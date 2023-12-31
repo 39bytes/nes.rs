@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 #[rustfmt::skip]
 pub mod lookup {
     use super::{AddressMode, Instruction, InstructionType};
@@ -45,6 +47,7 @@ impl Instruction {
     }
 }
 
+#[derive(Debug)]
 pub enum AddressMode {
     Imp,
     Imm,
@@ -60,6 +63,7 @@ pub enum AddressMode {
     Izy,
 }
 
+#[derive(Debug)]
 pub enum InstructionType {
     Adc,
     And,
