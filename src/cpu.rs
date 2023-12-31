@@ -46,7 +46,9 @@ pub struct Cpu6502 {
 }
 
 struct AddressModeResult {
+    /// The computed address to read from
     addr: u16,
+    /// Whether or not the addressing mode can lead to additional clock cycles
     additional_cycles: bool,
 }
 
@@ -405,6 +407,10 @@ impl Cpu6502 {
         }
     }
 
+    /// Relative addressing mode.
+    ///
+    /// Uses a signed byte offset from the current program counter.
+    /// This is only used by branch instructions.
     fn rel(&mut self) -> AddressModeResult {
         let offset = self.read(self.pc) as i8;
         self.pc += 1;
@@ -939,10 +945,12 @@ impl Cpu6502 {
         let a = self.a as u16;
 
         // Just invert the bits of the argument, then do the same thing as addition
-        // We have A = A - M - (1 - C)
-        // ~M = -M - 1
+        // This is because we have these two equations:
+        // A = A - M - (1 - C)      (Subtraction)
+        // ~M = -M - 1              (Two's complement)
         //
-        // A + (~M) + C
+        // Thus:
+        // A + (~M) + C             (Addition)
         // = A + (-M - 1) + C
         // = A - M - 1 + C
         // = A - M - (1 - C)
