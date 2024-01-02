@@ -133,19 +133,20 @@ fn draw_cpu_info(renderer: &mut Renderer, cpu: &Cpu6502, x: u32, y: u32) {
 
     for i in 0..10 {
         let instruction = Instruction::from_opcode(cpu.read(addr));
+        let arg_addr = addr + 1;
         let (arg_size, arg_repr) = match instruction.address_mode {
             AddressMode::Imp => (0, String::new()),
-            AddressMode::Imm => (1, format!("#${:02X}", cpu.read(addr + 1))),
-            AddressMode::Zp0 => (1, format!("${:02X}", cpu.read(addr + 1))),
-            AddressMode::Zpx => (1, format!("${:02X},X", cpu.read(addr + 1))),
-            AddressMode::Zpy => (1, format!("${:02X},Y", cpu.read(addr + 1))),
-            AddressMode::Rel => (1, format!("${:02X}", cpu.read(addr + 1))),
-            AddressMode::Abs => (2, format!("${:04X}", cpu.read_u16(addr + 1))),
-            AddressMode::Abx => (2, format!("${:04X},X", cpu.read_u16(addr + 1))),
-            AddressMode::Aby => (2, format!("${:04X},Y", cpu.read_u16(addr + 1))),
-            AddressMode::Ind => (2, format!("(${:04X})", cpu.read_u16(addr + 1))),
-            AddressMode::Izx => (1, format!("(${:02X},X)", cpu.read(addr + 1))),
-            AddressMode::Izy => (1, format!("(${:02X}),Y", cpu.read(addr + 1))),
+            AddressMode::Imm => (1, format!("#${:02X}", cpu.read(arg_addr))),
+            AddressMode::Zp0 => (1, format!("${:02X}", cpu.read(arg_addr))),
+            AddressMode::Zpx => (1, format!("${:02X},X", cpu.read(arg_addr))),
+            AddressMode::Zpy => (1, format!("${:02X},Y", cpu.read(arg_addr))),
+            AddressMode::Rel => (1, format!("${:02X}", cpu.read(arg_addr))),
+            AddressMode::Abs => (2, format!("${:04X}", cpu.read_u16(arg_addr))),
+            AddressMode::Abx => (2, format!("${:04X},X", cpu.read_u16(arg_addr))),
+            AddressMode::Aby => (2, format!("${:04X},Y", cpu.read_u16(arg_addr))),
+            AddressMode::Ind => (2, format!("(${:04X})", cpu.read_u16(arg_addr))),
+            AddressMode::Izx => (1, format!("(${:02X},X)", cpu.read(arg_addr))),
+            AddressMode::Izy => (1, format!("(${:02X}),Y", cpu.read(arg_addr))),
         };
 
         renderer.draw_text(
