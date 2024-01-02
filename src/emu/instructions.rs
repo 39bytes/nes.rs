@@ -1,7 +1,8 @@
 use std::fmt::Debug;
+use strum_macros::AsRefStr;
 
 #[rustfmt::skip]
-pub mod lookup {
+mod lookup {
     use super::{AddressMode, Instruction, InstructionType};
     use lazy_static::lazy_static;
 
@@ -45,9 +46,13 @@ impl Instruction {
             cycles,
         }
     }
+
+    pub fn from_opcode(opcode: u8) -> &'static Instruction {
+        &lookup::INSTRUCTIONS[opcode as usize]
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, AsRefStr, Copy, Clone)]
 pub enum AddressMode {
     Imp,
     Imm,
@@ -63,7 +68,7 @@ pub enum AddressMode {
     Izy,
 }
 
-#[derive(Debug)]
+#[derive(Debug, AsRefStr, Copy, Clone)]
 pub enum InstructionType {
     Adc,
     And,

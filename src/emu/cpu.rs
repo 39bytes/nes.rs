@@ -1,13 +1,12 @@
-use crate::bus::Bus;
-use crate::instructions::lookup::INSTRUCTIONS;
-use crate::instructions::{AddressMode, InstructionType};
+use super::bus::Bus;
+use super::instructions::{AddressMode, Instruction, InstructionType};
 use bitflags::bitflags;
 use std::cell::RefCell;
 use std::rc::Rc;
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    struct StatusFlags: u8 {
+    pub struct StatusFlags: u8 {
         /// Carry Bit
         const C = 1 << 0;
         /// Zero
@@ -41,7 +40,7 @@ pub struct Cpu6502 {
     pc: u16,             // Program Counter
     status: StatusFlags, // Status register
 
-    opcode: usize,
+    opcode: u8,
     cycles: u8,
 }
 
@@ -67,15 +66,43 @@ impl Cpu6502 {
         }
     }
 
-    fn print_page(&self, page: u8) {
-        self.bus.borrow().print_page(page);
+    pub fn a(&self) -> u8 {
+        self.a
     }
 
-    fn read(&self, addr: u16) -> u8 {
+    pub fn x(&self) -> u8 {
+        self.x
+    }
+
+    pub fn y(&self) -> u8 {
+        self.y
+    }
+
+    pub fn stkp(&self) -> u8 {
+        self.stkp
+    }
+
+    pub fn pc(&self) -> u16 {
+        self.pc
+    }
+
+    pub fn status(&self) -> StatusFlags {
+        self.status
+    }
+
+    pub fn opcode(&self) -> u8 {
+        self.opcode
+    }
+
+    pub fn cycles(&self) -> u8 {
+        self.cycles
+    }
+
+    pub fn read(&self, addr: u16) -> u8 {
         self.bus.borrow().read(addr)
     }
 
-    fn read_u16(&self, addr: u16) -> u16 {
+    pub fn read_u16(&self, addr: u16) -> u16 {
         let lo = self.read(addr) as u16;
         let hi = self.read(addr + 1) as u16;
 
@@ -154,7 +181,7 @@ impl Cpu6502 {
         self.cycles = cycles;
     }
 
-    fn reset(&mut self, pc: u16) {
+    pub fn reset(&mut self, pc: u16) {
         self.a = 0;
         self.x = 0;
         self.y = 0;
@@ -174,20 +201,20 @@ impl Cpu6502 {
     /// Run one clock cycle.
     pub fn clock(&mut self) {
         if self.cycles == 0 {
-            self.opcode = self.read(self.pc) as usize;
+            self.opcode = self.read(self.pc);
 
             self.pc += 1;
 
-            let instruction = &INSTRUCTIONS[self.opcode];
+            let instruction = Instruction::from_opcode(self.opcode);
             self.cycles = instruction.cycles;
 
-            println!("--------------------");
-            println!("Opcode: {:?}", self.opcode);
-            println!("Instruction: {:?}", instruction.instruction_type);
-            println!("Address Mode: {:?}", instruction.address_mode);
-            println!("Accumulator: {}", self.a);
-            println!("X Register: {}", self.x);
-            println!("Y Register: {}", self.y);
+            log::info!("--------------------");
+            log::info!("Opcode: {:?}", self.opcode);
+            log::info!("Instruction: {:?}", instruction.instruction_type);
+            log::info!("Address Mode: {:?}", instruction.address_mode);
+            log::info!("Accumulator: {}", self.a);
+            log::info!("X Register: {}", self.x);
+            log::info!("Y Register: {}", self.y);
 
             type A = AddressMode;
             let AddressModeResult {
@@ -489,7 +516,7 @@ impl Cpu6502 {
 
         AddressModeResult {
             addr,
-            additional_cycles: true,
+            additional_cycles,
         }
     }
 
@@ -534,7 +561,7 @@ impl Cpu6502 {
 
     /// Arithmetic shift left.
     fn asl(&mut self, addr: u16) -> u8 {
-        let addr_mode = &INSTRUCTIONS[self.opcode].address_mode;
+        let addr_mode = Instruction::from_opcode(self.opcode).address_mode;
 
         let arg = match addr_mode {
             AddressMode::Imp => self.a,
@@ -547,7 +574,7 @@ impl Cpu6502 {
         self.set_flag(StatusFlags::Z, res == 0);
         self.set_flag(StatusFlags::N, is_negative(res));
 
-        match INSTRUCTIONS[self.opcode].address_mode {
+        match addr_mode {
             AddressMode::Imp => self.a = res,
             _ => self.write(addr, res),
         }
@@ -804,7 +831,7 @@ impl Cpu6502 {
 
     /// Logical shift right.
     fn lsr(&mut self, addr: u16) -> u8 {
-        let addr_mode = &INSTRUCTIONS[self.opcode].address_mode;
+        let addr_mode = Instruction::from_opcode(self.opcode).address_mode;
         let arg = match addr_mode {
             AddressMode::Imp => self.a,
             _ => self.read(addr),
@@ -875,7 +902,7 @@ impl Cpu6502 {
 
     /// Rotate left.
     fn rol(&mut self, addr: u16) -> u8 {
-        let addr_mode = &INSTRUCTIONS[self.opcode].address_mode;
+        let addr_mode = Instruction::from_opcode(self.opcode).address_mode;
         let arg = match addr_mode {
             AddressMode::Imp => self.a,
             _ => self.read(addr),
@@ -898,7 +925,7 @@ impl Cpu6502 {
 
     /// Rotate right.
     fn ror(&mut self, addr: u16) -> u8 {
-        let addr_mode = &INSTRUCTIONS[self.opcode].address_mode;
+        let addr_mode = Instruction::from_opcode(self.opcode).address_mode;
         let arg = match addr_mode {
             AddressMode::Imp => self.a,
             _ => self.read(addr),

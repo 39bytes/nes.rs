@@ -8,5 +8,12 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.75"
 bitflags = "2.4.0"
+env_logger = "0.10.1"
+error-iter = "0.4.1"
 lazy_static = "1.4.0"
+log = "0.4.20"
 pixels = "0.13.0"
+rusttype = "0.9.3"
+strum_macros = "0.25.3"
+winit = { version = "0.29.8", features = ["rwh_05"] }
+winit_input_helper = "0.15.1"
