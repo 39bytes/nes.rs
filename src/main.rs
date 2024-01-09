@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use anyhow::{anyhow, Result};
-use bitflags::Flags;
 use error_iter::ErrorIter as _;
 use log::error;
 use renderer::Renderer;
@@ -16,7 +15,7 @@ use winit_input_helper::WinitInputHelper;
 
 use emu::bus::Bus;
 use emu::cpu::Cpu6502;
-use emu::instructions::{AddressMode, Instruction, InstructionType};
+use emu::instructions::{AddressMode, Instruction};
 
 mod emu;
 mod renderer;
@@ -66,15 +65,16 @@ pub fn main() -> Result<()> {
                 target.exit();
             }
         }
-        if input.key_pressed(KeyCode::Space) {
-            cpu.clock();
-        }
 
         // Handle input events
         if input.update(&event) {
             // Close events
             if input.close_requested() {
                 target.exit();
+            }
+
+            if input.key_pressed(KeyCode::Space) {
+                cpu.clock();
             }
 
             // Resize the window

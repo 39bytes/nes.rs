@@ -200,6 +200,7 @@ impl Cpu6502 {
 
     /// Run one clock cycle.
     pub fn clock(&mut self) {
+        log::info!("Clocking");
         if self.cycles == 0 {
             self.opcode = self.read(self.pc);
 
@@ -967,7 +968,6 @@ impl Cpu6502 {
     }
 
     /// Subtraction with carry.
-    /// TODO: Implement this
     fn sbc(&mut self, addr: u16) -> u8 {
         let a = self.a as u16;
 

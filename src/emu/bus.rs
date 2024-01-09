@@ -21,11 +21,6 @@ impl Bus {
 
     pub fn page_str(&self, page: u8) -> String {
         let page_start = (page as u16) * 0x100;
-        // println!(
-        //     "Address range: {:#06X} - {:#06X}",
-        //     page_start,
-        //     page_start + 0xFF
-        // );
         let mut s = String::new();
         s.push_str("   ");
         for i in 0..16 {
