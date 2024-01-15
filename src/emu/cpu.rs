@@ -2,7 +2,7 @@ use super::bus::Bus;
 use super::instructions::{AddressMode, Instruction, InstructionType};
 use bitflags::bitflags;
 use std::cell::RefCell;
-use std::rc::Rc;
+use std::rc::Weak;
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -30,7 +30,7 @@ bitflags! {
 const STACK_BASE_ADDR: u16 = 0x0100;
 
 pub struct Cpu6502 {
-    bus: Rc<RefCell<Bus>>,
+    bus: Weak<RefCell<Bus>>,
 
     /* Registers */
     a: u8,               // Accumulator
@@ -52,7 +52,7 @@ struct AddressModeResult {
 }
 
 impl Cpu6502 {
-    pub fn new(bus: Rc<RefCell<Bus>>) -> Self {
+    pub fn new(bus: Weak<RefCell<Bus>>) -> Self {
         Cpu6502 {
             bus,
             a: 0x00,
@@ -99,7 +99,10 @@ impl Cpu6502 {
     }
 
     pub fn read(&self, addr: u16) -> u8 {
-        self.bus.borrow().read(addr)
+        match self.bus.upgrade() {
+            Some(bus) => bus.borrow().cpu_read(addr),
+            None => panic!("Bus not found"),
+        }
     }
 
     pub fn read_u16(&self, addr: u16) -> u16 {
@@ -110,7 +113,10 @@ impl Cpu6502 {
     }
 
     fn write(&self, addr: u16, data: u8) {
-        self.bus.borrow_mut().write(addr, data);
+        match self.bus.upgrade() {
+            Some(bus) => bus.borrow_mut().cpu_write(addr, data),
+            None => panic!("Bus not found"),
+        }
     }
 
     /// Pushes a byte onto the stack.
@@ -1127,30 +1133,29 @@ fn is_negative(byte: u8) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
+    use std::rc::Rc;
 
-    fn setup() -> Cpu6502 {
-        let bus = Bus::new();
-        Cpu6502::new(Rc::new(RefCell::new(bus)))
+    fn setup() -> (Rc<RefCell<Bus>>, Rc<RefCell<Cpu6502>>) {
+        let bus = Rc::new(RefCell::new(Bus::new()));
+        let cpu = Rc::new(RefCell::new(Cpu6502::new(Rc::downgrade(&bus))));
+        bus.borrow_mut().attach_cpu(cpu.clone());
+        (bus, cpu)
     }
 
     #[test]
     fn test_adc() {
-        let mut cpu = setup();
+        let (_, cpu) = setup();
+        let mut cpu = cpu.borrow_mut();
 
         // Test that 2 + 3 = 5
-        // LDA #3
-        // STA $00
-        // LDA #2
-        // ADC $00
-        // STA $00
 
-        let code = vec![0xA9, 0x03, 0x85, 0x00, 0xA9, 0x02, 0x65, 0x00, 0x85, 0x00];
-        cpu.load_instructions(0x8000, code);
-        cpu.reset(0x8000);
-
-        for _ in 0..100 {
-            cpu.clock();
-        }
+        cpu.write(0x1000, 3);
+        cpu.write(0x1001, 2);
+        cpu.lda(0x1000);
+        cpu.sta(0x00);
+        cpu.lda(0x1001);
+        cpu.adc(0x00);
+        cpu.sta(0x00);
 
         assert_eq!(cpu.a, 5);
         assert_eq!(cpu.read(0x0000), 5);
@@ -1161,7 +1166,8 @@ mod test {
 
     #[test]
     fn test_adc_flags() {
-        let mut cpu = setup();
+        let (_, cpu) = setup();
+        let mut cpu = cpu.borrow_mut();
 
         // Test that the overflow bit is correctly set
         //
@@ -1171,11 +1177,11 @@ mod test {
         // LDA #70
         // ADC $00
 
-        cpu.write(0x8000, 80);
-        cpu.write(0x8001, 70);
-        cpu.lda(0x8000);
+        cpu.write(0x1000, 80);
+        cpu.write(0x1001, 70);
+        cpu.lda(0x1000);
         cpu.sta(0x00);
-        cpu.lda(0x8001);
+        cpu.lda(0x1001);
         cpu.adc(0x00);
 
         assert_eq!(cpu.a, 150);
@@ -1183,10 +1189,10 @@ mod test {
         assert!(!cpu.get_flag(StatusFlags::C));
         assert!(cpu.get_flag(StatusFlags::V));
 
-        cpu.write(0x8002, 255);
-        cpu.write(0x8003, 1);
-        cpu.lda(0x8002);
-        cpu.adc(0x8003);
+        cpu.write(0x1002, 255);
+        cpu.write(0x1003, 1);
+        cpu.lda(0x1002);
+        cpu.adc(0x1003);
 
         assert_eq!(cpu.a, 0);
         assert!(cpu.get_flag(StatusFlags::Z));

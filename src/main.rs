@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use anyhow::{anyhow, Result};
+use emu::ppu::Ppu;
 use error_iter::ErrorIter as _;
 use log::error;
 use renderer::Renderer;
@@ -43,9 +44,16 @@ pub fn main() -> Result<()> {
     let mut renderer = Renderer::new(font, &window, WIDTH, HEIGHT)?;
 
     let bus = Rc::new(RefCell::new(Bus::new()));
-    let mut cpu = Cpu6502::new(bus.clone());
-    cpu.load_instructions(0x8000, vec![0xF6, 0x00, 0xE8, 0x4C, 0x00, 0x80]);
-    cpu.reset(0x8000);
+    let cpu = Rc::new(RefCell::new(Cpu6502::new(Rc::downgrade(&bus))));
+    let ppu = Rc::new(RefCell::new(Ppu::new(Rc::downgrade(&bus))));
+    bus.borrow_mut().attach_cpu(cpu.clone());
+
+    {
+        let mut cpu_mut = cpu.borrow_mut();
+
+        cpu_mut.load_instructions(0x1500, vec![0xF6, 0x00, 0xE8, 0x4C, 0x00, 0x15]);
+        cpu_mut.reset(0x1500);
+    }
 
     event_loop.run(move |event, target| {
         // Draw the current frame
@@ -58,7 +66,7 @@ pub fn main() -> Result<()> {
             for (i, line) in bus.borrow().page_str(0).split('\n').enumerate() {
                 renderer.draw_text(line, 0, 240 + (i as u32) * 20);
             }
-            draw_cpu_info(&mut renderer, &cpu, 720, 240);
+            draw_cpu_info(&mut renderer, &cpu.borrow(), 720, 240);
 
             if let Err(err) = renderer.render() {
                 log_error("pixels.render", err);
@@ -73,8 +81,8 @@ pub fn main() -> Result<()> {
                 target.exit();
             }
 
-            if input.key_pressed(KeyCode::Space) {
-                cpu.clock();
+            if input.key_pressed(KeyCode::Space) || input.key_held(KeyCode::Space) {
+                cpu.borrow_mut().clock();
             }
 
             // Resize the window
@@ -110,7 +118,7 @@ fn draw_page_zero(renderer: &mut Renderer, bus: Rc<RefCell<Bus>>, x: u32, y: u32
     for i in 0..16 {
         for j in 0..16 {
             renderer.draw_text(
-                &format!("{:02X} ", bus.borrow().read(i * 0x10 + j) as usize),
+                &format!("{:02X} ", bus.borrow().cpu_read(i * 0x10 + j) as usize),
                 x + (j + 2) as u32 * 20,
                 y + (i + 2) as u32 * 20,
             )
