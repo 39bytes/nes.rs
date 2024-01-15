@@ -59,6 +59,10 @@ impl Bus {
                 Some(ppu) => ppu.borrow_mut().cpu_write(addr % 8, data),
                 None => panic!("PPU not attached"),
             },
+            0x4020..=0xFFFF => match &self.cartridge {
+                Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap(),
+                None => panic!("Cartridge not attached"),
+            },
             _ => panic!("Invalid address: {:04X}", addr),
         }
     }
@@ -72,6 +76,10 @@ impl Bus {
             0x2000..=0x3FFF => match &self.ppu {
                 Some(ppu) => ppu.borrow_mut().cpu_read(addr % 8),
                 None => panic!("PPU not attached"),
+            },
+            0x4020..=0xFFFF => match &self.cartridge {
+                Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap(),
+                None => panic!("Cartridge not attached"),
             },
             _ => panic!("Invalid address: {:04X}", addr),
         }

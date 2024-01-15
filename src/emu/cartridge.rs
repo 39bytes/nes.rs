@@ -2,11 +2,9 @@ use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use std::fs::File;
 use std::io::prelude::*;
-use std::io::{self, SeekFrom};
+use std::io::SeekFrom;
 use std::path::Path;
-use std::{cell::RefCell, rc::Weak};
 
-use super::bus::Bus;
 use super::mapper::{Mapper, Mapper0};
 
 bitflags! {
@@ -65,7 +63,6 @@ impl Header {
 }
 
 pub struct Cartridge {
-    // bus: Weak<RefCell<Bus>>,
     prg_memory: Vec<u8>,
     chr_memory: Vec<u8>,
 
@@ -116,21 +113,21 @@ impl Cartridge {
         })
     }
 
-    fn cpu_write(&mut self, addr: u16, data: u8) -> Result<()> {
+    pub fn cpu_write(&mut self, addr: u16, data: u8) -> Result<()> {
         self.prg_memory[self.mapper.cpu_map_read(addr)? as usize] = data;
         Ok(())
     }
 
-    fn cpu_read(&self, addr: u16) -> Result<u8> {
+    pub fn cpu_read(&self, addr: u16) -> Result<u8> {
         Ok(self.prg_memory[self.mapper.cpu_map_read(addr)? as usize])
     }
 
-    fn ppu_write(&mut self, addr: u16, data: u8) -> Result<()> {
+    pub fn ppu_write(&mut self, addr: u16, data: u8) -> Result<()> {
         self.chr_memory[self.mapper.cpu_map_read(addr)? as usize] = data;
         Ok(())
     }
 
-    fn ppu_read(&self, addr: u16) -> Result<u8> {
+    pub fn ppu_read(&self, addr: u16) -> Result<u8> {
         Ok(self.chr_memory[self.mapper.cpu_map_read(addr)? as usize])
     }
 }
