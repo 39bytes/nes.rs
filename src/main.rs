@@ -1,8 +1,11 @@
 use std::cell::RefCell;
+use std::env;
+use std::path::Path;
+use std::process;
 use std::rc::Rc;
 
 use anyhow::{anyhow, Result};
-use emu::ppu::Ppu;
+use emu::ppu::{PatternTable, Ppu};
 use error_iter::ErrorIter as _;
 use log::error;
 use renderer::Renderer;
@@ -15,14 +18,16 @@ use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
 use emu::bus::Bus;
+use emu::cartridge::Cartridge;
 use emu::cpu::Cpu6502;
 use emu::instructions::{AddressMode, Instruction};
+use emu::palette::Palette;
 
 mod emu;
 mod renderer;
 
-const WIDTH: u32 = 960;
-const HEIGHT: u32 = 720;
+const WIDTH: usize = 960;
+const HEIGHT: usize = 720;
 
 pub fn main() -> Result<()> {
     env_logger::init();
@@ -38,22 +43,34 @@ pub fn main() -> Result<()> {
             .unwrap()
     };
 
-    let font_data = include_bytes!("../assets/nes-arcade-font-2-1-monospaced.ttf");
+    let args: Vec<_> = env::args().collect();
+
+    if args.len() <= 1 {
+        println!("Usage: {} <rom path>", args[0]);
+        process::exit(1);
+    }
+
+    let rom_path = &args[1];
+
+    let font_data = include_bytes!("../assets/fonts/nes-arcade-font-2-1-monospaced.ttf");
     let font = Font::try_from_bytes(font_data as &[u8]).ok_or(anyhow!("Error loading font"))?;
+
+    let palette = Palette::from_file("assets/palettes/2C02G.pal")?;
 
     let mut renderer = Renderer::new(font, &window, WIDTH, HEIGHT)?;
 
     let bus = Rc::new(RefCell::new(Bus::new()));
     let cpu = Rc::new(RefCell::new(Cpu6502::new(Rc::downgrade(&bus))));
-    let ppu = Rc::new(RefCell::new(Ppu::new(Rc::downgrade(&bus))));
+    let ppu = Rc::new(RefCell::new(Ppu::new(Rc::downgrade(&bus), palette.clone())));
     bus.borrow_mut().attach_cpu(cpu.clone());
+    bus.borrow_mut().attach_ppu(ppu.clone());
 
-    {
-        let mut cpu_mut = cpu.borrow_mut();
+    let cartridge = Rc::new(RefCell::new(Cartridge::new(Path::new(rom_path))?));
+    bus.borrow_mut().attach_cartridge(cartridge);
 
-        cpu_mut.load_instructions(0x1500, vec![0xF6, 0x00, 0xE8, 0x4C, 0x00, 0x15]);
-        cpu_mut.reset(0x1500);
-    }
+    cpu.borrow_mut().reset();
+
+    let palette_sprite = &palette.as_sprite().scale(16);
 
     event_loop.run(move |event, target| {
         // Draw the current frame
@@ -63,9 +80,15 @@ pub fn main() -> Result<()> {
         } = event
         {
             renderer.clear();
-            for (i, line) in bus.borrow().page_str(0).split('\n').enumerate() {
-                renderer.draw_text(line, 0, 240 + (i as u32) * 20);
-            }
+            // for (i, line) in bus.borrow().page_str(255).split('\n').enumerate() {
+            //     renderer.draw_text(line, 0, 240 + i * 20);
+            // }
+            renderer.draw_sprite(
+                &ppu.borrow().get_pattern_table(PatternTable::Left),
+                120,
+                120,
+            );
+            renderer.draw_sprite(palette_sprite, 720, 640);
             draw_cpu_info(&mut renderer, &cpu.borrow(), 720, 240);
 
             if let Err(err) = renderer.render() {
@@ -107,26 +130,7 @@ fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
     }
 }
 
-fn draw_page_zero(renderer: &mut Renderer, bus: Rc<RefCell<Bus>>, x: u32, y: u32) {
-    for i in 0..16 {
-        renderer.draw_text(&format!("{:X}", i), x + 20, y + (i + 2) as u32 * 20);
-    }
-    for i in 0..16 {
-        renderer.draw_text(&format!("{:X}", i), x + (i + 2) as u32 * 20, y + 20);
-    }
-
-    for i in 0..16 {
-        for j in 0..16 {
-            renderer.draw_text(
-                &format!("{:02X} ", bus.borrow().cpu_read(i * 0x10 + j) as usize),
-                x + (j + 2) as u32 * 20,
-                y + (i + 2) as u32 * 20,
-            )
-        }
-    }
-}
-
-fn draw_cpu_info(renderer: &mut Renderer, cpu: &Cpu6502, x: u32, y: u32) {
+fn draw_cpu_info(renderer: &mut Renderer, cpu: &Cpu6502, x: usize, y: usize) {
     renderer.draw_text("Registers:", x, y);
     renderer.draw_text(&format!("A: {:#04X}", cpu.a()), x, y + 20);
     renderer.draw_text(&format!("X: {:#04X}", cpu.x()), x, y + 40);

@@ -25,7 +25,7 @@ impl Mapper for Mapper0 {
             return Err(anyhow!("Address out of range"));
         }
 
-        if self.num_banks > 1 {
+        if self.num_banks == 1 {
             Ok(addr % BANK_SIZE)
         } else {
             Ok(addr)
@@ -37,7 +37,7 @@ impl Mapper for Mapper0 {
             return Err(anyhow!("Address out of range"));
         }
 
-        if self.num_banks > 1 {
+        if self.num_banks == 1 {
             Ok(addr % BANK_SIZE)
         } else {
             Ok(addr)

@@ -24,7 +24,6 @@ bitflags! {
         /// Negative
         const N = 1 << 7;
     }
-
 }
 
 const STACK_BASE_ADDR: u16 = 0x0100;
@@ -187,7 +186,11 @@ impl Cpu6502 {
         self.cycles = cycles;
     }
 
-    pub fn reset(&mut self, pc: u16) {
+    pub fn reset(&mut self) {
+        self.reset_to(self.read_u16(0xFFFC))
+    }
+
+    pub fn reset_to(&mut self, pc: u16) {
         self.a = 0;
         self.x = 0;
         self.y = 0;

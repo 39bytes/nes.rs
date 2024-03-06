@@ -34,6 +34,7 @@ bitflags! {
 }
 
 /// The iNES format file header
+#[derive(Debug)]
 struct Header {
     name: [u8; 4],
     prg_rom_chunks: u8,
@@ -70,15 +71,18 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
-    fn new(rom_path: &Path) -> Result<Self> {
+    pub fn new(rom_path: &Path) -> Result<Self> {
+        log::info!("Loading ROM: {}", rom_path.display());
         let mut f = File::open(rom_path)?;
 
         let mut header_buf = [0; 16];
         f.read_exact(&mut header_buf)?;
 
         let header = Header::from_bytes(header_buf);
+        log::info!("Header: {:?}", header);
 
         if header.flags6.contains(Flags6::HasTrainer) {
+            log::info!("Rom has trainer info, skipping 512 bytes");
             f.seek(SeekFrom::Current(512))?;
         }
 
@@ -86,17 +90,7 @@ impl Cartridge {
 
         let (prg_rom, chr_rom) = match file_type {
             0 => todo!(),
-            1 => {
-                let prg_rom_size = (header.prg_rom_chunks as usize) * 16 * 1024;
-                let mut prg_rom = Vec::with_capacity(prg_rom_size);
-                f.read_exact(prg_rom.as_mut_slice())?;
-
-                let chr_rom_size = (header.prg_rom_chunks as usize) * 8 * 1024;
-                let mut chr_rom = Vec::with_capacity(chr_rom_size);
-                f.read_exact(chr_rom.as_mut_slice())?;
-
-                (prg_rom, chr_rom)
-            }
+            1 => Cartridge::from_type1(f, &header)?,
             2 => todo!(),
             _ => panic!("Invalid file type"),
         };
@@ -113,8 +107,26 @@ impl Cartridge {
         })
     }
 
+    fn from_type1(mut f: File, header: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
+        let prg_rom_size = (header.prg_rom_chunks as usize) * 16 * 1024;
+        log::info!("Reading {} bytes of program ROM", prg_rom_size);
+
+        let mut prg_rom = vec![0u8; prg_rom_size];
+        f.read_exact(prg_rom.as_mut_slice())?;
+        log::info!("Program ROM size: {}", prg_rom.len());
+
+        let chr_rom_size = (header.chr_rom_chunks as usize) * 8 * 1024;
+        log::info!("Reading {} bytes of character ROM", chr_rom_size);
+
+        let mut chr_rom = vec![0u8; chr_rom_size];
+        f.read_exact(chr_rom.as_mut_slice())?;
+        log::info!("Character ROM size: {}", chr_rom.len());
+
+        Ok((prg_rom, chr_rom))
+    }
+
     pub fn cpu_write(&mut self, addr: u16, data: u8) -> Result<()> {
-        self.prg_memory[self.mapper.cpu_map_read(addr)? as usize] = data;
+        self.prg_memory[self.mapper.cpu_map_write(addr)? as usize] = data;
         Ok(())
     }
 
@@ -123,11 +135,11 @@ impl Cartridge {
     }
 
     pub fn ppu_write(&mut self, addr: u16, data: u8) -> Result<()> {
-        self.chr_memory[self.mapper.cpu_map_read(addr)? as usize] = data;
+        self.chr_memory[self.mapper.ppu_map_write(addr)? as usize] = data;
         Ok(())
     }
 
     pub fn ppu_read(&self, addr: u16) -> Result<u8> {
-        Ok(self.chr_memory[self.mapper.cpu_map_read(addr)? as usize])
+        Ok(self.chr_memory[self.mapper.ppu_map_read(addr)? as usize])
     }
 }
