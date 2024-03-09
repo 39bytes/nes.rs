@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
+use std::fmt::Display;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::SeekFrom;
@@ -71,8 +72,8 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
-    pub fn new(rom_path: &Path) -> Result<Self> {
-        log::info!("Loading ROM: {}", rom_path.display());
+    pub fn new<T: AsRef<Path> + Display>(rom_path: T) -> Result<Self> {
+        log::info!("Loading ROM: {}", rom_path);
         let mut f = File::open(rom_path)?;
 
         let mut header_buf = [0; 16];

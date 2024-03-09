@@ -2,8 +2,6 @@ use anyhow::Result;
 use std::fs::File;
 use std::io::prelude::*;
 
-use crate::renderer::Sprite;
-
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Color(pub u8, pub u8, pub u8);
 
@@ -13,7 +11,7 @@ pub struct Palette {
 }
 
 impl Palette {
-    pub fn from_file(path: &str) -> Result<Self> {
+    pub fn load(path: &str) -> Result<Self> {
         let mut f = File::open(path)?;
 
         // Palettes are exactly 192 bytes, 3 bytes per color (64 colors)
@@ -28,11 +26,11 @@ impl Palette {
         Ok(Palette { colors })
     }
 
-    pub fn get_color(&self, color: u8) -> Option<Color> {
-        self.colors.get(color as usize).copied()
+    pub fn colors(&self) -> &Vec<Color> {
+        &self.colors
     }
 
-    pub fn as_sprite(&self) -> Sprite {
-        Sprite::new(self.colors.clone(), 16, 4).expect("Failed to create sprite from palette")
+    pub fn get_color(&self, color: u8) -> Option<Color> {
+        self.colors.get(color as usize).copied()
     }
 }

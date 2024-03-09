@@ -41,6 +41,8 @@ pub struct Cpu6502 {
 
     opcode: u8,
     cycles: u8,
+
+    total_cycles: u64,
 }
 
 struct AddressModeResult {
@@ -62,6 +64,7 @@ impl Cpu6502 {
             status: StatusFlags::empty(),
             opcode: 0x00,
             cycles: 0,
+            total_cycles: 0,
         }
     }
 
@@ -95,6 +98,10 @@ impl Cpu6502 {
 
     pub fn cycles(&self) -> u8 {
         self.cycles
+    }
+
+    pub fn total_cycles(&self) -> u64 {
+        self.total_cycles
     }
 
     pub fn read(&self, addr: u16) -> u8 {
@@ -194,11 +201,12 @@ impl Cpu6502 {
         self.a = 0;
         self.x = 0;
         self.y = 0;
-        self.stkp = 0xFF;
+        self.stkp = 0xFD;
+        self.status = StatusFlags::from_bits(0x24).unwrap();
 
         self.pc = pc;
 
-        self.cycles = 8;
+        self.cycles = 7;
     }
 
     pub fn load_instructions(&mut self, base_addr: u16, bytes: Vec<u8>) {
@@ -215,7 +223,7 @@ impl Cpu6502 {
 
             self.pc += 1;
 
-            let instruction = Instruction::from_opcode(self.opcode);
+            let instruction = Instruction::from(self.opcode);
             self.cycles = instruction.cycles;
 
             log::info!("--------------------");
@@ -310,8 +318,16 @@ impl Cpu6502 {
                 self.cycles += extra_cycle_count;
             }
         }
-
         self.cycles -= 1;
+
+        self.total_cycles += 1;
+    }
+
+    /// Debug function
+    pub fn next_instruction(&mut self) {
+        self.total_cycles += self.cycles as u64;
+        self.cycles = 0;
+        self.clock();
     }
 
     // Addressing modes
@@ -412,7 +428,7 @@ impl Cpu6502 {
         let hi = self.read(self.pc) as u16;
         self.pc += 1;
 
-        let addr = ((hi << 8) | lo) + self.x as u16;
+        let addr = ((hi << 8) | lo).wrapping_add(self.x as u16);
 
         // Additional clock cycle if page boundary is crossed
         let additional_cycles = (addr & 0xFF00) != (hi << 8);
@@ -433,7 +449,7 @@ impl Cpu6502 {
         let hi = self.read(self.pc) as u16;
         self.pc += 1;
 
-        let addr = ((hi << 8) | lo) + self.y as u16;
+        let addr = ((hi << 8) | lo).wrapping_add(self.y as u16);
 
         // Additional clock cycle if page boundary is crossed
         let additional_cycles = (addr & 0xFF00) != (hi << 8);
@@ -496,11 +512,11 @@ impl Cpu6502 {
     /// Indirect addressing mode with X offset.
     /// Dereferences a zero page pointer offset by the value of the X register.
     fn izx(&mut self) -> AddressModeResult {
-        let ptr = self.read(self.pc).wrapping_add(self.x) as u16;
+        let ptr = self.read(self.pc).wrapping_add(self.x);
         self.pc += 1;
 
-        let lo = self.read(ptr) as u16;
-        let hi = self.read(ptr + 1) as u16;
+        let lo = self.read(ptr as u16) as u16;
+        let hi = self.read(ptr.wrapping_add(1) as u16) as u16;
 
         let addr = (hi << 8) | lo;
 
@@ -513,13 +529,13 @@ impl Cpu6502 {
     /// Indirect addressing mode with Y offset.
     /// Follows an 8 bit pointer, then offsets the underlying data by the value of the Y register.
     fn izy(&mut self) -> AddressModeResult {
-        let ptr = self.read(self.pc) as u16;
+        let ptr = self.read(self.pc);
         self.pc += 1;
 
-        let lo = self.read(ptr) as u16;
-        let hi = self.read(ptr + 1) as u16;
+        let lo = self.read(ptr as u16) as u16;
+        let hi = self.read(ptr.wrapping_add(1) as u16) as u16;
 
-        let addr = ((hi << 8) | lo) + self.y as u16;
+        let addr = ((hi << 8) | lo).wrapping_add(self.y as u16);
 
         // May need additional clock cycle if page boundary is crossed
         let additional_cycles = (addr & 0xFF00) != (hi << 8);
@@ -571,7 +587,7 @@ impl Cpu6502 {
 
     /// Arithmetic shift left.
     fn asl(&mut self, addr: u16) -> u8 {
-        let addr_mode = Instruction::from_opcode(self.opcode).address_mode;
+        let addr_mode = Instruction::from(self.opcode).address_mode;
 
         let arg = match addr_mode {
             AddressMode::Imp => self.a,
@@ -611,11 +627,12 @@ impl Cpu6502 {
     ///
     /// ANDs the argument with the mask in A, and sets flags according to the result.
     fn bit(&mut self, addr: u16) -> u8 {
-        let val = self.a & self.read(addr);
+        let arg = self.read(addr);
+        let result = self.a & arg;
 
-        self.set_flag(StatusFlags::Z, val == 0);
-        self.set_flag(StatusFlags::V, (val & (1 << 6)) != 0);
-        self.set_flag(StatusFlags::N, (val & (1 << 7)) != 0);
+        self.set_flag(StatusFlags::Z, result == 0);
+        self.set_flag(StatusFlags::V, (arg & (1 << 6)) != 0);
+        self.set_flag(StatusFlags::N, (arg & (1 << 7)) != 0);
 
         0
     }
@@ -638,6 +655,7 @@ impl Cpu6502 {
     /// Break.
     /// Forces an interrupt.
     /// TODO: Implement this properly
+    /// apparently this should set I to 1?
     fn brk(&mut self) -> u8 {
         self.pc += 1;
 
@@ -686,10 +704,11 @@ impl Cpu6502 {
     /// Compare accumulator with argument.
     fn cmp(&mut self, addr: u16) -> u8 {
         let arg = self.read(addr);
+        let res = self.a.wrapping_sub(arg);
 
         self.set_flag(StatusFlags::C, self.a >= arg);
         self.set_flag(StatusFlags::Z, self.a == arg);
-        self.set_flag(StatusFlags::N, self.a < arg);
+        self.set_flag(StatusFlags::N, is_negative(res));
 
         1
     }
@@ -697,10 +716,11 @@ impl Cpu6502 {
     /// Compare X register with argument.
     fn cpx(&mut self, addr: u16) -> u8 {
         let arg = self.read(addr);
+        let res = self.x.wrapping_sub(arg);
 
         self.set_flag(StatusFlags::C, self.x >= arg);
         self.set_flag(StatusFlags::Z, self.x == arg);
-        self.set_flag(StatusFlags::N, self.x < arg);
+        self.set_flag(StatusFlags::N, is_negative(res));
 
         0
     }
@@ -708,10 +728,11 @@ impl Cpu6502 {
     /// Compare Y register with argument.
     fn cpy(&mut self, addr: u16) -> u8 {
         let arg = self.read(addr);
+        let res = self.y.wrapping_sub(arg);
 
         self.set_flag(StatusFlags::C, self.y >= arg);
         self.set_flag(StatusFlags::Z, self.y == arg);
-        self.set_flag(StatusFlags::N, self.y < arg);
+        self.set_flag(StatusFlags::N, is_negative(res));
 
         0
     }
@@ -841,7 +862,7 @@ impl Cpu6502 {
 
     /// Logical shift right.
     fn lsr(&mut self, addr: u16) -> u8 {
-        let addr_mode = Instruction::from_opcode(self.opcode).address_mode;
+        let addr_mode = Instruction::from(self.opcode).address_mode;
         let arg = match addr_mode {
             AddressMode::Imp => self.a,
             _ => self.read(addr),
@@ -888,7 +909,7 @@ impl Cpu6502 {
 
     /// Push status register onto the stack.
     fn php(&mut self) -> u8 {
-        self.push(self.status.bits());
+        self.push((self.status | StatusFlags::U | StatusFlags::B).bits());
 
         0
     }
@@ -906,13 +927,15 @@ impl Cpu6502 {
     fn plp(&mut self) -> u8 {
         self.status = StatusFlags::from_bits(self.pop())
             .expect("Invalid status register state popped from stack");
+        self.status.remove(StatusFlags::B);
+        self.status.insert(StatusFlags::U);
 
         0
     }
 
     /// Rotate left.
     fn rol(&mut self, addr: u16) -> u8 {
-        let addr_mode = Instruction::from_opcode(self.opcode).address_mode;
+        let addr_mode = Instruction::from(self.opcode).address_mode;
         let arg = match addr_mode {
             AddressMode::Imp => self.a,
             _ => self.read(addr),
@@ -935,7 +958,7 @@ impl Cpu6502 {
 
     /// Rotate right.
     fn ror(&mut self, addr: u16) -> u8 {
-        let addr_mode = Instruction::from_opcode(self.opcode).address_mode;
+        let addr_mode = Instruction::from(self.opcode).address_mode;
         let arg = match addr_mode {
             AddressMode::Imp => self.a,
             _ => self.read(addr),
@@ -961,7 +984,7 @@ impl Cpu6502 {
         self.status = StatusFlags::from_bits(self.pop())
             .expect("Invalid flags read from memory when returning from interrupt.");
         self.status.remove(StatusFlags::B);
-        self.status.remove(StatusFlags::U);
+        self.status.insert(StatusFlags::U);
 
         self.pc = self.pop_u16();
 
@@ -1136,7 +1159,23 @@ fn is_negative(byte: u8) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
+    use anyhow::{anyhow, Result};
     use std::rc::Rc;
+
+    #[derive(Eq, PartialEq, Debug)]
+    struct CpuState {
+        pc: u16,
+        opcode: u8,
+        instruction: String,
+        argument: u16,
+
+        a: u8,
+        x: u8,
+        y: u8,
+        p: u8,
+        sp: u8,
+        cycles: u64,
+    }
 
     fn setup() -> (Rc<RefCell<Bus>>, Rc<RefCell<Cpu6502>>) {
         let bus = Rc::new(RefCell::new(Bus::new()));
@@ -1202,4 +1241,7 @@ mod test {
         assert!(cpu.get_flag(StatusFlags::C));
         assert!(!cpu.get_flag(StatusFlags::V));
     }
+
+    #[test]
+    fn nestest_rom() {}
 }

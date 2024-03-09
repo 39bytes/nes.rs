@@ -95,7 +95,7 @@ impl Ppu {
 
             ctrl: PpuCtrl::empty(),
             mask: PpuMask::empty(),
-            status: PpuStatus::empty(),
+            status: PpuStatus::VerticalBlank,
             oam_addr: 0x00,
             oam_data: 0x00,
             scroll: 0x0000,
@@ -150,7 +150,7 @@ impl Ppu {
             0x0002 => {
                 let data = self.status.bits();
 
-                self.status.remove(PpuStatus::VerticalBlank);
+                // self.status.remove(PpuStatus::VerticalBlank);
                 self.addr_reg_high_byte = true;
 
                 data

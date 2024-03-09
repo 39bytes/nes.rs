@@ -1,9 +1,11 @@
+use std::fmt::Display;
+
 use anyhow::{anyhow, Result};
 use pixels::{Pixels, SurfaceTexture};
 use rusttype::{point, Font, Scale};
 use winit::window::Window;
 
-use crate::emu::palette::Color;
+use crate::emu::palette::{Color, Palette};
 
 pub struct Sprite {
     pixels: Vec<Color>,
@@ -49,6 +51,12 @@ impl Sprite {
         }
 
         Sprite::new(scaled, self.width * scale, self.height * scale).unwrap()
+    }
+}
+
+impl From<Palette> for Sprite {
+    fn from(value: Palette) -> Self {
+        Sprite::new(value.colors().clone(), 16, 4).unwrap()
     }
 }
 
