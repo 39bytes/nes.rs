@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use strum_macros::{AsRefStr, EnumString};
+use strum_macros::AsRefStr;
 
 #[rustfmt::skip]
 mod lookup {
@@ -90,7 +90,7 @@ impl AddressMode {
     }
 }
 
-#[derive(Debug, AsRefStr, Copy, Clone, EnumString)]
+#[derive(Debug, AsRefStr, Copy, Clone)]
 pub enum InstructionType {
     Adc,
     And,
