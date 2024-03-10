@@ -46,10 +46,10 @@ pub struct Cpu6502 {
 }
 
 struct AddressModeResult {
+    /// The pointer that was used to get the computed address, used for debugging
+    ptr: Option<u16>,
     /// The computed address to read from
     addr: u16,
-    /// The size of the argument, in bytes
-    arg_size: u8,
     /// Whether or not the addressing mode can lead to additional clock cycles
     additional_cycles: bool,
 }
@@ -211,51 +211,36 @@ impl Cpu6502 {
         self.cycles = 7;
     }
 
-    pub fn load_instructions(&mut self, base_addr: u16, bytes: Vec<u8>) {
-        for (i, byte) in bytes.into_iter().enumerate() {
-            self.write(base_addr + i as u16, byte);
-        }
-    }
-
     /// Run one clock cycle.
     pub fn clock(&mut self) {
-        log::info!("Clocking");
         if self.cycles == 0 {
             self.opcode = self.read(self.pc);
 
-            self.pc += 1;
-
-            let instruction = Instruction::from(self.opcode);
+            let instruction = Instruction::lookup(self.opcode);
             self.cycles = instruction.cycles;
-
-            log::info!("--------------------");
-            log::info!("Opcode: {:?}", self.opcode);
-            log::info!("Instruction: {:?}", instruction.instruction_type);
-            log::info!("Address Mode: {:?}", instruction.address_mode);
-            log::info!("Accumulator: {}", self.a);
-            log::info!("X Register: {}", self.x);
-            log::info!("Y Register: {}", self.y);
 
             type A = AddressMode;
             let AddressModeResult {
+                ptr: _,
                 addr,
-                arg_size,
                 additional_cycles,
             } = match instruction.address_mode {
                 A::Imp => self.imp(),
-                A::Imm => self.imm(),
-                A::Zp0 => self.zp0(),
-                A::Zpx => self.zpx(),
-                A::Zpy => self.zpy(),
-                A::Rel => self.rel(),
-                A::Abs => self.abs(),
-                A::Abx => self.abx(),
-                A::Aby => self.aby(),
-                A::Ind => self.ind(),
-                A::Izx => self.izx(),
-                A::Izy => self.izy(),
+                A::Acc => self.acc(),
+                A::Imm => self.imm(self.pc + 1),
+                A::Zp0 => self.zp0(self.pc + 1),
+                A::Zpx => self.zpx(self.pc + 1),
+                A::Zpy => self.zpy(self.pc + 1),
+                A::Rel => self.rel(self.pc + 1),
+                A::Abs => self.abs(self.pc + 1),
+                A::Abx => self.abx(self.pc + 1),
+                A::Aby => self.aby(self.pc + 1),
+                A::Ind => self.ind(self.pc + 1),
+                A::Izx => self.izx(self.pc + 1),
+                A::Izy => self.izy(self.pc + 1),
             };
-            self.pc += arg_size as u16;
+            // Add the size in bytes of the instruction (1, 2, or 3) to the program counter
+            self.pc += 1 + instruction.address_mode.arg_size();
 
             type I = InstructionType;
             let extra_cycle_count = match instruction.instruction_type {
@@ -342,8 +327,16 @@ impl Cpu6502 {
     /// For instructions with no arguments.
     fn imp(&self) -> AddressModeResult {
         AddressModeResult {
+            ptr: None,
             addr: 0,
-            arg_size: 0,
+            additional_cycles: false,
+        }
+    }
+
+    fn acc(&self) -> AddressModeResult {
+        AddressModeResult {
+            ptr: None,
+            addr: 0,
             additional_cycles: false,
         }
     }
@@ -351,10 +344,10 @@ impl Cpu6502 {
     /// Immediate addressing mode.
     ///
     /// Read data from the next byte of the instruction.
-    fn imm(&self) -> AddressModeResult {
+    fn imm(&self, arg_addr: u16) -> AddressModeResult {
         AddressModeResult {
-            addr: self.pc,
-            arg_size: 1,
+            ptr: None,
+            addr: arg_addr,
             additional_cycles: false,
         }
     }
@@ -362,10 +355,10 @@ impl Cpu6502 {
     /// Zero page addressing mode.
     ///
     /// Reads data from page 0 of memory (0x0000 - 0x00FF).
-    fn zp0(&self) -> AddressModeResult {
+    fn zp0(&self, arg_addr: u16) -> AddressModeResult {
         AddressModeResult {
-            addr: self.read(self.pc) as u16,
-            arg_size: 1,
+            ptr: None,
+            addr: self.read(arg_addr) as u16,
             additional_cycles: false,
         }
     }
@@ -374,10 +367,10 @@ impl Cpu6502 {
     ///
     /// Reads data from page 0 of memory (0x0000 - 0x00FF)
     /// but offset by the value of the X register.
-    fn zpx(&self) -> AddressModeResult {
+    fn zpx(&self, arg_addr: u16) -> AddressModeResult {
         AddressModeResult {
-            addr: self.read(self.pc).wrapping_add(self.x) as u16,
-            arg_size: 1,
+            ptr: None,
+            addr: self.read(arg_addr).wrapping_add(self.x) as u16,
             additional_cycles: false,
         }
     }
@@ -386,10 +379,10 @@ impl Cpu6502 {
     ///
     /// Reads data from page 0 of memory (0x0000 - 0x00FF)
     /// but offset by the value of the Y register.
-    fn zpy(&self) -> AddressModeResult {
+    fn zpy(&self, arg_addr: u16) -> AddressModeResult {
         AddressModeResult {
-            addr: self.read(self.pc).wrapping_add(self.y) as u16,
-            arg_size: 1,
+            ptr: None,
+            addr: self.read(arg_addr).wrapping_add(self.y) as u16,
             additional_cycles: false,
         }
     }
@@ -397,15 +390,10 @@ impl Cpu6502 {
     /// Absolute addressing mode.
     ///
     /// Reads data from a 16 bit absolute address.
-    fn abs(&self) -> AddressModeResult {
-        let lo = self.read(self.pc) as u16;
-        let hi = self.read(self.pc + 1) as u16;
-
-        let addr = (hi << 8) | lo;
-
+    fn abs(&self, arg_addr: u16) -> AddressModeResult {
         AddressModeResult {
-            addr,
-            arg_size: 2,
+            ptr: None,
+            addr: self.read_u16(arg_addr),
             additional_cycles: false,
         }
     }
@@ -414,9 +402,9 @@ impl Cpu6502 {
     ///
     /// Reads data from a 16 bit absolute addressing
     /// but offset by the value of the X register.
-    fn abx(&self) -> AddressModeResult {
-        let lo = self.read(self.pc) as u16;
-        let hi = self.read(self.pc + 1) as u16;
+    fn abx(&self, arg_addr: u16) -> AddressModeResult {
+        let lo = self.read(arg_addr) as u16;
+        let hi = self.read(arg_addr + 1) as u16;
 
         let addr = ((hi << 8) | lo).wrapping_add(self.x as u16);
 
@@ -424,8 +412,8 @@ impl Cpu6502 {
         let additional_cycles = (addr & 0xFF00) != (hi << 8);
 
         AddressModeResult {
+            ptr: None,
             addr,
-            arg_size: 2,
             additional_cycles,
         }
     }
@@ -434,9 +422,9 @@ impl Cpu6502 {
     ///
     /// Reads data from a 16 bit absolute addressing
     /// but offset by the value of the Y register.
-    fn aby(&self) -> AddressModeResult {
-        let lo = self.read(self.pc) as u16;
-        let hi = self.read(self.pc + 1) as u16;
+    fn aby(&self, arg_addr: u16) -> AddressModeResult {
+        let lo = self.read(arg_addr) as u16;
+        let hi = self.read(arg_addr + 1) as u16;
 
         let addr = ((hi << 8) | lo).wrapping_add(self.y as u16);
 
@@ -444,8 +432,8 @@ impl Cpu6502 {
         let additional_cycles = (addr & 0xFF00) != (hi << 8);
 
         AddressModeResult {
+            ptr: None,
             addr,
-            arg_size: 2,
             additional_cycles,
         }
     }
@@ -454,27 +442,27 @@ impl Cpu6502 {
     ///
     /// Uses a signed byte offset from the current program counter.
     /// This is only used by branch instructions.
-    fn rel(&self) -> AddressModeResult {
-        let offset = self.read(self.pc) as i8;
+    fn rel(&self, arg_addr: u16) -> AddressModeResult {
+        let offset = self.read(arg_addr) as i8;
 
         let addr = if offset < 0 {
-            self.pc + 1 - (offset.unsigned_abs() as u16)
+            arg_addr + 1 - (offset.unsigned_abs() as u16)
         } else {
-            self.pc + 1 + offset as u16
+            arg_addr + 1 + offset as u16
         };
 
         AddressModeResult {
+            ptr: None,
             addr,
-            arg_size: 1,
             additional_cycles: true,
         }
     }
 
     /// Indirect addressing mode.
     /// Follows a pointer to get the data.
-    fn ind(&self) -> AddressModeResult {
-        let ptr_lo = self.read(self.pc) as u16;
-        let ptr_hi = self.read(self.pc + 1) as u16;
+    fn ind(&self, arg_addr: u16) -> AddressModeResult {
+        let ptr_lo = self.read(arg_addr) as u16;
+        let ptr_hi = self.read(arg_addr + 1) as u16;
 
         let ptr = (ptr_hi << 8) | ptr_lo;
 
@@ -492,33 +480,32 @@ impl Cpu6502 {
         let addr = (hi << 8) | lo;
 
         AddressModeResult {
+            ptr: Some(ptr),
             addr,
-            arg_size: 2,
             additional_cycles: false,
         }
     }
 
     /// Indirect addressing mode with X offset.
     /// Dereferences a zero page pointer offset by the value of the X register.
-    fn izx(&self) -> AddressModeResult {
-        let ptr = self.read(self.pc).wrapping_add(self.x);
-
+    fn izx(&self, arg_addr: u16) -> AddressModeResult {
+        let ptr = self.read(arg_addr).wrapping_add(self.x);
         let lo = self.read(ptr as u16) as u16;
         let hi = self.read(ptr.wrapping_add(1) as u16) as u16;
 
         let addr = (hi << 8) | lo;
 
         AddressModeResult {
+            ptr: Some(ptr as u16),
             addr,
-            arg_size: 1,
             additional_cycles: false,
         }
     }
 
     /// Indirect addressing mode with Y offset.
     /// Follows an 8 bit pointer, then offsets the underlying data by the value of the Y register.
-    fn izy(&self) -> AddressModeResult {
-        let ptr = self.read(self.pc);
+    fn izy(&self, arg_addr: u16) -> AddressModeResult {
+        let ptr = self.read(arg_addr);
 
         let lo = self.read(ptr as u16) as u16;
         let hi = self.read(ptr.wrapping_add(1) as u16) as u16;
@@ -529,8 +516,8 @@ impl Cpu6502 {
         let additional_cycles = (addr & 0xFF00) != (hi << 8);
 
         AddressModeResult {
+            ptr: Some(ptr as u16),
             addr,
-            arg_size: 1,
             additional_cycles,
         }
     }
@@ -576,10 +563,10 @@ impl Cpu6502 {
 
     /// Arithmetic shift left.
     fn asl(&mut self, addr: u16) -> u8 {
-        let addr_mode = Instruction::from(self.opcode).address_mode;
+        let addr_mode = Instruction::lookup(self.opcode).address_mode;
 
         let arg = match addr_mode {
-            AddressMode::Imp => self.a,
+            AddressMode::Acc => self.a,
             _ => self.read(addr),
         };
         let val = (arg as u16) << 1;
@@ -590,7 +577,7 @@ impl Cpu6502 {
         self.set_flag(StatusFlags::N, is_negative(res));
 
         match addr_mode {
-            AddressMode::Imp => self.a = res,
+            AddressMode::Acc => self.a = res,
             _ => self.write(addr, res),
         }
 
@@ -851,9 +838,9 @@ impl Cpu6502 {
 
     /// Logical shift right.
     fn lsr(&mut self, addr: u16) -> u8 {
-        let addr_mode = Instruction::from(self.opcode).address_mode;
+        let addr_mode = Instruction::lookup(self.opcode).address_mode;
         let arg = match addr_mode {
-            AddressMode::Imp => self.a,
+            AddressMode::Acc => self.a,
             _ => self.read(addr),
         };
 
@@ -864,7 +851,7 @@ impl Cpu6502 {
         self.set_flag(StatusFlags::N, is_negative(res));
 
         match addr_mode {
-            AddressMode::Imp => self.a = res,
+            AddressMode::Acc => self.a = res,
             _ => self.write(addr, res),
         };
 
@@ -924,9 +911,9 @@ impl Cpu6502 {
 
     /// Rotate left.
     fn rol(&mut self, addr: u16) -> u8 {
-        let addr_mode = Instruction::from(self.opcode).address_mode;
+        let addr_mode = Instruction::lookup(self.opcode).address_mode;
         let arg = match addr_mode {
-            AddressMode::Imp => self.a,
+            AddressMode::Acc => self.a,
             _ => self.read(addr),
         };
 
@@ -938,7 +925,7 @@ impl Cpu6502 {
         self.set_flag(StatusFlags::N, is_negative(res));
 
         match addr_mode {
-            AddressMode::Imp => self.a = res,
+            AddressMode::Acc => self.a = res,
             _ => self.write(addr, res),
         }
 
@@ -947,9 +934,9 @@ impl Cpu6502 {
 
     /// Rotate right.
     fn ror(&mut self, addr: u16) -> u8 {
-        let addr_mode = Instruction::from(self.opcode).address_mode;
+        let addr_mode = Instruction::lookup(self.opcode).address_mode;
         let arg = match addr_mode {
-            AddressMode::Imp => self.a,
+            AddressMode::Acc => self.a,
             _ => self.read(addr),
         };
 
@@ -961,7 +948,7 @@ impl Cpu6502 {
         self.set_flag(StatusFlags::N, is_negative(res));
 
         match addr_mode {
-            AddressMode::Imp => self.a = res,
+            AddressMode::Acc => self.a = res,
             _ => self.write(addr, res),
         }
 
@@ -1147,9 +1134,15 @@ fn is_negative(byte: u8) -> bool {
 
 #[cfg(test)]
 mod test {
+    use crate::emu::cartridge::Cartridge;
+
     use super::*;
     use anyhow::{anyhow, Result};
-    use std::rc::Rc;
+    use std::{
+        fs::File,
+        io::{BufRead, BufReader},
+        rc::Rc,
+    };
 
     #[derive(Eq, PartialEq, Debug)]
     struct CpuState {
@@ -1166,6 +1159,123 @@ mod test {
         cycles: u64,
     }
 
+    fn get_instruction_repr(cpu: &Cpu6502, instruction_addr: u16) -> String {
+        let instruction = Instruction::lookup(cpu.read(instruction_addr));
+        let arg_addr = instruction_addr + 1;
+
+        let name = instruction.instruction_type.as_ref().to_uppercase();
+
+        match instruction.address_mode {
+            AddressMode::Imp => name,
+            AddressMode::Acc => format!("{} A", name),
+            AddressMode::Imm => format!("{} #${:02X}", name, cpu.read(arg_addr)),
+            AddressMode::Zp0 => {
+                let addr = cpu.zp0(arg_addr).addr;
+                format!("{} ${:02X} = {:02X}", name, addr, cpu.read(addr))
+            }
+            AddressMode::Zpx => {
+                let addr = cpu.zpx(arg_addr).addr;
+                format!(
+                    "{} ${:02X},X @ {:02X} = {:02X}",
+                    name,
+                    cpu.read(arg_addr),
+                    addr,
+                    cpu.read(addr)
+                )
+            }
+            AddressMode::Zpy => {
+                let addr = cpu.zpy(arg_addr).addr;
+                format!(
+                    "{} ${:02X},Y @ {:02X} = {:02X}",
+                    name,
+                    cpu.read(arg_addr),
+                    addr,
+                    cpu.read(addr)
+                )
+            }
+            AddressMode::Rel => format!("{} ${:04X}", name, cpu.rel(arg_addr).addr),
+            AddressMode::Abs => {
+                let addr = cpu.abs(arg_addr).addr;
+                match instruction.instruction_type {
+                    InstructionType::Jmp | InstructionType::Jsr => {
+                        format!("{} ${:04X}", name, addr)
+                    }
+                    _ => format!("{} ${:04X} = {:02X}", name, addr, cpu.read(addr)),
+                }
+            }
+            AddressMode::Abx => {
+                let addr = cpu.abx(arg_addr).addr;
+                format!(
+                    "{} ${:04X},X @ {:04X} = {:02X}",
+                    name,
+                    cpu.read_u16(arg_addr),
+                    addr,
+                    cpu.read(addr)
+                )
+            }
+            AddressMode::Aby => {
+                let addr = cpu.aby(arg_addr).addr;
+                format!(
+                    "{} ${:04X},Y @ {:04X} = {:02X}",
+                    name,
+                    cpu.read_u16(arg_addr),
+                    addr,
+                    cpu.read(addr)
+                )
+            }
+            AddressMode::Ind => {
+                let res = cpu.ind(arg_addr);
+                format!("{} (${:04X}) = {:04X}", name, res.ptr.unwrap(), res.addr)
+            }
+            AddressMode::Izx => {
+                let res = cpu.izx(arg_addr);
+                let ptr = res.ptr.unwrap();
+                let addr = res.addr;
+                format!(
+                    "{} (${:02X},X) @ {:02X} = {:04X} = {:02X}",
+                    name,
+                    cpu.read(arg_addr),
+                    ptr,
+                    addr,
+                    cpu.read(addr)
+                )
+            }
+            AddressMode::Izy => {
+                let res = cpu.izy(arg_addr);
+
+                let ptr = cpu.read(arg_addr);
+                let lo = cpu.read(ptr as u16) as u16;
+                let hi = cpu.read(ptr.wrapping_add(1) as u16) as u16;
+                let base_addr = (hi << 8) | lo;
+
+                let addr = res.addr;
+                format!(
+                    "{} (${:02X}),Y = {:04X} @ {:04X} = {:02X}",
+                    name,
+                    cpu.read(arg_addr),
+                    base_addr,
+                    addr,
+                    cpu.read(addr)
+                )
+            }
+        }
+    }
+
+    fn cpu_log_line(cpu: &Cpu6502) -> String {
+        format!(
+            "{:04X} {:02X} {:31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{}",
+            cpu.pc(),
+            cpu.read(cpu.pc()),
+            get_instruction_repr(cpu, cpu.pc()),
+            cpu.a(),
+            cpu.x(),
+            cpu.y(),
+            cpu.status().bits(),
+            cpu.stkp(),
+            cpu.total_cycles() + cpu.cycles() as u64
+        )
+    }
+
     fn setup() -> (Rc<RefCell<Bus>>, Rc<RefCell<Cpu6502>>) {
         let bus = Rc::new(RefCell::new(Bus::new()));
         let cpu = Rc::new(RefCell::new(Cpu6502::new(Rc::downgrade(&bus))));
@@ -1175,7 +1285,7 @@ mod test {
 
     #[test]
     fn test_adc() {
-        let (_, cpu) = setup();
+        let (_bus, cpu) = setup();
         let mut cpu = cpu.borrow_mut();
 
         // Test that 2 + 3 = 5
@@ -1197,7 +1307,7 @@ mod test {
 
     #[test]
     fn test_adc_flags() {
-        let (_, cpu) = setup();
+        let (_bus, cpu) = setup();
         let mut cpu = cpu.borrow_mut();
 
         // Test that the overflow bit is correctly set
@@ -1232,5 +1342,30 @@ mod test {
     }
 
     #[test]
-    fn nestest_rom() {}
+    fn nestest_rom() {
+        let (nes, cpu) = setup();
+
+        // The address of the last test before the one that
+        // tests the illegal opcodes, which I don't care about
+        const LAST_TEST_ADDR: u16 = 0xC6A3;
+
+        let cartridge = Rc::new(RefCell::new(
+            Cartridge::new("assets/roms/nestest.nes").unwrap(),
+        ));
+        nes.borrow_mut().attach_cartridge(cartridge);
+        let correct_log_file = File::open("assets/roms/nestest.log").unwrap();
+        let mut log_reader = BufReader::new(correct_log_file);
+
+        let mut cpu = cpu.borrow_mut();
+        cpu.reset_to(0xC000);
+
+        while cpu.pc() != LAST_TEST_ADDR {
+            let mut correct_log_line = String::new();
+            log_reader.read_line(&mut correct_log_line).unwrap();
+            let log_line = cpu_log_line(&cpu);
+            assert_eq!(correct_log_line.trim_end(), log_line);
+
+            cpu.next_instruction();
+        }
+    }
 }

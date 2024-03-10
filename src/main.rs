@@ -212,7 +212,7 @@ fn draw_cpu_info(renderer: &mut Renderer, cpu: &Cpu6502, x: usize, y: usize) {
     let mut addr = cpu.pc();
 
     for i in 0..10 {
-        let instruction = Instruction::from(cpu.read(addr));
+        let instruction = Instruction::lookup(cpu.read(addr));
         let instruction_repr = get_instruction_repr(cpu, addr);
 
         renderer.draw_text(
@@ -225,13 +225,14 @@ fn draw_cpu_info(renderer: &mut Renderer, cpu: &Cpu6502, x: usize, y: usize) {
 }
 
 fn get_instruction_repr(cpu: &Cpu6502, addr: u16) -> String {
-    let instruction = Instruction::from(cpu.read(addr));
+    let instruction = Instruction::lookup(cpu.read(addr));
     let arg_addr = addr + 1;
 
     let name = instruction.instruction_type.as_ref().to_uppercase();
 
     match instruction.address_mode {
         AddressMode::Imp => name,
+        AddressMode::Acc => format!("{} A", name),
         AddressMode::Imm => format!("{} #${:02X}", name, cpu.read(arg_addr)),
         AddressMode::Zp0 => format!(
             "{} ${:02X} = {:02X}",

@@ -1,5 +1,5 @@
 use std::fmt::Debug;
-use strum_macros::AsRefStr;
+use strum_macros::{AsRefStr, EnumString};
 
 #[rustfmt::skip]
 mod lookup {
@@ -12,13 +12,13 @@ mod lookup {
 
     lazy_static! {
         pub static ref INSTRUCTIONS: [Instruction; 256] = [
-            I::new(IT::Brk, A::Imm, 7),I::new(IT::Ora, A::Izx, 6),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Xxx, A::Imp, 8),I::new(IT::Nop, A::Zp0, 3),I::new(IT::Ora, A::Zp0, 3),I::new(IT::Asl, A::Zp0, 5),I::new(IT::Xxx, A::Imp, 5),I::new(IT::Php, A::Imp, 3),I::new(IT::Ora, A::Imm, 2),I::new(IT::Asl, A::Imp, 2),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Nop, A::Abs, 4),I::new(IT::Ora, A::Abs, 4),I::new(IT::Asl, A::Abs, 6),I::new(IT::Xxx, A::Imp, 6),
+            I::new(IT::Brk, A::Imm, 7),I::new(IT::Ora, A::Izx, 6),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Xxx, A::Imp, 8),I::new(IT::Nop, A::Zp0, 3),I::new(IT::Ora, A::Zp0, 3),I::new(IT::Asl, A::Zp0, 5),I::new(IT::Xxx, A::Imp, 5),I::new(IT::Php, A::Imp, 3),I::new(IT::Ora, A::Imm, 2),I::new(IT::Asl, A::Acc, 2),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Nop, A::Abs, 4),I::new(IT::Ora, A::Abs, 4),I::new(IT::Asl, A::Abs, 6),I::new(IT::Xxx, A::Imp, 6),
             I::new(IT::Bpl, A::Rel, 2),I::new(IT::Ora, A::Izy, 5),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Xxx, A::Imp, 8),I::new(IT::Nop, A::Zpx, 4),I::new(IT::Ora, A::Zpx, 4),I::new(IT::Asl, A::Zpx, 6),I::new(IT::Xxx, A::Imp, 6),I::new(IT::Clc, A::Imp, 2),I::new(IT::Ora, A::Aby, 4),I::new(IT::Nop, A::Imp, 2),I::new(IT::Xxx, A::Imp, 7),I::new(IT::Nop, A::Abx, 4),I::new(IT::Ora, A::Abx, 4),I::new(IT::Asl, A::Abx, 7),I::new(IT::Xxx, A::Imp, 7),
-            I::new(IT::Jsr, A::Abs, 6),I::new(IT::And, A::Izx, 6),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Xxx, A::Imp, 8),I::new(IT::Bit, A::Zp0, 3),I::new(IT::And, A::Zp0, 3),I::new(IT::Rol, A::Zp0, 5),I::new(IT::Xxx, A::Imp, 5),I::new(IT::Plp, A::Imp, 4),I::new(IT::And, A::Imm, 2),I::new(IT::Rol, A::Imp, 2),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Bit, A::Abs, 4),I::new(IT::And, A::Abs, 4),I::new(IT::Rol, A::Abs, 6),I::new(IT::Xxx, A::Imp, 6),
+            I::new(IT::Jsr, A::Abs, 6),I::new(IT::And, A::Izx, 6),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Xxx, A::Imp, 8),I::new(IT::Bit, A::Zp0, 3),I::new(IT::And, A::Zp0, 3),I::new(IT::Rol, A::Zp0, 5),I::new(IT::Xxx, A::Imp, 5),I::new(IT::Plp, A::Imp, 4),I::new(IT::And, A::Imm, 2),I::new(IT::Rol, A::Acc, 2),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Bit, A::Abs, 4),I::new(IT::And, A::Abs, 4),I::new(IT::Rol, A::Abs, 6),I::new(IT::Xxx, A::Imp, 6),
             I::new(IT::Bmi, A::Rel, 2),I::new(IT::And, A::Izy, 5),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Xxx, A::Imp, 8),I::new(IT::Nop, A::Zpx, 4),I::new(IT::And, A::Zpx, 4),I::new(IT::Rol, A::Zpx, 6),I::new(IT::Xxx, A::Imp, 6),I::new(IT::Sec, A::Imp, 2),I::new(IT::And, A::Aby, 4),I::new(IT::Nop, A::Imp, 2),I::new(IT::Xxx, A::Imp, 7),I::new(IT::Nop, A::Abx, 4),I::new(IT::And, A::Abx, 4),I::new(IT::Rol, A::Abx, 7),I::new(IT::Xxx, A::Imp, 7),
-            I::new(IT::Rti, A::Imp, 6),I::new(IT::Eor, A::Izx, 6),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Xxx, A::Imp, 8),I::new(IT::Nop, A::Zp0, 3),I::new(IT::Eor, A::Zp0, 3),I::new(IT::Lsr, A::Zp0, 5),I::new(IT::Xxx, A::Imp, 5),I::new(IT::Pha, A::Imp, 3),I::new(IT::Eor, A::Imm, 2),I::new(IT::Lsr, A::Imp, 2),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Jmp, A::Abs, 3),I::new(IT::Eor, A::Abs, 4),I::new(IT::Lsr, A::Abs, 6),I::new(IT::Xxx, A::Imp, 6),
+            I::new(IT::Rti, A::Imp, 6),I::new(IT::Eor, A::Izx, 6),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Xxx, A::Imp, 8),I::new(IT::Nop, A::Zp0, 3),I::new(IT::Eor, A::Zp0, 3),I::new(IT::Lsr, A::Zp0, 5),I::new(IT::Xxx, A::Imp, 5),I::new(IT::Pha, A::Imp, 3),I::new(IT::Eor, A::Imm, 2),I::new(IT::Lsr, A::Acc, 2),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Jmp, A::Abs, 3),I::new(IT::Eor, A::Abs, 4),I::new(IT::Lsr, A::Abs, 6),I::new(IT::Xxx, A::Imp, 6),
             I::new(IT::Bvc, A::Rel, 2),I::new(IT::Eor, A::Izy, 5),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Xxx, A::Imp, 8),I::new(IT::Nop, A::Zpx, 4),I::new(IT::Eor, A::Zpx, 4),I::new(IT::Lsr, A::Zpx, 6),I::new(IT::Xxx, A::Imp, 6),I::new(IT::Cli, A::Imp, 2),I::new(IT::Eor, A::Aby, 4),I::new(IT::Nop, A::Imp, 2),I::new(IT::Xxx, A::Imp, 7),I::new(IT::Nop, A::Abx, 4),I::new(IT::Eor, A::Abx, 4),I::new(IT::Lsr, A::Abx, 7),I::new(IT::Xxx, A::Imp, 7),
-            I::new(IT::Rts, A::Imp, 6),I::new(IT::Adc, A::Izx, 6),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Xxx, A::Imp, 8),I::new(IT::Nop, A::Zp0, 3),I::new(IT::Adc, A::Zp0, 3),I::new(IT::Ror, A::Zp0, 5),I::new(IT::Xxx, A::Imp, 5),I::new(IT::Pla, A::Imp, 4),I::new(IT::Adc, A::Imm, 2),I::new(IT::Ror, A::Imp, 2),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Jmp, A::Ind, 5),I::new(IT::Adc, A::Abs, 4),I::new(IT::Ror, A::Abs, 6),I::new(IT::Xxx, A::Imp, 6),
+            I::new(IT::Rts, A::Imp, 6),I::new(IT::Adc, A::Izx, 6),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Xxx, A::Imp, 8),I::new(IT::Nop, A::Zp0, 3),I::new(IT::Adc, A::Zp0, 3),I::new(IT::Ror, A::Zp0, 5),I::new(IT::Xxx, A::Imp, 5),I::new(IT::Pla, A::Imp, 4),I::new(IT::Adc, A::Imm, 2),I::new(IT::Ror, A::Acc, 2),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Jmp, A::Ind, 5),I::new(IT::Adc, A::Abs, 4),I::new(IT::Ror, A::Abs, 6),I::new(IT::Xxx, A::Imp, 6),
             I::new(IT::Bvs, A::Rel, 2),I::new(IT::Adc, A::Izy, 5),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Xxx, A::Imp, 8),I::new(IT::Nop, A::Zpx, 4),I::new(IT::Adc, A::Zpx, 4),I::new(IT::Ror, A::Zpx, 6),I::new(IT::Xxx, A::Imp, 6),I::new(IT::Sei, A::Imp, 2),I::new(IT::Adc, A::Aby, 4),I::new(IT::Nop, A::Imp, 2),I::new(IT::Xxx, A::Imp, 7),I::new(IT::Nop, A::Abx, 4),I::new(IT::Adc, A::Abx, 4),I::new(IT::Ror, A::Abx, 7),I::new(IT::Xxx, A::Imp, 7),
             I::new(IT::Nop, A::Imm, 2),I::new(IT::Sta, A::Izx, 6),I::new(IT::Nop, A::Imp, 2),I::new(IT::Xxx, A::Imp, 6),I::new(IT::Sty, A::Zp0, 3),I::new(IT::Sta, A::Zp0, 3),I::new(IT::Stx, A::Zp0, 3),I::new(IT::Xxx, A::Imp, 3),I::new(IT::Dey, A::Imp, 2),I::new(IT::Nop, A::Imp, 2),I::new(IT::Txa, A::Imp, 2),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Sty, A::Abs, 4),I::new(IT::Sta, A::Abs, 4),I::new(IT::Stx, A::Abs, 4),I::new(IT::Xxx, A::Imp, 4),
             I::new(IT::Bcc, A::Rel, 2),I::new(IT::Sta, A::Izy, 6),I::new(IT::Xxx, A::Imp, 2),I::new(IT::Xxx, A::Imp, 6),I::new(IT::Sty, A::Zpx, 4),I::new(IT::Sta, A::Zpx, 4),I::new(IT::Stx, A::Zpy, 4),I::new(IT::Xxx, A::Imp, 4),I::new(IT::Tya, A::Imp, 2),I::new(IT::Sta, A::Aby, 5),I::new(IT::Txs, A::Imp, 2),I::new(IT::Xxx, A::Imp, 5),I::new(IT::Nop, A::Abx, 5),I::new(IT::Sta, A::Abx, 5),I::new(IT::Xxx, A::Imp, 5),I::new(IT::Xxx, A::Imp, 5),
@@ -47,17 +47,16 @@ impl Instruction {
             cycles,
         }
     }
-}
 
-impl From<u8> for Instruction {
-    fn from(opcode: u8) -> Self {
-        lookup::INSTRUCTIONS[opcode as usize].clone()
+    pub fn lookup(opcode: u8) -> &'static Self {
+        &lookup::INSTRUCTIONS[opcode as usize]
     }
 }
 
 #[derive(Debug, AsRefStr, Copy, Clone)]
 pub enum AddressMode {
     Imp,
+    Acc,
     Imm,
     Zp0,
     Zpx,
@@ -75,6 +74,7 @@ impl AddressMode {
     pub fn arg_size(&self) -> u16 {
         match self {
             AddressMode::Imp => 0,
+            AddressMode::Acc => 0,
             AddressMode::Imm => 1,
             AddressMode::Zp0 => 1,
             AddressMode::Zpx => 1,
@@ -90,7 +90,7 @@ impl AddressMode {
     }
 }
 
-#[derive(Debug, AsRefStr, Copy, Clone)]
+#[derive(Debug, AsRefStr, Copy, Clone, EnumString)]
 pub enum InstructionType {
     Adc,
     And,
