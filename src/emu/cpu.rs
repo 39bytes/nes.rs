@@ -1137,27 +1137,11 @@ mod test {
     use crate::emu::cartridge::Cartridge;
 
     use super::*;
-    use anyhow::{anyhow, Result};
     use std::{
         fs::File,
         io::{BufRead, BufReader},
         rc::Rc,
     };
-
-    #[derive(Eq, PartialEq, Debug)]
-    struct CpuState {
-        pc: u16,
-        opcode: u8,
-        instruction: String,
-        argument: u16,
-
-        a: u8,
-        x: u8,
-        y: u8,
-        p: u8,
-        sp: u8,
-        cycles: u64,
-    }
 
     fn get_instruction_repr(cpu: &Cpu6502, instruction_addr: u16) -> String {
         let instruction = Instruction::lookup(cpu.read(instruction_addr));
@@ -1344,6 +1328,8 @@ mod test {
     #[test]
     fn nestest_rom() {
         let (nes, cpu) = setup();
+
+        // This rom tests everything
 
         // The address of the last test before the one that
         // tests the illegal opcodes, which I don't care about
