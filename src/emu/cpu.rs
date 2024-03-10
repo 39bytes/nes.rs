@@ -48,6 +48,8 @@ pub struct Cpu6502 {
 struct AddressModeResult {
     /// The computed address to read from
     addr: u16,
+    /// The size of the argument, in bytes
+    arg_size: u8,
     /// Whether or not the addressing mode can lead to additional clock cycles
     additional_cycles: bool,
 }
@@ -237,6 +239,7 @@ impl Cpu6502 {
             type A = AddressMode;
             let AddressModeResult {
                 addr,
+                arg_size,
                 additional_cycles,
             } = match instruction.address_mode {
                 A::Imp => self.imp(),
@@ -252,6 +255,7 @@ impl Cpu6502 {
                 A::Izx => self.izx(),
                 A::Izy => self.izy(),
             };
+            self.pc += arg_size as u16;
 
             type I = InstructionType;
             let extra_cycle_count = match instruction.instruction_type {
@@ -336,22 +340,21 @@ impl Cpu6502 {
     /// Implied addressing mode.
     ///
     /// For instructions with no arguments.
-    fn imp(&mut self) -> AddressModeResult {
+    fn imp(&self) -> AddressModeResult {
         AddressModeResult {
             addr: 0,
+            arg_size: 0,
             additional_cycles: false,
         }
     }
 
     /// Immediate addressing mode.
     ///
-    /// Reads data from the next byte of the instruction.
-    fn imm(&mut self) -> AddressModeResult {
-        let addr = self.pc;
-        self.pc += 1;
-
+    /// Read data from the next byte of the instruction.
+    fn imm(&self) -> AddressModeResult {
         AddressModeResult {
-            addr,
+            addr: self.pc,
+            arg_size: 1,
             additional_cycles: false,
         }
     }
@@ -359,12 +362,10 @@ impl Cpu6502 {
     /// Zero page addressing mode.
     ///
     /// Reads data from page 0 of memory (0x0000 - 0x00FF).
-    fn zp0(&mut self) -> AddressModeResult {
-        let addr = self.read(self.pc) as u16;
-        self.pc += 1;
-
+    fn zp0(&self) -> AddressModeResult {
         AddressModeResult {
-            addr,
+            addr: self.read(self.pc) as u16,
+            arg_size: 1,
             additional_cycles: false,
         }
     }
@@ -373,14 +374,10 @@ impl Cpu6502 {
     ///
     /// Reads data from page 0 of memory (0x0000 - 0x00FF)
     /// but offset by the value of the X register.
-    fn zpx(&mut self) -> AddressModeResult {
-        let addr = self.read(self.pc);
-        self.pc += 1;
-
-        let addr = addr.wrapping_add(self.x) as u16;
-
+    fn zpx(&self) -> AddressModeResult {
         AddressModeResult {
-            addr,
+            addr: self.read(self.pc).wrapping_add(self.x) as u16,
+            arg_size: 1,
             additional_cycles: false,
         }
     }
@@ -389,14 +386,10 @@ impl Cpu6502 {
     ///
     /// Reads data from page 0 of memory (0x0000 - 0x00FF)
     /// but offset by the value of the Y register.
-    fn zpy(&mut self) -> AddressModeResult {
-        let addr = self.read(self.pc);
-        self.pc += 1;
-
-        let addr = addr.wrapping_add(self.y) as u16;
-
+    fn zpy(&self) -> AddressModeResult {
         AddressModeResult {
-            addr,
+            addr: self.read(self.pc).wrapping_add(self.y) as u16,
+            arg_size: 1,
             additional_cycles: false,
         }
     }
@@ -404,16 +397,15 @@ impl Cpu6502 {
     /// Absolute addressing mode.
     ///
     /// Reads data from a 16 bit absolute address.
-    fn abs(&mut self) -> AddressModeResult {
+    fn abs(&self) -> AddressModeResult {
         let lo = self.read(self.pc) as u16;
-        self.pc += 1;
-        let hi = self.read(self.pc) as u16;
-        self.pc += 1;
+        let hi = self.read(self.pc + 1) as u16;
 
         let addr = (hi << 8) | lo;
 
         AddressModeResult {
             addr,
+            arg_size: 2,
             additional_cycles: false,
         }
     }
@@ -422,11 +414,9 @@ impl Cpu6502 {
     ///
     /// Reads data from a 16 bit absolute addressing
     /// but offset by the value of the X register.
-    fn abx(&mut self) -> AddressModeResult {
+    fn abx(&self) -> AddressModeResult {
         let lo = self.read(self.pc) as u16;
-        self.pc += 1;
-        let hi = self.read(self.pc) as u16;
-        self.pc += 1;
+        let hi = self.read(self.pc + 1) as u16;
 
         let addr = ((hi << 8) | lo).wrapping_add(self.x as u16);
 
@@ -435,6 +425,7 @@ impl Cpu6502 {
 
         AddressModeResult {
             addr,
+            arg_size: 2,
             additional_cycles,
         }
     }
@@ -443,11 +434,9 @@ impl Cpu6502 {
     ///
     /// Reads data from a 16 bit absolute addressing
     /// but offset by the value of the Y register.
-    fn aby(&mut self) -> AddressModeResult {
+    fn aby(&self) -> AddressModeResult {
         let lo = self.read(self.pc) as u16;
-        self.pc += 1;
-        let hi = self.read(self.pc) as u16;
-        self.pc += 1;
+        let hi = self.read(self.pc + 1) as u16;
 
         let addr = ((hi << 8) | lo).wrapping_add(self.y as u16);
 
@@ -456,6 +445,7 @@ impl Cpu6502 {
 
         AddressModeResult {
             addr,
+            arg_size: 2,
             additional_cycles,
         }
     }
@@ -464,29 +454,27 @@ impl Cpu6502 {
     ///
     /// Uses a signed byte offset from the current program counter.
     /// This is only used by branch instructions.
-    fn rel(&mut self) -> AddressModeResult {
+    fn rel(&self) -> AddressModeResult {
         let offset = self.read(self.pc) as i8;
-        self.pc += 1;
 
         let addr = if offset < 0 {
-            self.pc - (offset.unsigned_abs() as u16)
+            self.pc + 1 - (offset.unsigned_abs() as u16)
         } else {
-            self.pc + offset as u16
+            self.pc + 1 + offset as u16
         };
 
         AddressModeResult {
             addr,
+            arg_size: 1,
             additional_cycles: true,
         }
     }
 
     /// Indirect addressing mode.
     /// Follows a pointer to get the data.
-    fn ind(&mut self) -> AddressModeResult {
+    fn ind(&self) -> AddressModeResult {
         let ptr_lo = self.read(self.pc) as u16;
-        self.pc += 1;
-        let ptr_hi = self.read(self.pc) as u16;
-        self.pc += 1;
+        let ptr_hi = self.read(self.pc + 1) as u16;
 
         let ptr = (ptr_hi << 8) | ptr_lo;
 
@@ -505,15 +493,15 @@ impl Cpu6502 {
 
         AddressModeResult {
             addr,
+            arg_size: 2,
             additional_cycles: false,
         }
     }
 
     /// Indirect addressing mode with X offset.
     /// Dereferences a zero page pointer offset by the value of the X register.
-    fn izx(&mut self) -> AddressModeResult {
+    fn izx(&self) -> AddressModeResult {
         let ptr = self.read(self.pc).wrapping_add(self.x);
-        self.pc += 1;
 
         let lo = self.read(ptr as u16) as u16;
         let hi = self.read(ptr.wrapping_add(1) as u16) as u16;
@@ -522,15 +510,15 @@ impl Cpu6502 {
 
         AddressModeResult {
             addr,
+            arg_size: 1,
             additional_cycles: false,
         }
     }
 
     /// Indirect addressing mode with Y offset.
     /// Follows an 8 bit pointer, then offsets the underlying data by the value of the Y register.
-    fn izy(&mut self) -> AddressModeResult {
+    fn izy(&self) -> AddressModeResult {
         let ptr = self.read(self.pc);
-        self.pc += 1;
 
         let lo = self.read(ptr as u16) as u16;
         let hi = self.read(ptr.wrapping_add(1) as u16) as u16;
@@ -542,6 +530,7 @@ impl Cpu6502 {
 
         AddressModeResult {
             addr,
+            arg_size: 1,
             additional_cycles,
         }
     }
