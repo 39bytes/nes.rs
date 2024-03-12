@@ -35,7 +35,7 @@ pub struct Cpu6502 {
     a: u8,               // Accumulator
     x: u8,               // X register
     y: u8,               // Y register
-    stkp: u8,            // Stack Pointer
+    sp: u8,              // Stack Pointer
     pc: u16,             // Program Counter
     status: StatusFlags, // Status register
 
@@ -61,7 +61,7 @@ impl Cpu6502 {
             a: 0x00,
             x: 0x00,
             y: 0x00,
-            stkp: 0x00,
+            sp: 0x00,
             pc: 0x0000,
             status: StatusFlags::empty(),
             opcode: 0x00,
@@ -83,7 +83,7 @@ impl Cpu6502 {
     }
 
     pub fn stkp(&self) -> u8 {
-        self.stkp
+        self.sp
     }
 
     pub fn pc(&self) -> u16 {
@@ -129,8 +129,8 @@ impl Cpu6502 {
 
     /// Pushes a byte onto the stack.
     fn push(&mut self, data: u8) {
-        self.write(STACK_BASE_ADDR + self.stkp as u16, data);
-        self.stkp -= 1;
+        self.write(STACK_BASE_ADDR + self.sp as u16, data);
+        self.sp -= 1;
     }
 
     /// Pushes 2 bytes onto the stack.
@@ -138,22 +138,22 @@ impl Cpu6502 {
         let hi = (data >> 8) & 0x00FF;
         let lo = data & 0x00FF;
 
-        let stack_addr = STACK_BASE_ADDR + self.stkp as u16;
+        let stack_addr = STACK_BASE_ADDR + self.sp as u16;
         self.write(stack_addr, hi as u8);
         self.write(stack_addr - 1, lo as u8);
-        self.stkp -= 2;
+        self.sp -= 2;
     }
 
     /// Pops a byte from the stack.
     fn pop(&mut self) -> u8 {
-        self.stkp += 1;
-        self.read(STACK_BASE_ADDR + self.stkp as u16)
+        self.sp += 1;
+        self.read(STACK_BASE_ADDR + self.sp as u16)
     }
 
     fn pop_u16(&mut self) -> u16 {
-        self.stkp += 1;
-        let val = self.read_u16(STACK_BASE_ADDR + self.stkp as u16);
-        self.stkp += 1;
+        self.sp += 1;
+        let val = self.read_u16(STACK_BASE_ADDR + self.sp as u16);
+        self.sp += 1;
 
         val
     }
@@ -203,7 +203,7 @@ impl Cpu6502 {
         self.a = 0;
         self.x = 0;
         self.y = 0;
-        self.stkp = 0xFD;
+        self.sp = 0xFD;
         self.status = StatusFlags::from_bits(0x24).unwrap();
 
         self.pc = pc;
@@ -1072,7 +1072,7 @@ impl Cpu6502 {
 
     /// Transfer stack pointer to X register.
     fn tsx(&mut self) -> u8 {
-        self.x = self.stkp;
+        self.x = self.sp;
 
         self.set_flag(StatusFlags::Z, self.x == 0);
         self.set_flag(StatusFlags::N, is_negative(self.x));
@@ -1092,7 +1092,7 @@ impl Cpu6502 {
 
     /// Transfer X register to stack pointer.
     fn txs(&mut self) -> u8 {
-        self.stkp = self.x;
+        self.sp = self.x;
 
         0
     }
