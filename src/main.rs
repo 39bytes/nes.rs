@@ -67,12 +67,12 @@ pub fn main() -> Result<()> {
     let cartridge = Rc::new(RefCell::new(Cartridge::new(rom_path)?));
     nes.borrow_mut().attach_cartridge(cartridge);
 
-    cpu.borrow_mut().reset_to(0xC000);
+    cpu.borrow_mut().reset();
 
     let palette_sprite: Sprite = palette.into();
     let palette_sprite = palette_sprite.scale(16);
 
-    let mut showing_page = 0;
+    let mut displayed_page: u8 = 0;
 
     event_loop.run(move |event, target| {
         // Draw the current frame
@@ -83,18 +83,7 @@ pub fn main() -> Result<()> {
         {
             renderer.clear();
 
-            let page_start = (showing_page as u16) * 0x100;
-            let page_end = page_start + 0xFF;
-
-            renderer.draw_text(&format!("{:#06X}-{:#06X}", page_start, page_end), 0, 320);
-            for (i, line) in nes.borrow().page_str(showing_page).split('\n').enumerate() {
-                renderer.draw_text(line, 0, 360 + i * 20);
-            }
-            renderer.draw_sprite(
-                &ppu.borrow().get_pattern_table(PatternTable::Left),
-                120,
-                120,
-            );
+            draw_mem_page(&mut renderer, &nes.borrow(), displayed_page, 0, 320);
             renderer.draw_sprite(&palette_sprite, 720, 640);
             draw_cpu_info(&mut renderer, &cpu.borrow(), 720, 240);
 
@@ -116,9 +105,9 @@ pub fn main() -> Result<()> {
             } else if input.key_pressed(KeyCode::KeyN) {
                 cpu.borrow_mut().next_instruction();
             } else if input.key_pressed(KeyCode::KeyV) {
-                showing_page = showing_page.wrapping_sub(1);
+                displayed_page = displayed_page.wrapping_sub(1);
             } else if input.key_pressed(KeyCode::KeyB) {
-                showing_page = showing_page.wrapping_add(1);
+                displayed_page = displayed_page.wrapping_add(1);
             }
 
             // Resize the window
@@ -140,6 +129,16 @@ fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
     error!("{method_name}() failed: {err}");
     for source in err.sources().skip(1) {
         error!("  Caused by: {source}");
+    }
+}
+
+fn draw_mem_page(renderer: &mut Renderer, nes: &Bus, page: u8, x: usize, y: usize) {
+    let page_start = (page as u16) * 0x100;
+    let page_end = page_start + 0xFF;
+
+    renderer.draw_text(&format!("{:#06X}-{:#06X}", page_start, page_end), x, y);
+    for (i, line) in nes.page_str(page).split('\n').enumerate() {
+        renderer.draw_text(line, x, y + 40 + i * 20);
     }
 }
 

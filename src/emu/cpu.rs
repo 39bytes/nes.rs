@@ -47,6 +47,7 @@ pub struct Cpu6502 {
 
 struct AddressModeResult {
     /// The pointer that was used to get the computed address, used for debugging
+    #[allow(dead_code)]
     ptr: Option<u16>,
     /// The computed address to read from
     addr: u16,
@@ -1273,7 +1274,6 @@ mod test {
         let mut cpu = cpu.borrow_mut();
 
         // Test that 2 + 3 = 5
-
         cpu.write(0x1000, 3);
         cpu.write(0x1001, 2);
         cpu.lda(0x1000);
