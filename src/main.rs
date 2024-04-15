@@ -1,13 +1,10 @@
-use std::cell::RefCell;
 use std::env;
 use std::process;
-use std::rc::Rc;
 
 use anyhow::{anyhow, Result};
-use emu::ppu::{PatternTable, Ppu};
 use error_iter::ErrorIter as _;
 use log::error;
-use renderer::{Renderer, Sprite};
+use renderer::Renderer;
 use rusttype::Font;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
@@ -16,10 +13,10 @@ use winit::keyboard::KeyCode;
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
-use emu::bus::Bus;
 use emu::cartridge::Cartridge;
 use emu::cpu::Cpu6502;
 use emu::instructions::{AddressMode, Instruction};
+use emu::nes::Nes;
 use emu::palette::Palette;
 
 mod emu;
@@ -58,19 +55,10 @@ pub fn main() -> Result<()> {
 
     let mut renderer = Renderer::new(font, &window, WIDTH, HEIGHT)?;
 
-    let nes = Rc::new(RefCell::new(Bus::new()));
-    let cpu = Rc::new(RefCell::new(Cpu6502::new(Rc::downgrade(&nes))));
-    let ppu = Rc::new(RefCell::new(Ppu::new(Rc::downgrade(&nes), palette.clone())));
-    nes.borrow_mut().attach_cpu(cpu.clone());
-    nes.borrow_mut().attach_ppu(ppu.clone());
-
-    let cartridge = Rc::new(RefCell::new(Cartridge::new(rom_path)?));
-    nes.borrow_mut().attach_cartridge(cartridge);
-
-    cpu.borrow_mut().reset();
-
-    let palette_sprite: Sprite = palette.into();
-    let palette_sprite = palette_sprite.scale(16);
+    let mut nes = Nes::new(palette);
+    let cartridge = Cartridge::new(rom_path)?;
+    nes.load_cartridge(cartridge);
+    nes.reset();
 
     let mut displayed_page: u8 = 0;
 
@@ -83,9 +71,8 @@ pub fn main() -> Result<()> {
         {
             renderer.clear();
 
-            draw_mem_page(&mut renderer, &nes.borrow(), displayed_page, 0, 320);
-            renderer.draw_sprite(&palette_sprite, 720, 640);
-            draw_cpu_info(&mut renderer, &cpu.borrow(), 720, 240);
+            draw_mem_page(&mut renderer, &nes, displayed_page, 0, 320);
+            draw_cpu_info(&mut renderer, &nes, 720, 240);
 
             if let Err(err) = renderer.render() {
                 log_error("pixels.render", err);
@@ -101,9 +88,9 @@ pub fn main() -> Result<()> {
             }
 
             if input.key_pressed(KeyCode::Space) || input.key_held(KeyCode::Space) {
-                cpu.borrow_mut().clock();
+                nes.clock();
             } else if input.key_pressed(KeyCode::KeyN) {
-                cpu.borrow_mut().next_instruction();
+                nes.next_instruction();
             } else if input.key_pressed(KeyCode::KeyV) {
                 displayed_page = displayed_page.wrapping_sub(1);
             } else if input.key_pressed(KeyCode::KeyB) {
@@ -132,17 +119,19 @@ fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
     }
 }
 
-fn draw_mem_page(renderer: &mut Renderer, nes: &Bus, page: u8, x: usize, y: usize) {
+fn draw_mem_page(renderer: &mut Renderer, nes: &Nes, page: u8, x: usize, y: usize) {
     let page_start = (page as u16) * 0x100;
     let page_end = page_start + 0xFF;
 
     renderer.draw_text(&format!("{:#06X}-{:#06X}", page_start, page_end), x, y);
-    for (i, line) in nes.page_str(page).split('\n').enumerate() {
+    for (i, line) in nes.cpu_mem_page_str(page).split('\n').enumerate() {
         renderer.draw_text(line, x, y + 40 + i * 20);
     }
 }
 
-fn draw_cpu_info(renderer: &mut Renderer, cpu: &Cpu6502, x: usize, y: usize) {
+fn draw_cpu_info(renderer: &mut Renderer, nes: &Nes, x: usize, y: usize) {
+    let cpu = nes.cpu();
+
     renderer.draw_text("Registers:", x, y);
     renderer.draw_text(&format!("A: {:#04X}", cpu.a()), x, y + 20);
     renderer.draw_text(&format!("X: {:#04X}", cpu.x()), x, y + 40);
@@ -159,7 +148,7 @@ fn draw_cpu_info(renderer: &mut Renderer, cpu: &Cpu6502, x: usize, y: usize) {
 
     for i in 0..10 {
         let instruction = Instruction::lookup(cpu.read(addr));
-        let instruction_repr = get_instruction_repr(cpu, addr);
+        let instruction_repr = get_instruction_repr(&cpu, addr);
 
         renderer.draw_text(
             &format!("${:4X}: {}", addr, instruction_repr),

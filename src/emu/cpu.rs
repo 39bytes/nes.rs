@@ -1,8 +1,9 @@
-use super::bus::Bus;
+use super::cartridge::Cartridge;
 use super::instructions::{AddressMode, Instruction, InstructionType};
+use super::ppu::Ppu;
 use bitflags::bitflags;
 use std::cell::RefCell;
-use std::rc::Weak;
+use std::rc::Rc;
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -27,10 +28,9 @@ bitflags! {
 }
 
 const STACK_BASE_ADDR: u16 = 0x0100;
+const CPU_RAM_SIZE: usize = 2 * 1024;
 
 pub struct Cpu6502 {
-    bus: Weak<RefCell<Bus>>,
-
     /* Registers */
     a: u8,               // Accumulator
     x: u8,               // X register
@@ -43,6 +43,13 @@ pub struct Cpu6502 {
     cycles: u8,
 
     total_cycles: u64,
+
+    // Memory
+    ram: [u8; CPU_RAM_SIZE],
+
+    // Other components
+    ppu: Option<Rc<RefCell<Ppu>>>,
+    cartridge: Option<Rc<RefCell<Cartridge>>>,
 }
 
 struct AddressModeResult {
@@ -56,9 +63,8 @@ struct AddressModeResult {
 }
 
 impl Cpu6502 {
-    pub fn new(bus: Weak<RefCell<Bus>>) -> Self {
+    pub fn new() -> Self {
         Cpu6502 {
-            bus,
             a: 0x00,
             x: 0x00,
             y: 0x00,
@@ -68,7 +74,20 @@ impl Cpu6502 {
             opcode: 0x00,
             cycles: 0,
             total_cycles: 0,
+
+            ram: [0; CPU_RAM_SIZE],
+
+            cartridge: None,
+            ppu: None,
         }
+    }
+
+    pub fn with_ppu(&mut self, ppu: Rc<RefCell<Ppu>>) {
+        self.ppu = Some(ppu);
+    }
+
+    pub fn with_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) {
+        self.cartridge = Some(cartridge);
     }
 
     pub fn a(&self) -> u8 {
@@ -108,9 +127,20 @@ impl Cpu6502 {
     }
 
     pub fn read(&self, addr: u16) -> u8 {
-        match self.bus.upgrade() {
-            Some(bus) => bus.borrow().cpu_read(addr),
-            None => panic!("Bus not found"),
+        match addr {
+            0x0000..=0x1FFF => {
+                let mapped_addr = addr as usize % CPU_RAM_SIZE;
+                self.ram[mapped_addr]
+            }
+            0x2000..=0x3FFF => match &self.ppu {
+                Some(ppu) => ppu.borrow_mut().cpu_read(addr % 8),
+                None => panic!("PPU not attached"),
+            },
+            0x4020..=0xFFFF => match &self.cartridge {
+                Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap(),
+                None => panic!("Cartridge not attached"),
+            },
+            _ => todo!("Reading from CPU address {:04X} not implemented yet", addr),
         }
     }
 
@@ -121,10 +151,21 @@ impl Cpu6502 {
         (hi << 8) | lo
     }
 
-    fn write(&self, addr: u16, data: u8) {
-        match self.bus.upgrade() {
-            Some(bus) => bus.borrow_mut().cpu_write(addr, data),
-            None => panic!("Bus not found"),
+    fn write(&mut self, addr: u16, data: u8) {
+        match addr {
+            0x0000..=0x1FFF => {
+                let mapped_addr = addr as usize % CPU_RAM_SIZE;
+                self.ram[mapped_addr] = data;
+            }
+            0x2000..=0x3FFF => match &self.ppu {
+                Some(ppu) => ppu.borrow_mut().cpu_write(addr % 8, data),
+                None => panic!("PPU not attached"),
+            },
+            0x4020..=0xFFFF => match &self.cartridge {
+                Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap(),
+                None => panic!("Cartridge not attached"),
+            },
+            _ => todo!("Reading from CPU address {:04X} not implemented yet", addr),
         }
     }
 
@@ -1031,21 +1072,21 @@ impl Cpu6502 {
     }
 
     /// Store accumulator in memory.
-    fn sta(&self, addr: u16) -> u8 {
+    fn sta(&mut self, addr: u16) -> u8 {
         self.write(addr, self.a);
 
         0
     }
 
     /// Store X register in memory.
-    fn stx(&self, addr: u16) -> u8 {
+    fn stx(&mut self, addr: u16) -> u8 {
         self.write(addr, self.x);
 
         0
     }
 
     /// Store Y register in memory.
-    fn sty(&self, addr: u16) -> u8 {
+    fn sty(&mut self, addr: u16) -> u8 {
         self.write(addr, self.y);
 
         0
@@ -1261,17 +1302,9 @@ mod test {
         )
     }
 
-    fn setup() -> (Rc<RefCell<Bus>>, Rc<RefCell<Cpu6502>>) {
-        let bus = Rc::new(RefCell::new(Bus::new()));
-        let cpu = Rc::new(RefCell::new(Cpu6502::new(Rc::downgrade(&bus))));
-        bus.borrow_mut().attach_cpu(cpu.clone());
-        (bus, cpu)
-    }
-
     #[test]
     fn test_adc() {
-        let (_bus, cpu) = setup();
-        let mut cpu = cpu.borrow_mut();
+        let mut cpu = Cpu6502::new();
 
         // Test that 2 + 3 = 5
         cpu.write(0x1000, 3);
@@ -1291,8 +1324,7 @@ mod test {
 
     #[test]
     fn test_adc_flags() {
-        let (_bus, cpu) = setup();
-        let mut cpu = cpu.borrow_mut();
+        let mut cpu = Cpu6502::new();
 
         // Test that the overflow bit is correctly set
         //
@@ -1327,7 +1359,7 @@ mod test {
 
     #[test]
     fn nestest_rom() {
-        let (nes, cpu) = setup();
+        let mut cpu = Cpu6502::new();
 
         // This rom tests everything
 
@@ -1335,14 +1367,11 @@ mod test {
         // tests the illegal opcodes, which I don't care about
         const LAST_TEST_ADDR: u16 = 0xC6A3;
 
-        let cartridge = Rc::new(RefCell::new(
-            Cartridge::new("assets/roms/nestest.nes").unwrap(),
-        ));
-        nes.borrow_mut().attach_cartridge(cartridge);
+        let cartridge = Cartridge::new("assets/roms/nestest.nes").unwrap();
+        cpu.with_cartridge(Rc::new(RefCell::new(cartridge)));
         let correct_log_file = File::open("assets/roms/nestest.log").unwrap();
         let mut log_reader = BufReader::new(correct_log_file);
 
-        let mut cpu = cpu.borrow_mut();
         cpu.reset_to(0xC000);
 
         while cpu.pc() != LAST_TEST_ADDR {

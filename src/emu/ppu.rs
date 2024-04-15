@@ -1,12 +1,13 @@
-use std::{cell::RefCell, rc::Weak};
+use std::{cell::RefCell, rc::Rc};
 
 use crate::renderer::Sprite;
 
 use super::{
-    bus::Bus,
+    cartridge::Cartridge,
+    cpu::Cpu6502,
     palette::{Color, Palette},
 };
-use bitflags::{bitflags, Flags};
+use bitflags::bitflags;
 
 pub enum PatternTable {
     Left,
@@ -60,8 +61,11 @@ bitflags! {
     }
 }
 
+const PATTERN_RAM_SIZE: usize = 2 * 1024;
+const NAMETABLE_RAM_SIZE: usize = 2 * 1024;
+const PALETTE_RAM_SIZE: usize = 32;
+
 pub struct Ppu {
-    bus: Weak<RefCell<Bus>>,
     palette: Palette,
 
     scanline: i16,
@@ -79,12 +83,20 @@ pub struct Ppu {
     scroll: u16,
     addr: u16,
     data: u8,
+
+    // Memory
+    pattern_ram: [u8; PATTERN_RAM_SIZE],
+    nametable_ram: [u8; NAMETABLE_RAM_SIZE],
+    palette_ram: [u8; PALETTE_RAM_SIZE],
+
+    // Other components
+    cpu: Option<Rc<RefCell<Cpu6502>>>,
+    cartridge: Option<Rc<RefCell<Cartridge>>>,
 }
 
 impl Ppu {
-    pub fn new(bus: Weak<RefCell<Bus>>, palette: Palette) -> Self {
+    pub fn new(palette: Palette) -> Self {
         Ppu {
-            bus,
             palette,
 
             scanline: 0,
@@ -101,7 +113,22 @@ impl Ppu {
             scroll: 0x0000,
             addr: 0x0000,
             data: 0x00,
+
+            pattern_ram: [0; PATTERN_RAM_SIZE],
+            nametable_ram: [0; NAMETABLE_RAM_SIZE],
+            palette_ram: [0; PALETTE_RAM_SIZE],
+
+            cpu: None,
+            cartridge: None,
         }
+    }
+
+    pub fn with_cpu(&mut self, cpu: Rc<RefCell<Cpu6502>>) {
+        self.cpu = Some(cpu);
+    }
+
+    pub fn with_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) {
+        self.cartridge = Some(cartridge);
     }
 
     pub fn clock(&mut self) {
@@ -174,17 +201,53 @@ impl Ppu {
         }
     }
 
-    pub fn write(&self, addr: u16, data: u8) {
-        match self.bus.upgrade() {
-            Some(bus) => bus.borrow_mut().ppu_write(addr, data),
-            None => panic!("Bus not found"),
+    pub fn write(&mut self, addr: u16, data: u8) {
+        match &self.cartridge {
+            Some(cartridge) => {
+                if let Ok(()) = cartridge.borrow_mut().ppu_write(addr, data) {
+                    return;
+                }
+            }
+            None => panic!("Cartridge not attached"),
+        };
+
+        match addr {
+            0x0000..=0x1FFF => self.pattern_ram[addr as usize] = data,
+            0x2000..=0x3EFF => todo!(),
+            0x3F00..=0x3FFF => {
+                let i = match addr & 0x1F {
+                    0x0010 | 0x0014 | 0x0018 | 0x001C => addr - 0x10,
+                    x => x,
+                };
+
+                self.palette_ram[i as usize] = data;
+            }
+            _ => panic!("Reading from PPU address {:04X} not implemented yet", addr),
         }
     }
 
     pub fn read(&self, addr: u16) -> u8 {
-        match self.bus.upgrade() {
-            Some(bus) => bus.borrow().ppu_read(addr),
-            None => panic!("Bus not found"),
+        match &self.cartridge {
+            Some(cartridge) => {
+                if let Ok(data) = cartridge.borrow().ppu_read(addr) {
+                    return data;
+                }
+            }
+            None => panic!("Cartridge not attached"),
+        };
+
+        match addr {
+            0x0000..=0x1FFF => self.pattern_ram[addr as usize],
+            0x2000..=0x3EFF => todo!(),
+            0x3F00..=0x3FFF => {
+                let i = match addr & 0x1F {
+                    0x0010 | 0x0014 | 0x0018 | 0x001C => addr - 0x10,
+                    x => x,
+                };
+
+                self.palette_ram[i as usize]
+            }
+            _ => todo!("Reading from PPU address {:04X} not implemented yet", addr),
         }
     }
 
