@@ -3,6 +3,8 @@ use std::{
     rc::Rc,
 };
 
+use anyhow::Result;
+
 use super::{cartridge::Cartridge, cpu::Cpu6502, palette::Palette, ppu::Ppu};
 
 pub struct Nes {
@@ -37,10 +39,12 @@ impl Nes {
         self.ppu.borrow()
     }
 
-    pub fn load_cartridge(&mut self, cartridge: Cartridge) {
+    pub fn load_cartridge(&mut self, cartridge: Cartridge) -> Result<()> {
         let cartridge = Rc::new(RefCell::new(cartridge));
-        self.cpu.borrow_mut().with_cartridge(cartridge.clone());
-        self.ppu.borrow_mut().with_cartridge(cartridge.clone());
+        self.cpu.borrow_mut().load_cartridge(cartridge.clone());
+        self.ppu.borrow_mut().load_cartridge(cartridge.clone())?;
+
+        Ok(())
     }
 
     pub fn reset(&mut self) {

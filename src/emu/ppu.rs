@@ -7,6 +7,7 @@ use super::{
     cpu::Cpu6502,
     palette::{Color, Palette},
 };
+use anyhow::Result;
 use bitflags::bitflags;
 
 pub enum PatternTable {
@@ -61,7 +62,7 @@ bitflags! {
     }
 }
 
-const PATTERN_RAM_SIZE: usize = 2 * 1024;
+const PATTERN_RAM_SIZE: usize = 8 * 1024;
 const NAMETABLE_RAM_SIZE: usize = 2 * 1024;
 const PALETTE_RAM_SIZE: usize = 32;
 
@@ -71,7 +72,7 @@ pub struct Ppu {
     scanline: i16,
     cycle: i16,
 
-    addr_reg_high_byte: bool,
+    write_latch: bool,
     data_buffer: u8,
 
     // Registers
@@ -102,7 +103,7 @@ impl Ppu {
             scanline: 0,
             cycle: 0,
 
-            addr_reg_high_byte: true,
+            write_latch: true,
             data_buffer: 0x00,
 
             ctrl: PpuCtrl::empty(),
@@ -127,8 +128,18 @@ impl Ppu {
         self.cpu = Some(cpu);
     }
 
-    pub fn with_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) {
+    pub fn load_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) -> Result<()> {
+        for i in 0..PATTERN_RAM_SIZE {
+            self.pattern_ram[i] = cartridge.borrow().ppu_read(i as u16)?;
+        }
+        log::info!("Loaded pattern RAM");
+        log::info!(
+            "First 128 bytes of pattern RAM: {:?}",
+            &self.pattern_ram[..128]
+        );
         self.cartridge = Some(cartridge);
+
+        Ok(())
     }
 
     pub fn clock(&mut self) {
@@ -145,48 +156,56 @@ impl Ppu {
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) {
-        match addr {
-            0x0000 => self.ctrl = PpuCtrl::from_bits_truncate(data),
-            0x0001 => self.mask = PpuMask::from_bits_truncate(data),
-            0x0002 => {}
-            0x0003 => {}
-            0x0004 => {}
-            0x0005 => {}
-            0x0006 => {
+        assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
+
+        let register = addr % 8;
+        match register {
+            0 => self.ctrl = PpuCtrl::from_bits_truncate(data),
+            1 => self.mask = PpuMask::from_bits_truncate(data),
+            2 => {}
+            3 => {}
+            4 => {}
+            5 => {}
+            6 => {
                 let data = data as u16;
-                if self.addr_reg_high_byte {
+                // Write latch is true on first write, false on second
+                // We write the high byte first.
+                if self.write_latch {
                     self.addr = (self.addr & 0x00FF) | (data << 8);
-                    self.addr_reg_high_byte = false;
+                    self.write_latch = false;
                 } else {
                     self.addr = (self.addr & 0xFF00) | data;
-                    self.addr_reg_high_byte = true;
+                    self.write_latch = true;
                 }
             }
-            0x0007 => {
+            7 => {
                 self.write(self.addr, data);
                 self.addr += 1;
             }
-            _ => panic!("Invalid register"),
+            _ => unreachable!(),
         }
     }
 
     pub fn cpu_read(&mut self, addr: u16) -> u8 {
-        match addr {
-            0x0000 => 0,
-            0x0001 => 0,
-            0x0002 => {
+        assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
+
+        let register = addr % 8;
+        match register {
+            0 => self.ctrl.bits(),
+            1 => self.mask.bits(),
+            2 => {
                 let data = self.status.bits();
 
                 // self.status.remove(PpuStatus::VerticalBlank);
-                self.addr_reg_high_byte = true;
+                self.write_latch = true;
 
                 data
             }
-            0x0003 => 0,
-            0x0004 => 0,
-            0x0005 => 0,
-            0x0006 => 0,
-            0x0007 => {
+            3 => todo!(),
+            4 => todo!(),
+            5 => todo!(),
+            6 => todo!(),
+            7 => {
                 let mut temp = self.data_buffer;
                 self.data_buffer = self.read(self.addr);
 
@@ -197,7 +216,7 @@ impl Ppu {
 
                 temp
             }
-            _ => panic!("Invalid register"),
+            _ => unreachable!(),
         }
     }
 
@@ -213,10 +232,12 @@ impl Ppu {
 
         match addr {
             0x0000..=0x1FFF => self.pattern_ram[addr as usize] = data,
-            0x2000..=0x3EFF => todo!(),
+            0x2000..=0x3EFF => self.nametable_ram[addr as usize % NAMETABLE_RAM_SIZE] = data,
             0x3F00..=0x3FFF => {
-                let i = match addr & 0x1F {
-                    0x0010 | 0x0014 | 0x0018 | 0x001C => addr - 0x10,
+                // Palette ram is from 0x3F00 to 0x3F1F, but mirrored from 0x3F20-0x3FFF
+                let i = addr & 0x1F;
+                let i = match i {
+                    0x10 | 0x14 | 0x18 | 0x1C => i - 0x10,
                     x => x,
                 };
 
@@ -238,10 +259,13 @@ impl Ppu {
 
         match addr {
             0x0000..=0x1FFF => self.pattern_ram[addr as usize],
-            0x2000..=0x3EFF => todo!(),
+            0x2000..=0x3EFF => self.nametable_ram[addr as usize % NAMETABLE_RAM_SIZE],
             0x3F00..=0x3FFF => {
-                let i = match addr & 0x1F {
-                    0x0010 | 0x0014 | 0x0018 | 0x001C => addr - 0x10,
+                // Palette ram is from 0x3F00 to 0x3F1F, but mirrored from 0x3F20-0x3FFF
+                let i = addr & 0x1F;
+                let i = match i {
+                    // Mirrored on these addresses
+                    0x10 | 0x14 | 0x18 | 0x1C => i - 0x10,
                     x => x,
                 };
 
@@ -251,12 +275,13 @@ impl Ppu {
         }
     }
 
-    fn get_palette_color(&self, palette: u8, pixel: u8) -> Color {
+    pub fn get_palette_color(&self, palette: u8, pixel: u8) -> Color {
         let offset = palette * 4 + pixel;
+        let color_index = self.read(0x3F00 + offset as u16);
 
         self.palette
-            .get_color(self.read(0x3F00 + offset as u16))
-            .unwrap_or_default()
+            .get_color(color_index)
+            .unwrap_or_else(|| panic!("Invalid palette color {}", color_index))
     }
 
     pub fn get_pattern_table(&self, table: PatternTable) -> Sprite {

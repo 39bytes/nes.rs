@@ -86,7 +86,7 @@ impl Cpu6502 {
         self.ppu = Some(ppu);
     }
 
-    pub fn with_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) {
+    pub fn load_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) {
         self.cartridge = Some(cartridge);
     }
 
@@ -129,11 +129,13 @@ impl Cpu6502 {
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1FFF => {
+                // Actual RAM is from 0x0000 to 0x07FF, but it is mirrored
+                // for the rest of the address range
                 let mapped_addr = addr as usize % CPU_RAM_SIZE;
                 self.ram[mapped_addr]
             }
             0x2000..=0x3FFF => match &self.ppu {
-                Some(ppu) => ppu.borrow_mut().cpu_read(addr % 8),
+                Some(ppu) => ppu.borrow_mut().cpu_read(addr),
                 None => panic!("PPU not attached"),
             },
             0x4020..=0xFFFF => match &self.cartridge {
@@ -158,7 +160,7 @@ impl Cpu6502 {
                 self.ram[mapped_addr] = data;
             }
             0x2000..=0x3FFF => match &self.ppu {
-                Some(ppu) => ppu.borrow_mut().cpu_write(addr % 8, data),
+                Some(ppu) => ppu.borrow_mut().cpu_write(addr, data),
                 None => panic!("PPU not attached"),
             },
             0x4020..=0xFFFF => match &self.cartridge {
@@ -1368,7 +1370,7 @@ mod test {
         const LAST_TEST_ADDR: u16 = 0xC6A3;
 
         let cartridge = Cartridge::new("assets/roms/nestest.nes").unwrap();
-        cpu.with_cartridge(Rc::new(RefCell::new(cartridge)));
+        cpu.load_cartridge(Rc::new(RefCell::new(cartridge)));
         let correct_log_file = File::open("assets/roms/nestest.log").unwrap();
         let mut log_reader = BufReader::new(correct_log_file);
 

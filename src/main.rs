@@ -2,9 +2,11 @@ use std::env;
 use std::process;
 
 use anyhow::{anyhow, Result};
+use emu::ppu::PatternTable;
 use error_iter::ErrorIter as _;
 use log::error;
 use renderer::Renderer;
+use renderer::Sprite;
 use rusttype::Font;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
@@ -55,12 +57,15 @@ pub fn main() -> Result<()> {
 
     let mut renderer = Renderer::new(font, &window, WIDTH, HEIGHT)?;
 
-    let mut nes = Nes::new(palette);
+    let mut nes = Nes::new(palette.clone());
     let cartridge = Cartridge::new(rom_path)?;
-    nes.load_cartridge(cartridge);
+    nes.load_cartridge(cartridge)?;
     nes.reset();
 
+    let palette_sprite: Sprite = Sprite::from(palette).scale(16);
+
     let mut displayed_page: u8 = 0;
+    let mut paused = true;
 
     event_loop.run(move |event, target| {
         // Draw the current frame
@@ -71,7 +76,23 @@ pub fn main() -> Result<()> {
         {
             renderer.clear();
 
-            draw_mem_page(&mut renderer, &nes, displayed_page, 0, 320);
+            renderer.draw_sprite(&palette_sprite, 0, 0);
+            let left_pattern_table = nes.ppu().get_pattern_table(PatternTable::Left);
+            let right_pattern_table = nes.ppu().get_pattern_table(PatternTable::Right);
+            renderer.draw_sprite(&left_pattern_table, 0, 64);
+            renderer.draw_sprite(&right_pattern_table, 160, 64);
+            for i in 0..8 {
+                let bg_color = nes.ppu().get_palette_color(i, 0);
+                let color1 = nes.ppu().get_palette_color(i, 1);
+                let color2 = nes.ppu().get_palette_color(i, 2);
+                let color3 = nes.ppu().get_palette_color(i, 3);
+                let sprite = Sprite::new(vec![bg_color, color1, color2, color3], 4, 1)
+                    .unwrap()
+                    .scale(16);
+                renderer.draw_sprite(&sprite, 0, (i as usize) * 16 + 224);
+            }
+
+            // draw_mem_page(&mut renderer, &nes, displayed_page, 0, 320);
             draw_cpu_info(&mut renderer, &nes, 720, 240);
 
             if let Err(err) = renderer.render() {
@@ -88,7 +109,9 @@ pub fn main() -> Result<()> {
             }
 
             if input.key_pressed(KeyCode::Space) || input.key_held(KeyCode::Space) {
-                nes.clock();
+                for _ in 0..60 {
+                    nes.clock();
+                }
             } else if input.key_pressed(KeyCode::KeyN) {
                 nes.next_instruction();
             } else if input.key_pressed(KeyCode::KeyV) {

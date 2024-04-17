@@ -122,6 +122,7 @@ impl Cartridge {
         let mut chr_rom = vec![0u8; chr_rom_size];
         f.read_exact(chr_rom.as_mut_slice())?;
         log::info!("Character ROM size: {}", chr_rom.len());
+        log::info!("First 128 bytes of character ROM: {:?}", &chr_rom[..128]);
 
         Ok((prg_rom, chr_rom))
     }
