@@ -18,8 +18,7 @@ pub struct Nes {
 impl Nes {
     pub fn new(palette: Palette) -> Self {
         let cpu = Rc::new(RefCell::new(Cpu6502::new()));
-        let ppu = Rc::new(RefCell::new(Ppu::new(palette)));
-        ppu.borrow_mut().with_cpu(cpu.clone());
+        let ppu = Rc::new(RefCell::new(Ppu::new(palette, cpu.clone())));
         cpu.borrow_mut().with_ppu(ppu.clone());
 
         Nes {
@@ -53,15 +52,22 @@ impl Nes {
 
     pub fn clock(&mut self) {
         self.clock_count += 1;
-        self.ppu.borrow_mut().clock();
+        let nmi = self.ppu.borrow_mut().clock();
         if self.clock_count % 3 == 0 {
             self.cpu.borrow_mut().clock();
         }
-        self.clock_count += 1;
+        if nmi {
+            self.cpu.borrow_mut().nmi();
+        }
     }
 
     pub fn next_instruction(&mut self) {
-        self.cpu.borrow_mut().next_instruction();
+        let cycles = self.cpu.borrow().cycles();
+        let until_next_cpu_cycle = (3 - self.clock_count % 3) as u8;
+        let to_next = until_next_cpu_cycle + cycles * 3;
+        for _ in 0..to_next {
+            self.clock();
+        }
     }
 
     pub fn cpu_mem_page_str(&self, page: u8) -> String {

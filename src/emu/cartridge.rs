@@ -128,12 +128,12 @@ impl Cartridge {
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) -> Result<()> {
-        self.prg_memory[self.mapper.cpu_map_write(addr)? as usize] = data;
+        self.prg_memory[self.mapper.cpu_map_write(addr)? as usize - 0x8000] = data;
         Ok(())
     }
 
     pub fn cpu_read(&self, addr: u16) -> Result<u8> {
-        Ok(self.prg_memory[self.mapper.cpu_map_read(addr)? as usize])
+        Ok(self.prg_memory[self.mapper.cpu_map_read(addr)? as usize - 0x8000])
     }
 
     pub fn ppu_write(&mut self, addr: u16, data: u8) -> Result<()> {

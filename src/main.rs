@@ -27,6 +27,9 @@ mod renderer;
 const WIDTH: usize = 960;
 const HEIGHT: usize = 720;
 
+const CLOCK_SPEED: u32 = 5361818;
+const FRAME_CLOCKS: u32 = CLOCK_SPEED / 60;
+
 pub fn main() -> Result<()> {
     env_logger::init();
     let event_loop = EventLoop::new().unwrap();
@@ -65,7 +68,7 @@ pub fn main() -> Result<()> {
     let palette_sprite: Sprite = Sprite::from(palette).scale(16);
 
     let mut displayed_page: u8 = 0;
-    let mut paused = true;
+    let mut last_time = 0;
 
     event_loop.run(move |event, target| {
         // Draw the current frame
@@ -109,7 +112,7 @@ pub fn main() -> Result<()> {
             }
 
             if input.key_pressed(KeyCode::Space) || input.key_held(KeyCode::Space) {
-                for _ in 0..60 {
+                for _ in 0..FRAME_CLOCKS {
                     nes.clock();
                 }
             } else if input.key_pressed(KeyCode::KeyN) {

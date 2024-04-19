@@ -90,6 +90,13 @@ impl Cpu6502 {
         self.cartridge = Some(cartridge);
     }
 
+    #[cfg(test)]
+    fn next_instruction(&mut self) {
+        self.total_cycles += self.cycles as u64;
+        self.cycles = 0;
+        self.clock();
+    }
+
     pub fn a(&self) -> u8 {
         self.a
     }
@@ -142,7 +149,8 @@ impl Cpu6502 {
                 Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap(),
                 None => panic!("Cartridge not attached"),
             },
-            _ => todo!("Reading from CPU address {:04X} not implemented yet", addr),
+            _ => 0,
+            // _ => todo!("Reading from CPU address {:04X} not implemented yet", addr),
         }
     }
 
@@ -167,7 +175,7 @@ impl Cpu6502 {
                 Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap(),
                 None => panic!("Cartridge not attached"),
             },
-            _ => todo!("Reading from CPU address {:04X} not implemented yet", addr),
+            _ => 0,
         }
     }
 
@@ -354,13 +362,6 @@ impl Cpu6502 {
         self.cycles -= 1;
 
         self.total_cycles += 1;
-    }
-
-    /// Debug function
-    pub fn next_instruction(&mut self) {
-        self.total_cycles += self.cycles as u64;
-        self.cycles = 0;
-        self.clock();
     }
 
     // Addressing modes
@@ -1167,7 +1168,7 @@ impl Cpu6502 {
     }
 
     /// Non-maskable interrupt, can't be disabled
-    fn nmi(&mut self) {
+    pub fn nmi(&mut self) {
         self.interrupt(0xFFFA, 8);
     }
 }

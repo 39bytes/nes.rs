@@ -26,7 +26,7 @@ impl Mapper for Mapper0 {
         }
 
         if self.num_banks == 1 {
-            Ok(addr % BANK_SIZE)
+            Ok((addr - 0x8000) % BANK_SIZE + 0x8000)
         } else {
             Ok(addr)
         }
@@ -38,7 +38,7 @@ impl Mapper for Mapper0 {
         }
 
         if self.num_banks == 1 {
-            Ok(addr % BANK_SIZE)
+            Ok((addr - 0x8000) % BANK_SIZE + 0x8000)
         } else {
             Ok(addr)
         }

@@ -86,21 +86,20 @@ pub struct Ppu {
     data: u8,
 
     // Memory
-    pattern_ram: [u8; PATTERN_RAM_SIZE],
     nametable_ram: [u8; NAMETABLE_RAM_SIZE],
     palette_ram: [u8; PALETTE_RAM_SIZE],
 
     // Other components
-    cpu: Option<Rc<RefCell<Cpu6502>>>,
+    cpu: Rc<RefCell<Cpu6502>>,
     cartridge: Option<Rc<RefCell<Cartridge>>>,
 }
 
 impl Ppu {
-    pub fn new(palette: Palette) -> Self {
+    pub fn new(palette: Palette, cpu: Rc<RefCell<Cpu6502>>) -> Self {
         Ppu {
             palette,
 
-            scanline: 0,
+            scanline: -1,
             cycle: 0,
 
             write_latch: true,
@@ -115,35 +114,40 @@ impl Ppu {
             addr: 0x0000,
             data: 0x00,
 
-            pattern_ram: [0; PATTERN_RAM_SIZE],
             nametable_ram: [0; NAMETABLE_RAM_SIZE],
             palette_ram: [0; PALETTE_RAM_SIZE],
 
-            cpu: None,
+            cpu,
             cartridge: None,
         }
     }
 
-    pub fn with_cpu(&mut self, cpu: Rc<RefCell<Cpu6502>>) {
-        self.cpu = Some(cpu);
-    }
-
     pub fn load_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) -> Result<()> {
-        for i in 0..PATTERN_RAM_SIZE {
-            self.pattern_ram[i] = cartridge.borrow().ppu_read(i as u16)?;
-        }
-        log::info!("Loaded pattern RAM");
-        log::info!(
-            "First 128 bytes of pattern RAM: {:?}",
-            &self.pattern_ram[..128]
-        );
         self.cartridge = Some(cartridge);
 
         Ok(())
     }
 
-    pub fn clock(&mut self) {
+    /// Returns true if an NMI should be emitted
+    pub fn clock(&mut self) -> bool {
+        // See: https://www.nesdev.org/wiki/PPU_rendering
         self.cycle += 1;
+
+        // Rendering a new frame so reset vertical blank
+        if self.scanline == -1 && self.cycle == 1 {
+            log::info!("Resetting vertical blank");
+            self.status.set(PpuStatus::VerticalBlank, false);
+            log::info!("Status register bits: {}", self.status.bits());
+        }
+
+        let mut nmi = false;
+        // Finished rendering visible portion, entering vertical blank
+        if self.scanline == 241 && self.cycle == 1 {
+            log::info!("Setting vertical blank");
+            self.status.set(PpuStatus::VerticalBlank, true);
+            log::info!("Status register bits: {}", self.status.bits());
+            nmi = true;
+        }
 
         if self.cycle > 340 {
             self.cycle = 0;
@@ -153,6 +157,8 @@ impl Ppu {
                 self.scanline = -1;
             }
         }
+
+        nmi
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) {
@@ -195,8 +201,9 @@ impl Ppu {
             1 => self.mask.bits(),
             2 => {
                 let data = self.status.bits();
+                log::info!("Status: {}", data);
 
-                // self.status.remove(PpuStatus::VerticalBlank);
+                self.status.set(PpuStatus::VerticalBlank, false);
                 self.write_latch = true;
 
                 data
@@ -231,7 +238,7 @@ impl Ppu {
         };
 
         match addr {
-            0x0000..=0x1FFF => self.pattern_ram[addr as usize] = data,
+            0x0000..=0x1FFF => {}
             0x2000..=0x3EFF => self.nametable_ram[addr as usize % NAMETABLE_RAM_SIZE] = data,
             0x3F00..=0x3FFF => {
                 // Palette ram is from 0x3F00 to 0x3F1F, but mirrored from 0x3F20-0x3FFF
@@ -243,7 +250,7 @@ impl Ppu {
 
                 self.palette_ram[i as usize] = data;
             }
-            _ => panic!("Reading from PPU address {:04X} not implemented yet", addr),
+            _ => panic!("Writing to PPU address {:04X} not implemented yet", addr),
         }
     }
 
@@ -258,7 +265,6 @@ impl Ppu {
         };
 
         match addr {
-            0x0000..=0x1FFF => self.pattern_ram[addr as usize],
             0x2000..=0x3EFF => self.nametable_ram[addr as usize % NAMETABLE_RAM_SIZE],
             0x3F00..=0x3FFF => {
                 // Palette ram is from 0x3F00 to 0x3F1F, but mirrored from 0x3F20-0x3FFF
@@ -296,14 +302,15 @@ impl Ppu {
             for j in 0..16 {
                 let tile_offset = i * 256 + j * 16;
                 for tile_row in 0..8 {
-                    let tile_lsb = self.read(table_offset + tile_offset + tile_row);
-                    let tile_msb = self.read(table_offset + tile_offset + tile_row + 8);
+                    let row_addr = table_offset + tile_offset + tile_row;
+                    let tile_lsb = self.read(row_addr);
+                    let tile_msb = self.read(row_addr + 8);
 
                     for tile_col in 0..8 {
                         let lsb = (tile_lsb >> tile_col) & 0x01;
                         let msb = (tile_msb >> tile_col) & 0x01;
 
-                        let pixel = lsb | (msb << 1);
+                        let pixel = (msb << 1) | lsb;
                         let pixel_index = (i * 8 + tile_row) * 128 + (j * 8 + 7 - tile_col);
                         // TODO: Don't hardcode palette
                         buf[pixel_index as usize] = self.get_palette_color(0, pixel);
