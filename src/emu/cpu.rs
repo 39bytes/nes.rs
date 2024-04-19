@@ -175,7 +175,7 @@ impl Cpu6502 {
                 Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap(),
                 None => panic!("Cartridge not attached"),
             },
-            _ => 0,
+            _ => {}
         }
     }
 
@@ -1169,7 +1169,7 @@ impl Cpu6502 {
 
     /// Non-maskable interrupt, can't be disabled
     pub fn nmi(&mut self) {
-        self.interrupt(0xFFFA, 8);
+        self.interrupt(0xFFFA, 7);
     }
 }
 

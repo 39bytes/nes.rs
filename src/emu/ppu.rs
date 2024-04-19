@@ -1,12 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::renderer::Sprite;
+use crate::renderer::{Color, Sprite};
 
-use super::{
-    cartridge::Cartridge,
-    cpu::Cpu6502,
-    palette::{Color, Palette},
-};
+use super::{cartridge::Cartridge, cpu::Cpu6502, palette::Palette};
 use anyhow::Result;
 use bitflags::bitflags;
 
@@ -16,7 +12,8 @@ pub enum PatternTable {
 }
 
 bitflags! {
-    struct PpuCtrl: u8 {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    pub struct PpuCtrl: u8 {
         /// Base nametable address
         /// 0: $2000; 1: $2400; 2: $2800; 3: $2C00
         const NametableLSB = 1 << 0;
@@ -41,7 +38,7 @@ bitflags! {
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    struct PpuMask: u8 {
+    pub struct PpuMask: u8 {
         const Greyscale = 1 << 0;
         const ShowBackgroundLeft = 1 << 1;
         const ShowSpritesLeft = 1 << 2;
@@ -55,7 +52,7 @@ bitflags! {
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    struct PpuStatus: u8 {
+    pub struct PpuStatus: u8 {
         const SpriteOverflow = 1 << 5;
         const Sprite0Hit = 1 << 6;
         const VerticalBlank = 1 << 7;
@@ -120,6 +117,38 @@ impl Ppu {
             cpu,
             cartridge: None,
         }
+    }
+
+    pub fn ctrl(&self) -> PpuCtrl {
+        self.ctrl
+    }
+
+    pub fn mask(&self) -> PpuMask {
+        self.mask
+    }
+
+    pub fn status(&self) -> PpuStatus {
+        self.status
+    }
+
+    pub fn oam_addr(&self) -> u8 {
+        self.oam_addr
+    }
+
+    pub fn oam_data(&self) -> u8 {
+        self.oam_data
+    }
+
+    pub fn scroll(&self) -> u16 {
+        self.scroll
+    }
+
+    pub fn addr(&self) -> u16 {
+        self.addr
+    }
+
+    pub fn data(&self) -> u8 {
+        self.data
     }
 
     pub fn load_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) -> Result<()> {

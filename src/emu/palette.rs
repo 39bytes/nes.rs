@@ -2,8 +2,7 @@ use anyhow::Result;
 use std::fs::File;
 use std::io::prelude::*;
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Color(pub u8, pub u8, pub u8);
+use crate::renderer::{Color, Sprite};
 
 #[derive(Debug, Clone)]
 pub struct Palette {
@@ -32,5 +31,11 @@ impl Palette {
 
     pub fn get_color(&self, color: u8) -> Option<Color> {
         self.colors.get(color as usize).copied()
+    }
+}
+
+impl From<Palette> for Sprite {
+    fn from(value: Palette) -> Self {
+        Sprite::new(value.colors().clone(), 16, 4).unwrap()
     }
 }

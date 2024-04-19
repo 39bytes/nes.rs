@@ -1,11 +1,16 @@
-use std::fmt::Display;
-
 use anyhow::{anyhow, Result};
 use pixels::{Pixels, SurfaceTexture};
 use rusttype::{point, Font, Scale};
 use winit::window::Window;
 
-use crate::emu::palette::{Color, Palette};
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Color(pub u8, pub u8, pub u8);
+
+impl Color {
+    pub const WHITE: Self = Color(255, 255, 255);
+    pub const GRAY: Self = Color(128, 128, 128);
+    pub const BLACK: Self = Color(0, 0, 0);
+}
 
 pub struct Sprite {
     pixels: Vec<Color>,
@@ -54,10 +59,18 @@ impl Sprite {
     }
 }
 
-impl From<Palette> for Sprite {
-    fn from(value: Palette) -> Self {
-        Sprite::new(value.colors().clone(), 16, 4).unwrap()
+pub fn outline(width: usize, height: usize, color: Color) -> Sprite {
+    let mut buf = vec![];
+    for i in 0..height {
+        for j in 0..width {
+            if i == 0 || i == height - 1 || j == 0 || j == width - 1 {
+                buf.push(color);
+            } else {
+                buf.push(Color::BLACK);
+            }
+        }
     }
+    Sprite::new(buf, width, height).unwrap()
 }
 
 pub struct Renderer {
@@ -102,8 +115,8 @@ impl Renderer {
     }
 
     pub fn draw_sprite(&mut self, sprite: &Sprite, x: usize, y: usize) {
-        for i in 0..sprite.height {
-            for j in 0..sprite.width {
+        for i in 0..sprite.height() {
+            for j in 0..sprite.width() {
                 let px = self.pixel_index(x + j, y + i);
                 let frame = self.pixels.frame_mut();
                 let pixel = sprite.pixels[i * sprite.width + j];
@@ -116,6 +129,7 @@ impl Renderer {
         }
     }
 
+    /// Draws white text at a given screen position
     pub fn draw_text(&mut self, text: &str, x: usize, y: usize) {
         let scale = Scale::uniform(Self::FONT_SIZE as f32);
 
@@ -138,6 +152,48 @@ impl Renderer {
 
                     let b = (v * 255.0) as u8;
                     let pixel = [b, b, b, 255];
+                    frame[i..i + 4].copy_from_slice(&pixel);
+                });
+            }
+        }
+    }
+
+    /// Draws text with color for each character that can be computed from a closure.
+    pub fn draw_text_with_computed_color<F>(
+        &mut self,
+        text: &str,
+        x: usize,
+        y: usize,
+        color_func: F,
+    ) where
+        F: Fn(usize) -> Color,
+    {
+        let scale = Scale::uniform(Self::FONT_SIZE as f32);
+
+        let v_metrics = self.font.v_metrics(scale);
+
+        let glyphs = self
+            .font
+            .layout(text, scale, point(x as f32, y as f32 + v_metrics.ascent));
+        let frame = self.pixels.frame_mut();
+
+        for (idx, glyph) in glyphs.enumerate() {
+            if let Some(bb) = glyph.pixel_bounding_box() {
+                glyph.draw(|x, y, v| {
+                    let x = bb.min.x as u32 + x;
+                    let y = bb.min.y as u32 + y;
+                    let i = (x as usize + y as usize * self.width) * 4;
+                    if i + 3 >= frame.len() {
+                        return;
+                    }
+                    let color = color_func(idx);
+
+                    let pixel = [
+                        (v * color.0 as f32) as u8,
+                        (v * color.1 as f32) as u8,
+                        (v * color.2 as f32) as u8,
+                        255,
+                    ];
                     frame[i..i + 4].copy_from_slice(&pixel);
                 });
             }
