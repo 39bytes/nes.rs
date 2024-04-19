@@ -4,7 +4,6 @@ use std::process;
 use anyhow::{anyhow, Result};
 use error_iter::ErrorIter as _;
 use log::error;
-use renderer::outline;
 use renderer::{Color, Renderer, Sprite};
 use rusttype::Font;
 use winit::dpi::LogicalSize;
@@ -164,6 +163,7 @@ fn draw_cpu_info(renderer: &mut Renderer, nes: &Nes, x: usize, y: usize) {
     renderer.draw_text(&format!("Y: {:#04X}", cpu.y()), x, y + 60);
     renderer.draw_text(&format!("Stack: {:#04X}", cpu.stkp()), x, y + 80);
     renderer.draw_text("Status:", x, y + 100);
+
     draw_flags(renderer, cpu.status().bits(), "NVUBDIZC", x + 96, y + 100);
     renderer.draw_text(&format!("PC: {:#06X}", cpu.pc()), x, y + 140);
 
@@ -219,10 +219,13 @@ fn draw_ppu_info(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
     renderer.draw_text("PPU Registers:", x, y);
     renderer.draw_text("CTRL: ", x, y + 20);
     draw_flags(renderer, ppu.ctrl().bits(), "VPHBSINN", x + 80, y + 20);
+
     renderer.draw_text("MASK: ", x, y + 40);
     draw_flags(renderer, ppu.mask().bits(), "BGRsbMmG", x + 80, y + 40);
+
     renderer.draw_text("STATUS: ", x, y + 60);
     draw_flags(renderer, ppu.status().bits(), "VSO-----", x + 96, y + 60);
+
     renderer.draw_text(&format!("OAMADDR: {:#06X}", ppu.oam_addr()), x, y + 80);
     renderer.draw_text(&format!("OAMDATA: {:#06X}", ppu.oam_data()), x, y + 100);
     renderer.draw_text(&format!("SCROLL: {:#06X}", ppu.scroll()), x, y + 120);
@@ -233,6 +236,7 @@ fn draw_ppu_info(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
 fn draw_pattern_tables(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
     let left_pattern_table = ppu.get_pattern_table(PatternTable::Left);
     let right_pattern_table = ppu.get_pattern_table(PatternTable::Right);
+
     renderer.draw_text("Pattern Tables", x, y);
     renderer.draw_sprite(&left_pattern_table, x, y + 24);
     renderer.draw_sprite(&right_pattern_table, x + 144, y + 24);
@@ -243,6 +247,7 @@ fn palette_sprite(ppu: &Ppu, palette_index: u8) -> Sprite {
     let color1 = ppu.get_palette_color(palette_index, 1);
     let color2 = ppu.get_palette_color(palette_index, 2);
     let color3 = ppu.get_palette_color(palette_index, 3);
+
     Sprite::new(vec![bg_color, color1, color2, color3], 4, 1)
         .unwrap()
         .scale(16)
