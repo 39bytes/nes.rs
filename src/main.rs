@@ -2,7 +2,6 @@ use std::env;
 use std::process;
 
 use anyhow::{anyhow, Result};
-use clap::Parser;
 use error_iter::ErrorIter as _;
 use log::error;
 use renderer::{Color, Renderer, Sprite};
