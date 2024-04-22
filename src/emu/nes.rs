@@ -38,6 +38,10 @@ impl Nes {
         self.ppu.borrow()
     }
 
+    pub fn clock_count(&self) -> u64 {
+        self.clock_count
+    }
+
     pub fn load_cartridge(&mut self, cartridge: Cartridge) -> Result<()> {
         let cartridge = Rc::new(RefCell::new(cartridge));
         self.cpu.borrow_mut().load_cartridge(cartridge.clone());
@@ -57,6 +61,7 @@ impl Nes {
             self.cpu.borrow_mut().clock();
         }
         if nmi {
+            println!("NMI");
             self.cpu.borrow_mut().nmi();
         }
     }

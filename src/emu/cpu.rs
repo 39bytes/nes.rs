@@ -138,7 +138,7 @@ impl Cpu6502 {
             0x0000..=0x1FFF => {
                 // Actual RAM is from 0x0000 to 0x07FF, but it is mirrored
                 // for the rest of the address range
-                let mapped_addr = addr as usize % CPU_RAM_SIZE;
+                let mapped_addr = addr as usize & 0x07FF;
                 self.ram[mapped_addr]
             }
             0x2000..=0x3FFF => match &self.ppu {
@@ -154,7 +154,35 @@ impl Cpu6502 {
         }
     }
 
+    pub fn read_debug(&self, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x1FFF => {
+                // Actual RAM is from 0x0000 to 0x07FF, but it is mirrored
+                // for the rest of the address range
+                let mapped_addr = addr as usize & 0x07FF;
+                self.ram[mapped_addr]
+            }
+            0x2000..=0x3FFF => match &self.ppu {
+                Some(ppu) => ppu.borrow().cpu_read_debug(addr),
+                None => panic!("PPU not attached"),
+            },
+            0x4020..=0xFFFF => match &self.cartridge {
+                Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap(),
+                None => panic!("Cartridge not attached"),
+            },
+            _ => 0,
+            // _ => todo!("Reading from CPU address {:04X} not implemented yet", addr),
+        }
+    }
+
     pub fn read_u16(&self, addr: u16) -> u16 {
+        let lo = self.read(addr) as u16;
+        let hi = self.read(addr + 1) as u16;
+
+        (hi << 8) | lo
+    }
+
+    pub fn read_debug_u16(&self, addr: u16) -> u16 {
         let lo = self.read(addr) as u16;
         let hi = self.read(addr + 1) as u16;
 
@@ -181,12 +209,18 @@ impl Cpu6502 {
 
     /// Pushes a byte onto the stack.
     fn push(&mut self, data: u8) {
+        if self.sp == 0 {
+            panic!("Stack overflow");
+        }
         self.write(STACK_BASE_ADDR + self.sp as u16, data);
         self.sp -= 1;
     }
 
     /// Pushes 2 bytes onto the stack.
     fn push_u16(&mut self, data: u16) {
+        if self.sp <= 1 {
+            panic!("Stack overflow");
+        }
         let hi = (data >> 8) & 0x00FF;
         let lo = data & 0x00FF;
 
@@ -1171,6 +1205,124 @@ impl Cpu6502 {
     pub fn nmi(&mut self) {
         self.interrupt(0xFFFA, 7);
     }
+
+    // Debug functions
+    pub fn get_instruction_repr(&self, instruction_addr: u16) -> String {
+        let instruction = Instruction::lookup(self.read_debug(instruction_addr));
+        let arg_addr = instruction_addr + 1;
+
+        let name = instruction.instruction_type.as_ref().to_uppercase();
+
+        match instruction.address_mode {
+            AddressMode::Imp => name,
+            AddressMode::Acc => format!("{} A", name),
+            AddressMode::Imm => format!("{} #${:02X}", name, self.read_debug(arg_addr)),
+            AddressMode::Zp0 => {
+                let addr = self.zp0(arg_addr).addr;
+                format!("{} ${:02X} = {:02X}", name, addr, self.read_debug(addr))
+            }
+            AddressMode::Zpx => {
+                let addr = self.zpx(arg_addr).addr;
+                format!(
+                    "{} ${:02X},X @ {:02X} = {:02X}",
+                    name,
+                    self.read_debug(arg_addr),
+                    addr,
+                    self.read_debug(addr)
+                )
+            }
+            AddressMode::Zpy => {
+                let addr = self.zpy(arg_addr).addr;
+                format!(
+                    "{} ${:02X},Y @ {:02X} = {:02X}",
+                    name,
+                    self.read_debug(arg_addr),
+                    addr,
+                    self.read_debug(addr)
+                )
+            }
+            AddressMode::Rel => format!("{} ${:04X}", name, self.rel(arg_addr).addr),
+            AddressMode::Abs => {
+                let addr = self.abs(arg_addr).addr;
+                match instruction.instruction_type {
+                    InstructionType::Jmp | InstructionType::Jsr => {
+                        format!("{} ${:04X}", name, addr)
+                    }
+                    _ => format!("{} ${:04X} = {:02X}", name, addr, self.read_debug(addr)),
+                }
+            }
+            AddressMode::Abx => {
+                let addr = self.abx(arg_addr).addr;
+                format!(
+                    "{} ${:04X},X @ {:04X} = {:02X}",
+                    name,
+                    self.read_debug_u16(arg_addr),
+                    addr,
+                    self.read_debug(addr)
+                )
+            }
+            AddressMode::Aby => {
+                let addr = self.aby(arg_addr).addr;
+                format!(
+                    "{} ${:04X},Y @ {:04X} = {:02X}",
+                    name,
+                    self.read_debug_u16(arg_addr),
+                    addr,
+                    self.read_debug(addr)
+                )
+            }
+            AddressMode::Ind => {
+                let res = self.ind(arg_addr);
+                format!("{} (${:04X}) = {:04X}", name, res.ptr.unwrap(), res.addr)
+            }
+            AddressMode::Izx => {
+                let res = self.izx(arg_addr);
+                let ptr = res.ptr.unwrap();
+                let addr = res.addr;
+                format!(
+                    "{} (${:02X},X) @ {:02X} = {:04X} = {:02X}",
+                    name,
+                    self.read_debug(arg_addr),
+                    ptr,
+                    addr,
+                    self.read_debug(addr)
+                )
+            }
+            AddressMode::Izy => {
+                let res = self.izy(arg_addr);
+
+                let ptr = self.read_debug(arg_addr);
+                let lo = self.read_debug(ptr as u16) as u16;
+                let hi = self.read_debug(ptr.wrapping_add(1) as u16) as u16;
+                let base_addr = (hi << 8) | lo;
+
+                let addr = res.addr;
+                format!(
+                    "{} (${:02X}),Y = {:04X} @ {:04X} = {:02X}",
+                    name,
+                    self.read_debug(arg_addr),
+                    base_addr,
+                    addr,
+                    self.read_debug(addr)
+                )
+            }
+        }
+    }
+
+    pub fn get_log_line(&self) -> String {
+        format!(
+            "{:04X} {:02X} {:31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{}",
+            self.pc(),
+            self.read_debug(self.pc()),
+            self.get_instruction_repr(self.pc()),
+            self.a(),
+            self.x(),
+            self.y(),
+            self.status().bits(),
+            self.stkp(),
+            self.total_cycles() + self.cycles() as u64
+        )
+    }
 }
 
 fn is_negative(byte: u8) -> bool {
@@ -1187,123 +1339,6 @@ mod test {
         io::{BufRead, BufReader},
         rc::Rc,
     };
-
-    fn get_instruction_repr(cpu: &Cpu6502, instruction_addr: u16) -> String {
-        let instruction = Instruction::lookup(cpu.read(instruction_addr));
-        let arg_addr = instruction_addr + 1;
-
-        let name = instruction.instruction_type.as_ref().to_uppercase();
-
-        match instruction.address_mode {
-            AddressMode::Imp => name,
-            AddressMode::Acc => format!("{} A", name),
-            AddressMode::Imm => format!("{} #${:02X}", name, cpu.read(arg_addr)),
-            AddressMode::Zp0 => {
-                let addr = cpu.zp0(arg_addr).addr;
-                format!("{} ${:02X} = {:02X}", name, addr, cpu.read(addr))
-            }
-            AddressMode::Zpx => {
-                let addr = cpu.zpx(arg_addr).addr;
-                format!(
-                    "{} ${:02X},X @ {:02X} = {:02X}",
-                    name,
-                    cpu.read(arg_addr),
-                    addr,
-                    cpu.read(addr)
-                )
-            }
-            AddressMode::Zpy => {
-                let addr = cpu.zpy(arg_addr).addr;
-                format!(
-                    "{} ${:02X},Y @ {:02X} = {:02X}",
-                    name,
-                    cpu.read(arg_addr),
-                    addr,
-                    cpu.read(addr)
-                )
-            }
-            AddressMode::Rel => format!("{} ${:04X}", name, cpu.rel(arg_addr).addr),
-            AddressMode::Abs => {
-                let addr = cpu.abs(arg_addr).addr;
-                match instruction.instruction_type {
-                    InstructionType::Jmp | InstructionType::Jsr => {
-                        format!("{} ${:04X}", name, addr)
-                    }
-                    _ => format!("{} ${:04X} = {:02X}", name, addr, cpu.read(addr)),
-                }
-            }
-            AddressMode::Abx => {
-                let addr = cpu.abx(arg_addr).addr;
-                format!(
-                    "{} ${:04X},X @ {:04X} = {:02X}",
-                    name,
-                    cpu.read_u16(arg_addr),
-                    addr,
-                    cpu.read(addr)
-                )
-            }
-            AddressMode::Aby => {
-                let addr = cpu.aby(arg_addr).addr;
-                format!(
-                    "{} ${:04X},Y @ {:04X} = {:02X}",
-                    name,
-                    cpu.read_u16(arg_addr),
-                    addr,
-                    cpu.read(addr)
-                )
-            }
-            AddressMode::Ind => {
-                let res = cpu.ind(arg_addr);
-                format!("{} (${:04X}) = {:04X}", name, res.ptr.unwrap(), res.addr)
-            }
-            AddressMode::Izx => {
-                let res = cpu.izx(arg_addr);
-                let ptr = res.ptr.unwrap();
-                let addr = res.addr;
-                format!(
-                    "{} (${:02X},X) @ {:02X} = {:04X} = {:02X}",
-                    name,
-                    cpu.read(arg_addr),
-                    ptr,
-                    addr,
-                    cpu.read(addr)
-                )
-            }
-            AddressMode::Izy => {
-                let res = cpu.izy(arg_addr);
-
-                let ptr = cpu.read(arg_addr);
-                let lo = cpu.read(ptr as u16) as u16;
-                let hi = cpu.read(ptr.wrapping_add(1) as u16) as u16;
-                let base_addr = (hi << 8) | lo;
-
-                let addr = res.addr;
-                format!(
-                    "{} (${:02X}),Y = {:04X} @ {:04X} = {:02X}",
-                    name,
-                    cpu.read(arg_addr),
-                    base_addr,
-                    addr,
-                    cpu.read(addr)
-                )
-            }
-        }
-    }
-
-    fn cpu_log_line(cpu: &Cpu6502) -> String {
-        format!(
-            "{:04X} {:02X} {:31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{}",
-            cpu.pc(),
-            cpu.read(cpu.pc()),
-            get_instruction_repr(cpu, cpu.pc()),
-            cpu.a(),
-            cpu.x(),
-            cpu.y(),
-            cpu.status().bits(),
-            cpu.stkp(),
-            cpu.total_cycles() + cpu.cycles() as u64
-        )
-    }
 
     #[test]
     fn test_adc() {
@@ -1380,7 +1415,7 @@ mod test {
         while cpu.pc() != LAST_TEST_ADDR {
             let mut correct_log_line = String::new();
             log_reader.read_line(&mut correct_log_line).unwrap();
-            let log_line = cpu_log_line(&cpu);
+            let log_line = cpu.get_log_line();
             assert_eq!(correct_log_line.trim_end(), log_line);
 
             cpu.next_instruction();

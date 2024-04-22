@@ -151,6 +151,14 @@ impl Ppu {
         self.data
     }
 
+    pub fn scanline(&self) -> i16 {
+        self.scanline
+    }
+
+    pub fn cycle(&self) -> i16 {
+        self.cycle
+    }
+
     pub fn load_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) -> Result<()> {
         self.cartridge = Some(cartridge);
 
@@ -164,17 +172,13 @@ impl Ppu {
 
         // Rendering a new frame so reset vertical blank
         if self.scanline == -1 && self.cycle == 1 {
-            log::info!("Resetting vertical blank");
             self.status.set(PpuStatus::VerticalBlank, false);
-            log::info!("Status register bits: {}", self.status.bits());
         }
 
         let mut nmi = false;
         // Finished rendering visible portion, entering vertical blank
         if self.scanline == 241 && self.cycle == 1 {
-            log::info!("Setting vertical blank");
             self.status.set(PpuStatus::VerticalBlank, true);
-            log::info!("Status register bits: {}", self.status.bits());
             nmi = true;
         }
 
@@ -230,17 +234,17 @@ impl Ppu {
             1 => self.mask.bits(),
             2 => {
                 let data = self.status.bits();
-                log::info!("Status: {}", data);
+                // println!("Read status register: {:08b}", data);
 
                 self.status.set(PpuStatus::VerticalBlank, false);
                 self.write_latch = true;
 
                 data
             }
-            3 => todo!(),
-            4 => todo!(),
-            5 => todo!(),
-            6 => todo!(),
+            3 => 0,
+            4 => 0,
+            5 => 0,
+            6 => 0,
             7 => {
                 let mut temp = self.data_buffer;
                 self.data_buffer = self.read(self.addr);
@@ -252,6 +256,24 @@ impl Ppu {
 
                 temp
             }
+            _ => unreachable!(),
+        }
+    }
+
+    /// CPU Read but doesn't affect state
+    pub fn cpu_read_debug(&self, addr: u16) -> u8 {
+        assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
+
+        let register = addr % 8;
+        match register {
+            0 => self.ctrl.bits(),
+            1 => self.mask.bits(),
+            2 => self.status.bits(),
+            3 => 0,
+            4 => 0,
+            5 => 0,
+            6 => 0,
+            7 => self.data_buffer,
             _ => unreachable!(),
         }
     }
@@ -279,7 +301,8 @@ impl Ppu {
 
                 self.palette_ram[i as usize] = data;
             }
-            _ => panic!("Writing to PPU address {:04X} not implemented yet", addr),
+            // _ => panic!("Writing to PPU address {:04X} not implemented yet", addr),
+            _ => {}
         }
     }
 
@@ -306,7 +329,8 @@ impl Ppu {
 
                 self.palette_ram[i as usize]
             }
-            _ => todo!("Reading from PPU address {:04X} not implemented yet", addr),
+            // _ => todo!("Reading from PPU address {:04X} not implemented yet", addr),
+            _ => 0,
         }
     }
 

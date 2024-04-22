@@ -2,6 +2,7 @@ use std::env;
 use std::process;
 
 use anyhow::{anyhow, Result};
+use clap::Parser;
 use error_iter::ErrorIter as _;
 use log::error;
 use renderer::{Color, Renderer, Sprite};
@@ -68,7 +69,6 @@ pub fn main() -> Result<()> {
     let palette_sprite = Sprite::from(palette).scale(16);
 
     let mut displayed_page: u8 = 0;
-    let mut last_time = 0;
 
     event_loop.run(move |event, target| {
         // Draw the current frame
@@ -83,8 +83,11 @@ pub fn main() -> Result<()> {
             draw_palettes(&mut renderer, &nes.ppu(), 240, 0);
             renderer.draw_sprite(&palette_sprite, 240, 88);
             draw_pattern_tables(&mut renderer, &nes.ppu(), 596, 0);
+            renderer.draw_text(&format!("Scanline: {}", nes.ppu().scanline()), 0, 192);
+            renderer.draw_text(&format!("Cycle: {}", nes.ppu().cycle()), 0, 208);
+            renderer.draw_text(&format!("Global Clock: {}", nes.clock_count()), 0, 224);
 
-            // draw_mem_page(&mut renderer, &nes, displayed_page, 0, 320);
+            draw_mem_page(&mut renderer, &nes, displayed_page, 0, 320);
             draw_cpu_info(&mut renderer, &nes, 720, 240);
 
             if let Err(err) = renderer.render() {
@@ -101,7 +104,7 @@ pub fn main() -> Result<()> {
             }
 
             if input.key_pressed(KeyCode::Space) || input.key_held(KeyCode::Space) {
-                for _ in 0..FRAME_CLOCKS {
+                for _ in 0..360 {
                     nes.clock();
                 }
             } else if input.key_pressed(KeyCode::KeyN) {
