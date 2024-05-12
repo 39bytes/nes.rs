@@ -1,3 +1,4 @@
+mod bit_ext;
 pub mod cartridge;
 pub mod cpu;
 pub mod instructions;

@@ -5,12 +5,16 @@ use std::{
 
 use anyhow::Result;
 
+use crate::renderer::{Color, Sprite};
+
 use super::{cartridge::Cartridge, cpu::Cpu6502, palette::Palette, ppu::Ppu};
 
 pub struct Nes {
     cpu: Rc<RefCell<Cpu6502>>,
     ppu: Rc<RefCell<Ppu>>,
     cartridge: Option<Rc<RefCell<Cartridge>>>,
+
+    screen: Sprite,
 
     clock_count: u64,
 }
@@ -26,6 +30,8 @@ impl Nes {
             ppu,
             cartridge: None,
 
+            screen: Sprite::monocolor(Color::BLACK, 256, 240),
+
             clock_count: 0,
         }
     }
@@ -38,6 +44,10 @@ impl Nes {
         self.ppu.borrow()
     }
 
+    pub fn screen(&self) -> &Sprite {
+        &self.screen
+    }
+
     pub fn clock_count(&self) -> u64 {
         self.clock_count
     }
@@ -45,7 +55,7 @@ impl Nes {
     pub fn load_cartridge(&mut self, cartridge: Cartridge) -> Result<()> {
         let cartridge = Rc::new(RefCell::new(cartridge));
         self.cpu.borrow_mut().load_cartridge(cartridge.clone());
-        self.ppu.borrow_mut().load_cartridge(cartridge.clone())?;
+        self.ppu.borrow_mut().load_cartridge(cartridge.clone());
 
         Ok(())
     }
@@ -56,12 +66,18 @@ impl Nes {
 
     pub fn clock(&mut self) {
         self.clock_count += 1;
-        let nmi = self.ppu.borrow_mut().clock();
+        let clock_res = self.ppu.borrow_mut().clock();
+        if let Some(pixel) = clock_res.pixel {
+            if let Err(e) = self.screen.set_pixel(pixel.x, pixel.y, pixel.color) {
+                panic!("{}", e);
+            }
+        }
+
         if self.clock_count % 3 == 0 {
             self.cpu.borrow_mut().clock();
         }
-        if nmi {
-            println!("NMI");
+
+        if clock_res.nmi {
             self.cpu.borrow_mut().nmi();
         }
     }

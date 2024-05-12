@@ -12,6 +12,18 @@ impl Color {
     pub const BLACK: Self = Color(0, 0, 0);
 }
 
+pub struct Pixel {
+    pub x: usize,
+    pub y: usize,
+    pub color: Color,
+}
+
+impl Pixel {
+    pub fn new(x: usize, y: usize, color: Color) -> Self {
+        Pixel { x, y, color }
+    }
+}
+
 pub struct Sprite {
     pixels: Vec<Color>,
     width: usize,
@@ -36,6 +48,20 @@ impl Sprite {
         })
     }
 
+    pub fn monocolor(color: Color, width: usize, height: usize) -> Self {
+        let mut pixels = Vec::with_capacity(width * height);
+
+        for _ in 0..(width * height) {
+            pixels.push(color);
+        }
+
+        Sprite {
+            pixels,
+            width,
+            height,
+        }
+    }
+
     pub fn width(&self) -> usize {
         self.width
     }
@@ -56,6 +82,19 @@ impl Sprite {
         }
 
         Sprite::new(scaled, self.width * scale, self.height * scale).unwrap()
+    }
+
+    pub fn set_pixel(&mut self, x: usize, y: usize, color: Color) -> Result<()> {
+        if !(0..self.width).contains(&x) || !(0..self.height).contains(&y) {
+            return Err(anyhow!(
+                "Coordinates ({}, {}) are outside of the bounds of the sprite",
+                x,
+                y
+            ));
+        }
+
+        self.pixels[y * self.width + x] = color;
+        Ok(())
     }
 }
 

@@ -68,6 +68,7 @@ pub fn main() -> Result<()> {
     let palette_sprite = Sprite::from(palette).scale(16);
 
     let mut displayed_page: u8 = 0;
+    let mut paused = true;
 
     event_loop.run(move |event, target| {
         // Draw the current frame
@@ -85,13 +86,21 @@ pub fn main() -> Result<()> {
             renderer.draw_text(&format!("Scanline: {}", nes.ppu().scanline()), 0, 192);
             renderer.draw_text(&format!("Cycle: {}", nes.ppu().cycle()), 0, 208);
             renderer.draw_text(&format!("Global Clock: {}", nes.clock_count()), 0, 224);
+            renderer.draw_sprite(nes.screen(), 0, 256);
 
-            draw_mem_page(&mut renderer, &nes, displayed_page, 0, 320);
+            // draw_mem_page(&mut renderer, &nes, displayed_page, 0, 320);
+            // draw_nametable(&mut renderer, &nes.ppu(), 0, 0);
             draw_cpu_info(&mut renderer, &nes, 720, 240);
 
             if let Err(err) = renderer.render() {
                 log_error("pixels.render", err);
                 target.exit();
+            }
+        }
+
+        if !paused {
+            for _ in 0..FRAME_CLOCKS {
+                nes.clock();
             }
         }
 
@@ -102,10 +111,8 @@ pub fn main() -> Result<()> {
                 target.exit();
             }
 
-            if input.key_pressed(KeyCode::Space) || input.key_held(KeyCode::Space) {
-                for _ in 0..360 {
-                    nes.clock();
-                }
+            if input.key_pressed(KeyCode::Space) {
+                paused = !paused;
             } else if input.key_pressed(KeyCode::KeyN) {
                 nes.next_instruction();
             } else if input.key_pressed(KeyCode::KeyV) {
@@ -230,9 +237,8 @@ fn draw_ppu_info(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
 
     renderer.draw_text(&format!("OAMADDR: {:#06X}", ppu.oam_addr()), x, y + 80);
     renderer.draw_text(&format!("OAMDATA: {:#06X}", ppu.oam_data()), x, y + 100);
-    renderer.draw_text(&format!("SCROLL: {:#06X}", ppu.scroll()), x, y + 120);
-    renderer.draw_text(&format!("ADDR: {:#06X}", ppu.addr()), x, y + 140);
-    renderer.draw_text(&format!("DATA: {:#06X}", ppu.data()), x, y + 160);
+    renderer.draw_text(&format!("ADDR: {:#06X}", ppu.addr()), x, y + 120);
+    renderer.draw_text(&format!("DATA: {:#06X}", ppu.data()), x, y + 140);
 }
 
 fn draw_pattern_tables(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
@@ -274,5 +280,16 @@ fn draw_palettes(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
             x + 72 * (i as usize % 2) + 160,
             y + 24 * (i as usize / 2) + 24,
         );
+    }
+}
+
+fn draw_nametable(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
+    let nametable1 = &ppu.nametables()[..1024];
+
+    for j in 0..30 {
+        for i in 0..32 {
+            let tile_index = nametable1[j * 32 + i];
+            renderer.draw_text(&format!("{:02X}", tile_index), i * 24 + x, j * 24 + y);
+        }
     }
 }

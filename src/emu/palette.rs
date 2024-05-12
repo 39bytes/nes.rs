@@ -9,6 +9,14 @@ pub struct Palette {
     colors: Vec<Color>,
 }
 
+impl Default for Palette {
+    fn default() -> Self {
+        Self {
+            colors: Vec::from([Color::BLACK; 64]),
+        }
+    }
+}
+
 impl Palette {
     pub fn load(path: &str) -> Result<Self> {
         let mut f = File::open(path)?;

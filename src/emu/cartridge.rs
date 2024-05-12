@@ -64,11 +64,18 @@ impl Header {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum Mirroring {
+    Horizontal,
+    Vertical,
+}
+
 pub struct Cartridge {
     prg_memory: Vec<u8>,
     chr_memory: Vec<u8>,
 
     mapper: Box<dyn Mapper>,
+    mirroring: Mirroring,
 }
 
 impl Cartridge {
@@ -86,6 +93,12 @@ impl Cartridge {
             log::info!("Rom has trainer info, skipping 512 bytes");
             f.seek(SeekFrom::Current(512))?;
         }
+
+        let mirroring = if header.flags6.contains(Flags6::Mirroring) {
+            Mirroring::Vertical
+        } else {
+            Mirroring::Horizontal
+        };
 
         let file_type = 1;
 
@@ -105,7 +118,12 @@ impl Cartridge {
             prg_memory: prg_rom,
             chr_memory: chr_rom,
             mapper,
+            mirroring,
         })
+    }
+
+    pub fn mirroring(&self) -> Mirroring {
+        self.mirroring
     }
 
     fn from_type1(mut f: File, header: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
