@@ -22,7 +22,7 @@ impl Mapper0 {
 impl Mapper for Mapper0 {
     fn cpu_map_read(&self, addr: u16) -> Result<u16> {
         if addr < 0x8000 {
-            return Err(anyhow!("Address out of range"));
+            return Err(anyhow!("Address {:#06X} out of range", addr));
         }
 
         if self.num_banks == 1 {
@@ -34,7 +34,7 @@ impl Mapper for Mapper0 {
 
     fn cpu_map_write(&self, addr: u16) -> Result<u16> {
         if addr < 0x8000 {
-            return Err(anyhow!("Address out of range"));
+            return Err(anyhow!("Address {:#06X} out of range", addr));
         }
 
         if self.num_banks == 1 {
@@ -46,7 +46,7 @@ impl Mapper for Mapper0 {
 
     fn ppu_map_read(&self, addr: u16) -> Result<u16> {
         if addr > 0x1FFF {
-            return Err(anyhow!("Address out of range"));
+            return Err(anyhow!("Address {:#06X} out of range", addr));
         }
 
         Ok(addr)
