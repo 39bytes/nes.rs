@@ -84,10 +84,12 @@ pub fn main() -> Result<()> {
             draw_palettes(&mut renderer, &nes.ppu(), 240, 0);
             renderer.draw_sprite(&palette_sprite, 240, 88);
             draw_pattern_tables(&mut renderer, &nes.ppu(), 596, 0);
-            renderer.draw_text(&format!("Scanline: {}", nes.ppu().scanline()), 0, 192);
-            renderer.draw_text(&format!("Cycle: {}", nes.ppu().cycle()), 0, 208);
-            renderer.draw_text(&format!("Global Clock: {}", nes.clock_count()), 0, 224);
-            renderer.draw_sprite(nes.screen(), 0, 256);
+            renderer.draw_text(&format!("Scanline: {}", nes.ppu().scanline()), 0, 160);
+            renderer.draw_text(&format!("Cycle: {}", nes.ppu().cycle()), 0, 176);
+            renderer.draw_text(&format!("Global Clock: {}", nes.clock_count()), 0, 192);
+
+            let screen = nes.screen().clone();
+            renderer.draw_sprite(&screen.scale(2), 0, 224);
 
             // draw_mem_page(&mut renderer, &nes, displayed_page, 0, 320);
             // draw_nametable(&mut renderer, &nes.ppu(), 0, 0);
