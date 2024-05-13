@@ -24,6 +24,7 @@ impl Pixel {
     }
 }
 
+#[derive(Clone)]
 pub struct Sprite {
     pixels: Vec<Color>,
     width: usize,
@@ -157,13 +158,15 @@ impl Renderer {
         for i in 0..sprite.height() {
             for j in 0..sprite.width() {
                 let px = self.pixel_index(x + j, y + i);
-                let frame = self.pixels.frame_mut();
-                let pixel = sprite.pixels[i * sprite.width + j];
+                if let Some(px) = px {
+                    let frame = self.pixels.frame_mut();
+                    let pixel = sprite.pixels[i * sprite.width + j];
 
-                frame[px] = pixel.0;
-                frame[px + 1] = pixel.1;
-                frame[px + 2] = pixel.2;
-                frame[px + 3] = 255;
+                    frame[px] = pixel.0;
+                    frame[px + 1] = pixel.1;
+                    frame[px + 2] = pixel.2;
+                    frame[px + 3] = 255;
+                }
             }
         }
     }
@@ -239,7 +242,11 @@ impl Renderer {
         }
     }
 
-    fn pixel_index(&self, x: usize, y: usize) -> usize {
-        (x + y * self.width) * 4
+    fn pixel_index(&self, x: usize, y: usize) -> Option<usize> {
+        if !(0..self.width).contains(&x) || !(0..self.height).contains(&y) {
+            None
+        } else {
+            Some((x + y * self.width) * 4)
+        }
     }
 }
