@@ -308,7 +308,7 @@ impl Ppu {
         // Finished rendering visible portion, entering vertical blank
         if self.scanline == 241 && self.cycle == 1 {
             self.status.set(PpuStatus::VerticalBlank, true);
-            nmi = true;
+            nmi = self.ctrl.contains(PpuCtrl::GenerateNMI);
         }
 
         let pixel = self.get_pixel();
@@ -612,9 +612,9 @@ impl Ppu {
                     temp = self.data_buffer;
                 }
                 if self.ctrl.contains(PpuCtrl::VRamAddressIncrement) {
-                    self.vram_addr.set_coarse_y(self.vram_addr.coarse_y() + 1);
+                    self.vram_addr = VRAMAddr::from(u16::from(self.vram_addr) + 32);
                 } else {
-                    self.vram_addr.set_coarse_x(self.vram_addr.coarse_x() + 1);
+                    self.vram_addr = VRAMAddr::from(u16::from(self.vram_addr) + 1);
                 }
 
                 temp
