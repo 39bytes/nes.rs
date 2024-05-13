@@ -126,8 +126,9 @@ const NAMETABLE_SIZE: usize = 1024;
 pub struct Ppu {
     palette: Palette,
 
-    scanline: i16,
+    // X and Y positions that the PPU is currently rendering
     cycle: u16,
+    scanline: i16,
 
     // Registers
     ctrl: PpuCtrl,

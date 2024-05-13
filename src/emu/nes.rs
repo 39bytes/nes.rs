@@ -1,5 +1,5 @@
 use std::{
-    cell::{Ref, RefCell},
+    cell::{Ref, RefCell, RefMut},
     rc::Rc,
 };
 
@@ -7,7 +7,9 @@ use anyhow::Result;
 
 use crate::renderer::{Color, Sprite};
 
-use super::{cartridge::Cartridge, cpu::Cpu6502, palette::Palette, ppu::Ppu};
+use super::{
+    cartridge::Cartridge, cpu::Cpu6502, input::ControllerButtons, palette::Palette, ppu::Ppu,
+};
 
 pub struct Nes {
     cpu: Rc<RefCell<Cpu6502>>,
@@ -40,8 +42,16 @@ impl Nes {
         self.cpu.borrow()
     }
 
+    pub fn cpu_mut(&self) -> RefMut<Cpu6502> {
+        self.cpu.borrow_mut()
+    }
+
     pub fn ppu(&self) -> Ref<Ppu> {
         self.ppu.borrow()
+    }
+
+    pub fn ppu_mut(&self) -> RefMut<Ppu> {
+        self.ppu.borrow_mut()
     }
 
     pub fn screen(&self) -> &Sprite {
@@ -62,6 +72,10 @@ impl Nes {
 
     pub fn reset(&mut self) {
         self.cpu.borrow_mut().reset();
+    }
+
+    pub fn trigger_inputs(&mut self, buttons: ControllerButtons) {
+        self.cpu.borrow_mut().trigger_inputs(buttons);
     }
 
     pub fn clock(&mut self) {
@@ -104,7 +118,7 @@ impl Nes {
             s.push_str(&format!("{:X}  ", i));
             for j in 0..16 {
                 let idx = page_start + i * 0x10 + j;
-                s.push_str(&format!("{:02X} ", self.cpu.borrow().read(idx)));
+                s.push_str(&format!("{:02X} ", self.cpu.borrow_mut().read(idx)));
             }
             s.push('\n');
         }

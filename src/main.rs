@@ -2,6 +2,7 @@ use std::env;
 use std::process;
 
 use anyhow::{anyhow, Result};
+use emu::input::ControllerButtons;
 use error_iter::ErrorIter as _;
 use log::error;
 use renderer::{Color, Renderer, Sprite};
@@ -111,6 +112,7 @@ pub fn main() -> Result<()> {
                 target.exit();
             }
 
+            // Emulator meta events
             if input.key_pressed(KeyCode::Space) {
                 paused = !paused;
             } else if input.key_pressed(KeyCode::KeyN) {
@@ -120,6 +122,34 @@ pub fn main() -> Result<()> {
             } else if input.key_pressed(KeyCode::KeyB) {
                 displayed_page = displayed_page.wrapping_add(1);
             }
+
+            // Console input
+            let mut buttons = ControllerButtons::empty();
+            if input.key_held(KeyCode::KeyX) {
+                buttons.insert(ControllerButtons::A);
+            }
+            if input.key_held(KeyCode::KeyZ) {
+                buttons.insert(ControllerButtons::B);
+            }
+            if input.key_held(KeyCode::KeyA) {
+                buttons.insert(ControllerButtons::Select);
+            }
+            if input.key_held(KeyCode::KeyS) {
+                buttons.insert(ControllerButtons::Start);
+            }
+            if input.key_held(KeyCode::ArrowUp) {
+                buttons.insert(ControllerButtons::Up);
+            }
+            if input.key_held(KeyCode::ArrowDown) {
+                buttons.insert(ControllerButtons::Down);
+            }
+            if input.key_held(KeyCode::ArrowLeft) {
+                buttons.insert(ControllerButtons::Left);
+            }
+            if input.key_held(KeyCode::ArrowRight) {
+                buttons.insert(ControllerButtons::Right);
+            }
+            nes.trigger_inputs(buttons);
 
             // Resize the window
             if let Some(size) = input.window_resized() {
@@ -164,7 +194,7 @@ fn draw_flags(renderer: &mut Renderer, flags: u8, text: &str, x: usize, y: usize
 }
 
 fn draw_cpu_info(renderer: &mut Renderer, nes: &Nes, x: usize, y: usize) {
-    let cpu = nes.cpu();
+    let mut cpu = nes.cpu_mut();
 
     renderer.draw_text("CPU Registers:", x, y);
     renderer.draw_text(&format!("A: {:#04X}", cpu.a()), x, y + 20);
@@ -182,7 +212,7 @@ fn draw_cpu_info(renderer: &mut Renderer, nes: &Nes, x: usize, y: usize) {
 
     for i in 0..10 {
         let instruction = Instruction::lookup(cpu.read(addr));
-        let instruction_repr = get_instruction_repr(&cpu, addr);
+        let instruction_repr = get_instruction_repr(&mut cpu, addr);
 
         renderer.draw_text(
             &format!("${:4X}: {}", addr, instruction_repr),
@@ -193,7 +223,7 @@ fn draw_cpu_info(renderer: &mut Renderer, nes: &Nes, x: usize, y: usize) {
     }
 }
 
-fn get_instruction_repr(cpu: &Cpu6502, addr: u16) -> String {
+fn get_instruction_repr(cpu: &mut Cpu6502, addr: u16) -> String {
     let instruction = Instruction::lookup(cpu.read(addr));
     let arg_addr = addr + 1;
 

@@ -1,4 +1,5 @@
 use super::cartridge::Cartridge;
+use super::input::ControllerButtons;
 use super::instructions::{AddressMode, Instruction, InstructionType};
 use super::ppu::Ppu;
 use bitflags::bitflags;
@@ -50,6 +51,10 @@ pub struct Cpu6502 {
     // Other components
     ppu: Option<Rc<RefCell<Ppu>>>,
     cartridge: Option<Rc<RefCell<Cartridge>>>,
+
+    // Input
+    controller: ControllerButtons,
+    controller_shift_reg: u8,
 }
 
 struct AddressModeResult {
@@ -79,6 +84,9 @@ impl Cpu6502 {
 
             cartridge: None,
             ppu: None,
+
+            controller: ControllerButtons::empty(),
+            controller_shift_reg: 0x00,
         }
     }
 
@@ -133,7 +141,11 @@ impl Cpu6502 {
         self.total_cycles
     }
 
-    pub fn read(&self, addr: u16) -> u8 {
+    pub fn trigger_inputs(&mut self, buttons: ControllerButtons) {
+        self.controller = buttons;
+    }
+
+    pub fn read(&mut self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1FFF => {
                 // Actual RAM is from 0x0000 to 0x07FF, but it is mirrored
@@ -145,6 +157,11 @@ impl Cpu6502 {
                 Some(ppu) => ppu.borrow_mut().cpu_read(addr),
                 None => panic!("PPU not attached"),
             },
+            0x4016..=0x4017 => {
+                let out = self.controller_shift_reg & 0x01;
+                self.controller_shift_reg >>= 1;
+                out
+            }
             0x4020..=0xFFFF => match &self.cartridge {
                 Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap(),
                 None => panic!("Cartridge not attached"),
@@ -175,14 +192,14 @@ impl Cpu6502 {
         }
     }
 
-    pub fn read_u16(&self, addr: u16) -> u16 {
+    pub fn read_u16(&mut self, addr: u16) -> u16 {
         let lo = self.read(addr) as u16;
         let hi = self.read(addr + 1) as u16;
 
         (hi << 8) | lo
     }
 
-    pub fn read_debug_u16(&self, addr: u16) -> u16 {
+    pub fn read_debug_u16(&mut self, addr: u16) -> u16 {
         let lo = self.read(addr) as u16;
         let hi = self.read(addr + 1) as u16;
 
@@ -199,6 +216,7 @@ impl Cpu6502 {
                 Some(ppu) => ppu.borrow_mut().cpu_write(addr, data),
                 None => panic!("PPU not attached"),
             },
+            0x4016..=0x4017 => self.controller_shift_reg = self.controller.bits(),
             0x4020..=0xFFFF => match &self.cartridge {
                 Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap(),
                 None => panic!("Cartridge not attached"),
@@ -282,7 +300,8 @@ impl Cpu6502 {
     }
 
     pub fn reset(&mut self) {
-        self.reset_to(self.read_u16(0xFFFC))
+        let reset_addr = self.read_u16(0xFFFC);
+        self.reset_to(reset_addr);
     }
 
     pub fn reset_to(&mut self, pc: u16) {
@@ -434,7 +453,7 @@ impl Cpu6502 {
     /// Zero page addressing mode.
     ///
     /// Reads data from page 0 of memory (0x0000 - 0x00FF).
-    fn zp0(&self, arg_addr: u16) -> AddressModeResult {
+    fn zp0(&mut self, arg_addr: u16) -> AddressModeResult {
         AddressModeResult {
             ptr: None,
             addr: self.read(arg_addr) as u16,
@@ -446,7 +465,7 @@ impl Cpu6502 {
     ///
     /// Reads data from page 0 of memory (0x0000 - 0x00FF)
     /// but offset by the value of the X register.
-    fn zpx(&self, arg_addr: u16) -> AddressModeResult {
+    fn zpx(&mut self, arg_addr: u16) -> AddressModeResult {
         AddressModeResult {
             ptr: None,
             addr: self.read(arg_addr).wrapping_add(self.x) as u16,
@@ -458,7 +477,7 @@ impl Cpu6502 {
     ///
     /// Reads data from page 0 of memory (0x0000 - 0x00FF)
     /// but offset by the value of the Y register.
-    fn zpy(&self, arg_addr: u16) -> AddressModeResult {
+    fn zpy(&mut self, arg_addr: u16) -> AddressModeResult {
         AddressModeResult {
             ptr: None,
             addr: self.read(arg_addr).wrapping_add(self.y) as u16,
@@ -469,7 +488,7 @@ impl Cpu6502 {
     /// Absolute addressing mode.
     ///
     /// Reads data from a 16 bit absolute address.
-    fn abs(&self, arg_addr: u16) -> AddressModeResult {
+    fn abs(&mut self, arg_addr: u16) -> AddressModeResult {
         AddressModeResult {
             ptr: None,
             addr: self.read_u16(arg_addr),
@@ -481,7 +500,7 @@ impl Cpu6502 {
     ///
     /// Reads data from a 16 bit absolute addressing
     /// but offset by the value of the X register.
-    fn abx(&self, arg_addr: u16) -> AddressModeResult {
+    fn abx(&mut self, arg_addr: u16) -> AddressModeResult {
         let lo = self.read(arg_addr) as u16;
         let hi = self.read(arg_addr + 1) as u16;
 
@@ -501,7 +520,7 @@ impl Cpu6502 {
     ///
     /// Reads data from a 16 bit absolute addressing
     /// but offset by the value of the Y register.
-    fn aby(&self, arg_addr: u16) -> AddressModeResult {
+    fn aby(&mut self, arg_addr: u16) -> AddressModeResult {
         let lo = self.read(arg_addr) as u16;
         let hi = self.read(arg_addr + 1) as u16;
 
@@ -521,7 +540,7 @@ impl Cpu6502 {
     ///
     /// Uses a signed byte offset from the current program counter.
     /// This is only used by branch instructions.
-    fn rel(&self, arg_addr: u16) -> AddressModeResult {
+    fn rel(&mut self, arg_addr: u16) -> AddressModeResult {
         let offset = self.read(arg_addr) as i8;
 
         let addr = if offset < 0 {
@@ -539,7 +558,7 @@ impl Cpu6502 {
 
     /// Indirect addressing mode.
     /// Follows a pointer to get the data.
-    fn ind(&self, arg_addr: u16) -> AddressModeResult {
+    fn ind(&mut self, arg_addr: u16) -> AddressModeResult {
         let ptr_lo = self.read(arg_addr) as u16;
         let ptr_hi = self.read(arg_addr + 1) as u16;
 
@@ -567,7 +586,7 @@ impl Cpu6502 {
 
     /// Indirect addressing mode with X offset.
     /// Dereferences a zero page pointer offset by the value of the X register.
-    fn izx(&self, arg_addr: u16) -> AddressModeResult {
+    fn izx(&mut self, arg_addr: u16) -> AddressModeResult {
         let ptr = self.read(arg_addr).wrapping_add(self.x);
         let lo = self.read(ptr as u16) as u16;
         let hi = self.read(ptr.wrapping_add(1) as u16) as u16;
@@ -583,7 +602,7 @@ impl Cpu6502 {
 
     /// Indirect addressing mode with Y offset.
     /// Follows an 8 bit pointer, then offsets the underlying data by the value of the Y register.
-    fn izy(&self, arg_addr: u16) -> AddressModeResult {
+    fn izy(&mut self, arg_addr: u16) -> AddressModeResult {
         let ptr = self.read(arg_addr);
 
         let lo = self.read(ptr as u16) as u16;
@@ -1207,7 +1226,7 @@ impl Cpu6502 {
     }
 
     // Debug functions
-    pub fn get_instruction_repr(&self, instruction_addr: u16) -> String {
+    pub fn get_instruction_repr(&mut self, instruction_addr: u16) -> String {
         let instruction = Instruction::lookup(self.read_debug(instruction_addr));
         let arg_addr = instruction_addr + 1;
 
@@ -1309,7 +1328,7 @@ impl Cpu6502 {
         }
     }
 
-    pub fn get_log_line(&self) -> String {
+    pub fn get_log_line(&mut self) -> String {
         format!(
             "{:04X} {:02X} {:31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{}",
             self.pc(),
