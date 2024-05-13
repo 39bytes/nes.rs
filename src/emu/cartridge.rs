@@ -111,7 +111,7 @@ impl Cartridge {
 
         let mapper = match header.mapper_num {
             0 => Box::new(Mapper0::new(header.prg_rom_chunks)),
-            _ => Err(anyhow!("Unimplemented mapper"))?,
+            _ => Err(anyhow!("Unimplemented mapper {}", header.mapper_num))?,
         };
 
         Ok(Cartridge {
@@ -140,26 +140,33 @@ impl Cartridge {
         let mut chr_rom = vec![0u8; chr_rom_size];
         f.read_exact(chr_rom.as_mut_slice())?;
         log::info!("Character ROM size: {}", chr_rom.len());
-        log::info!("First 128 bytes of character ROM: {:?}", &chr_rom[..128]);
 
         Ok((prg_rom, chr_rom))
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) -> Result<()> {
-        self.prg_memory[self.mapper.cpu_map_write(addr)? as usize] = data;
+        let addr = self.mapper.cpu_map_write(addr)? as usize;
+        self.prg_memory[addr] = data;
         Ok(())
     }
 
     pub fn cpu_read(&self, addr: u16) -> Result<u8> {
-        Ok(self.prg_memory[self.mapper.cpu_map_read(addr)? as usize])
+        let addr = self.mapper.cpu_map_read(addr)? as usize;
+        Ok(self.prg_memory[addr])
     }
 
     pub fn ppu_write(&mut self, addr: u16, data: u8) -> Result<()> {
-        self.chr_memory[self.mapper.ppu_map_write(addr)? as usize] = data;
+        let addr = self.mapper.ppu_map_write(addr)? as usize;
+        self.chr_memory[addr] = data;
         Ok(())
     }
 
     pub fn ppu_read(&self, addr: u16) -> Result<u8> {
-        Ok(self.chr_memory[self.mapper.ppu_map_read(addr)? as usize])
+        let data = self
+            .chr_memory
+            .get(self.mapper.ppu_map_read(addr)? as usize)
+            .ok_or(anyhow!("Invalid PPU read address: {:#X}", addr))?;
+
+        Ok(*data)
     }
 }
