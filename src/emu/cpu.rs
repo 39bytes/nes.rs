@@ -218,7 +218,7 @@ impl Cpu6502 {
             },
             0x4016..=0x4017 => self.controller_shift_reg = self.controller.bits(),
             0x4020..=0xFFFF => match &self.cartridge {
-                Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap(),
+                Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap_or(()),
                 None => panic!("Cartridge not attached"),
             },
             _ => {}
