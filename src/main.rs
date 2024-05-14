@@ -63,7 +63,7 @@ pub fn main() -> Result<()> {
 
     let mut nes = Nes::new(palette.clone());
     let cartridge = Cartridge::new(rom_path)?;
-    nes.load_cartridge(cartridge)?;
+    nes.load_cartridge(cartridge);
     nes.reset();
 
     let palette_sprite = Sprite::from(palette).scale(16);

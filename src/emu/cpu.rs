@@ -218,7 +218,7 @@ impl Cpu6502 {
             },
             0x4016..=0x4017 => self.controller_shift_reg = self.controller.bits(),
             0x4020..=0xFFFF => match &self.cartridge {
-                Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap_or(()),
+                Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap(),
                 None => panic!("Cartridge not attached"),
             },
             _ => {}
@@ -344,6 +344,7 @@ impl Cpu6502 {
                 A::Izx => self.izx(self.pc + 1),
                 A::Izy => self.izy(self.pc + 1),
             };
+
             // Add the size in bytes of the instruction (1, 2, or 3) to the program counter
             self.pc += 1 + instruction.address_mode.arg_size();
 
@@ -1350,7 +1351,7 @@ fn is_negative(byte: u8) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::emu::cartridge::Cartridge;
+    use crate::emu::{cartridge::Cartridge, palette::Palette};
 
     use super::*;
     use std::{

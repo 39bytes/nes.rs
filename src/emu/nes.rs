@@ -62,12 +62,10 @@ impl Nes {
         self.clock_count
     }
 
-    pub fn load_cartridge(&mut self, cartridge: Cartridge) -> Result<()> {
+    pub fn load_cartridge(&mut self, cartridge: Cartridge) {
         let cartridge = Rc::new(RefCell::new(cartridge));
         self.cpu.borrow_mut().load_cartridge(cartridge.clone());
         self.ppu.borrow_mut().load_cartridge(cartridge.clone());
-
-        Ok(())
     }
 
     pub fn reset(&mut self) {
@@ -124,5 +122,123 @@ impl Nes {
         }
 
         s
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::emu::instructions::{Instruction, InstructionType};
+
+    use super::*;
+
+    fn rom_test(path: &str) {
+        let mut nes = Nes::new(Palette::default());
+        let cartridge = Cartridge::new(path).unwrap();
+        nes.load_cartridge(cartridge);
+        nes.reset();
+
+        // Status of 0x80 means the test is still running
+        // while nes.cpu().read_debug(0x6000) == 0x80 {
+        for _ in 0..50_000_000 {
+            nes.clock();
+        }
+
+        // Read test status code
+        let cpu = nes.cpu_mut();
+        let status = cpu.read_debug(0x6000);
+
+        let mut char_addr = 0x6004;
+        let mut message = String::new();
+
+        loop {
+            let byte = cpu.read_debug(char_addr);
+            if byte == 0x00 {
+                break;
+            }
+            message.push(byte as char);
+            char_addr += 1;
+        }
+
+        assert_eq!(status, 0, "{}", message);
+    }
+
+    #[test]
+    fn instr_test_v5_basics() {
+        rom_test("assets/roms/instr_test-v5/01-basics.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_implied() {
+        rom_test("assets/roms/instr_test-v5/02-implied.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_immediate() {
+        rom_test("assets/roms/instr_test-v5/03-immediate.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_zero_page() {
+        rom_test("assets/roms/instr_test-v5/04-zero_page.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_zp_xy() {
+        rom_test("assets/roms/instr_test-v5/05-zp_xy.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_absolute() {
+        rom_test("assets/roms/instr_test-v5/06-absolute.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_abs_xy() {
+        rom_test("assets/roms/instr_test-v5/07-abs_xy.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_ind_x() {
+        rom_test("assets/roms/instr_test-v5/08-ind_x.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_ind_y() {
+        rom_test("assets/roms/instr_test-v5/09-ind_y.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_branches() {
+        rom_test("assets/roms/instr_test-v5/10-branches.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_stack() {
+        rom_test("assets/roms/instr_test-v5/11-stack.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_jmp_jsr() {
+        rom_test("assets/roms/instr_test-v5/12-jmp_jsr.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_rts() {
+        rom_test("assets/roms/instr_test-v5/13-rts.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_rti() {
+        rom_test("assets/roms/instr_test-v5/14-rti.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_brk() {
+        rom_test("assets/roms/instr_test-v5/15-brk.nes");
+    }
+
+    #[test]
+    fn instr_test_v5_special() {
+        rom_test("assets/roms/instr_test-v5/16-special.nes");
     }
 }
