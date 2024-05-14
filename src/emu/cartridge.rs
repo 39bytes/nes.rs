@@ -6,6 +6,8 @@ use std::io::prelude::*;
 use std::io::SeekFrom;
 use std::path::Path;
 
+use super::mapper::MapRead;
+use super::mapper::MapWrite;
 use super::mapper::{Mapper, Mapper0};
 
 bitflags! {
@@ -145,14 +147,20 @@ impl Cartridge {
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) -> Result<()> {
-        let addr = self.mapper.cpu_map_write(addr)? as usize;
-        self.prg_memory[addr] = data;
-        Ok(())
+        match self.mapper.cpu_map_write(addr, data)? {
+            MapWrite::Address(addr) => {
+                self.prg_memory[addr as usize] = data;
+                Ok(())
+            }
+            MapWrite::RAMWritten => Ok(()),
+        }
     }
 
     pub fn cpu_read(&self, addr: u16) -> Result<u8> {
-        let addr = self.mapper.cpu_map_read(addr)? as usize;
-        Ok(self.prg_memory[addr])
+        match self.mapper.cpu_map_read(addr)? {
+            MapRead::Address(addr) => Ok(self.prg_memory[addr as usize]),
+            MapRead::RAMData(data) => Ok(data),
+        }
     }
 
     pub fn ppu_write(&mut self, addr: u16, data: u8) -> Result<()> {
