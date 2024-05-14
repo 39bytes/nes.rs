@@ -163,82 +163,82 @@ mod test {
     }
 
     #[test]
-    fn instr_test_v5_basics() {
+    fn instr_test_v5_01_basics() {
         rom_test("assets/roms/instr_test-v5/01-basics.nes");
     }
 
     #[test]
-    fn instr_test_v5_implied() {
+    fn instr_test_v5_02_implied() {
         rom_test("assets/roms/instr_test-v5/02-implied.nes");
     }
 
     #[test]
-    fn instr_test_v5_immediate() {
+    fn instr_test_v5_03_immediate() {
         rom_test("assets/roms/instr_test-v5/03-immediate.nes");
     }
 
     #[test]
-    fn instr_test_v5_zero_page() {
+    fn instr_test_v5_04_zero_page() {
         rom_test("assets/roms/instr_test-v5/04-zero_page.nes");
     }
 
     #[test]
-    fn instr_test_v5_zp_xy() {
+    fn instr_test_v5_05_zp_xy() {
         rom_test("assets/roms/instr_test-v5/05-zp_xy.nes");
     }
 
     #[test]
-    fn instr_test_v5_absolute() {
+    fn instr_test_v5_06_absolute() {
         rom_test("assets/roms/instr_test-v5/06-absolute.nes");
     }
 
     #[test]
-    fn instr_test_v5_abs_xy() {
+    fn instr_test_v5_07_abs_xy() {
         rom_test("assets/roms/instr_test-v5/07-abs_xy.nes");
     }
 
     #[test]
-    fn instr_test_v5_ind_x() {
+    fn instr_test_v5_08_ind_x() {
         rom_test("assets/roms/instr_test-v5/08-ind_x.nes");
     }
 
     #[test]
-    fn instr_test_v5_ind_y() {
+    fn instr_test_v5_09_ind_y() {
         rom_test("assets/roms/instr_test-v5/09-ind_y.nes");
     }
 
     #[test]
-    fn instr_test_v5_branches() {
+    fn instr_test_v5_10_branches() {
         rom_test("assets/roms/instr_test-v5/10-branches.nes");
     }
 
     #[test]
-    fn instr_test_v5_stack() {
+    fn instr_test_v5_11_stack() {
         rom_test("assets/roms/instr_test-v5/11-stack.nes");
     }
 
     #[test]
-    fn instr_test_v5_jmp_jsr() {
+    fn instr_test_v5_12_jmp_jsr() {
         rom_test("assets/roms/instr_test-v5/12-jmp_jsr.nes");
     }
 
     #[test]
-    fn instr_test_v5_rts() {
+    fn instr_test_v5_13_rts() {
         rom_test("assets/roms/instr_test-v5/13-rts.nes");
     }
 
     #[test]
-    fn instr_test_v5_rti() {
+    fn instr_test_v5_14_rti() {
         rom_test("assets/roms/instr_test-v5/14-rti.nes");
     }
 
     #[test]
-    fn instr_test_v5_brk() {
+    fn instr_test_v5_15_brk() {
         rom_test("assets/roms/instr_test-v5/15-brk.nes");
     }
 
     #[test]
-    fn instr_test_v5_special() {
+    fn instr_test_v5_16_special() {
         rom_test("assets/roms/instr_test-v5/16-special.nes");
     }
 }
