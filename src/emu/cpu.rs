@@ -163,7 +163,7 @@ impl Cpu6502 {
                 out
             }
             0x4020..=0xFFFF => match &self.cartridge {
-                Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap(),
+                Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap_or(0),
                 None => panic!("Cartridge not attached"),
             },
             _ => 0,
@@ -184,7 +184,7 @@ impl Cpu6502 {
                 None => panic!("PPU not attached"),
             },
             0x4020..=0xFFFF => match &self.cartridge {
-                Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap(),
+                Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap_or(0),
                 None => panic!("Cartridge not attached"),
             },
             _ => 0,
@@ -218,7 +218,7 @@ impl Cpu6502 {
             },
             0x4016..=0x4017 => self.controller_shift_reg = self.controller.bits(),
             0x4020..=0xFFFF => match &self.cartridge {
-                Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap(),
+                Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap_or(()),
                 None => panic!("Cartridge not attached"),
             },
             _ => {}
@@ -623,6 +623,7 @@ impl Cpu6502 {
 
     // Opcodes (instructions)
     // Reference: https://www.nesdev.org/obelisk-6502-guide/reference.html
+    // TODO: Add unofficial opcodes
 
     /// Addition with carry.
     /// Adds the argument and the accumulator, and the carry bit.
@@ -732,10 +733,8 @@ impl Cpu6502 {
     /// TODO: Implement this properly
     /// apparently this should set I to 1?
     fn brk(&mut self) -> u8 {
-        self.pc += 1;
-
         self.push_u16(self.pc);
-        self.push(self.status.bits());
+        self.push((self.status | StatusFlags::B | StatusFlags::U).bits());
 
         self.pc = self.read_u16(0xFFFE);
 
@@ -779,6 +778,7 @@ impl Cpu6502 {
     /// Compare accumulator with argument.
     fn cmp(&mut self, addr: u16) -> u8 {
         let arg = self.read(addr);
+
         let res = self.a.wrapping_sub(arg);
 
         self.set_flag(StatusFlags::C, self.a >= arg);
@@ -1351,7 +1351,7 @@ fn is_negative(byte: u8) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::emu::{cartridge::Cartridge, palette::Palette};
+    use crate::emu::cartridge::Cartridge;
 
     use super::*;
     use std::{
