@@ -183,6 +183,7 @@ impl Cpu6502 {
                 Some(ppu) => ppu.borrow().cpu_read_debug(addr),
                 None => panic!("PPU not attached"),
             },
+            0x4016..=0x4017 => self.controller_shift_reg & 0x01,
             0x4020..=0xFFFF => match &self.cartridge {
                 Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap_or(0),
                 None => panic!("Cartridge not attached"),
@@ -199,9 +200,9 @@ impl Cpu6502 {
         (hi << 8) | lo
     }
 
-    pub fn read_debug_u16(&mut self, addr: u16) -> u16 {
-        let lo = self.read(addr) as u16;
-        let hi = self.read(addr + 1) as u16;
+    pub fn read_debug_u16(&self, addr: u16) -> u16 {
+        let lo = self.read_debug(addr) as u16;
+        let hi = self.read_debug(addr + 1) as u16;
 
         (hi << 8) | lo
     }

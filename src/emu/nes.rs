@@ -1,9 +1,7 @@
 use std::{
-    cell::{Ref, RefCell, RefMut},
+    cell::{Ref, RefCell},
     rc::Rc,
 };
-
-use anyhow::Result;
 
 use crate::renderer::{Color, Sprite};
 
@@ -42,16 +40,8 @@ impl Nes {
         self.cpu.borrow()
     }
 
-    pub fn cpu_mut(&self) -> RefMut<Cpu6502> {
-        self.cpu.borrow_mut()
-    }
-
     pub fn ppu(&self) -> Ref<Ppu> {
         self.ppu.borrow()
-    }
-
-    pub fn ppu_mut(&self) -> RefMut<Ppu> {
-        self.ppu.borrow_mut()
     }
 
     pub fn screen(&self) -> &Sprite {
@@ -140,7 +130,7 @@ mod test {
         }
 
         // Read test status code
-        let cpu = nes.cpu_mut();
+        let cpu = nes.cpu.borrow_mut();
         let status = cpu.read_debug(0x6000);
 
         let mut char_addr = 0x6004;

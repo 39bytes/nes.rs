@@ -196,7 +196,7 @@ fn draw_flags(renderer: &mut Renderer, flags: u8, text: &str, x: usize, y: usize
 }
 
 fn draw_cpu_info(renderer: &mut Renderer, nes: &Nes, x: usize, y: usize) {
-    let mut cpu = nes.cpu_mut();
+    let cpu = nes.cpu();
 
     renderer.draw_text("CPU Registers:", x, y);
     renderer.draw_text(&format!("A: {:#04X}", cpu.a()), x, y + 20);
@@ -213,8 +213,8 @@ fn draw_cpu_info(renderer: &mut Renderer, nes: &Nes, x: usize, y: usize) {
     let mut addr = cpu.pc();
 
     for i in 0..10 {
-        let instruction = Instruction::lookup(cpu.read(addr));
-        let instruction_repr = get_instruction_repr(&mut cpu, addr);
+        let instruction = Instruction::lookup(cpu.read_debug(addr));
+        let instruction_repr = get_instruction_repr(&cpu, addr);
 
         renderer.draw_text(
             &format!("${:4X}: {}", addr, instruction_repr),
@@ -225,8 +225,8 @@ fn draw_cpu_info(renderer: &mut Renderer, nes: &Nes, x: usize, y: usize) {
     }
 }
 
-fn get_instruction_repr(cpu: &mut Cpu6502, addr: u16) -> String {
-    let instruction = Instruction::lookup(cpu.read(addr));
+fn get_instruction_repr(cpu: &Cpu6502, addr: u16) -> String {
+    let instruction = Instruction::lookup(cpu.read_debug(addr));
     let arg_addr = addr + 1;
 
     let name = instruction.instruction_type.as_ref().to_uppercase();
@@ -234,12 +234,12 @@ fn get_instruction_repr(cpu: &mut Cpu6502, addr: u16) -> String {
     match instruction.address_mode {
         AddressMode::Imp => name,
         AddressMode::Acc => format!("{} A", name),
-        AddressMode::Imm => format!("{} #${:02X}", name, cpu.read(arg_addr)),
-        AddressMode::Zp0 => format!("{} ${:02X}", name, cpu.read(arg_addr),),
-        AddressMode::Zpx => format!("{} ${:02X},X", name, cpu.read(arg_addr)),
-        AddressMode::Zpy => format!("{} ${:02X},Y", name, cpu.read(arg_addr)),
+        AddressMode::Imm => format!("{} #${:02X}", name, cpu.read_debug(arg_addr)),
+        AddressMode::Zp0 => format!("{} ${:02X}", name, cpu.read_debug(arg_addr),),
+        AddressMode::Zpx => format!("{} ${:02X},X", name, cpu.read_debug(arg_addr)),
+        AddressMode::Zpy => format!("{} ${:02X},Y", name, cpu.read_debug(arg_addr)),
         AddressMode::Rel => {
-            let offset = cpu.read(arg_addr) as i8;
+            let offset = cpu.read_debug(arg_addr) as i8;
             let computed_addr = if offset < 0 {
                 addr - (offset.unsigned_abs() as u16)
             } else {
@@ -247,12 +247,12 @@ fn get_instruction_repr(cpu: &mut Cpu6502, addr: u16) -> String {
             };
             format!("{} ${:02X}", name, computed_addr + 2)
         }
-        AddressMode::Abs => format!("{} ${:04X}", name, cpu.read_u16(arg_addr)),
-        AddressMode::Abx => format!("{} ${:04X},X", name, cpu.read_u16(arg_addr)),
-        AddressMode::Aby => format!("{} ${:04X},Y", name, cpu.read_u16(arg_addr)),
-        AddressMode::Ind => format!("{} (${:04X})", name, cpu.read_u16(arg_addr)),
-        AddressMode::Izx => format!("{} (${:02X},X)", name, cpu.read(arg_addr)),
-        AddressMode::Izy => format!("{} (${:02X}),Y", name, cpu.read(arg_addr)),
+        AddressMode::Abs => format!("{} ${:04X}", name, cpu.read_debug_u16(arg_addr)),
+        AddressMode::Abx => format!("{} ${:04X},X", name, cpu.read_debug_u16(arg_addr)),
+        AddressMode::Aby => format!("{} ${:04X},Y", name, cpu.read_debug_u16(arg_addr)),
+        AddressMode::Ind => format!("{} (${:04X})", name, cpu.read_debug_u16(arg_addr)),
+        AddressMode::Izx => format!("{} (${:02X},X)", name, cpu.read_debug(arg_addr)),
+        AddressMode::Izy => format!("{} (${:02X}),Y", name, cpu.read_debug(arg_addr)),
     }
 }
 
