@@ -324,6 +324,8 @@ impl Cpu6502 {
             let instruction = Instruction::lookup(self.opcode);
             self.cycles = instruction.cycles;
 
+            let arg_addr = self.pc + 1;
+
             type A = AddressMode;
             let AddressModeResult {
                 ptr: _,
@@ -332,81 +334,100 @@ impl Cpu6502 {
             } = match instruction.address_mode {
                 A::Imp => self.imp(),
                 A::Acc => self.acc(),
-                A::Imm => self.imm(self.pc + 1),
-                A::Zp0 => self.zp0(self.pc + 1),
-                A::Zpx => self.zpx(self.pc + 1),
-                A::Zpy => self.zpy(self.pc + 1),
-                A::Rel => self.rel(self.pc + 1),
-                A::Abs => self.abs(self.pc + 1),
-                A::Abx => self.abx(self.pc + 1),
-                A::Aby => self.aby(self.pc + 1),
-                A::Ind => self.ind(self.pc + 1),
-                A::Izx => self.izx(self.pc + 1),
-                A::Izy => self.izy(self.pc + 1),
+                A::Imm => self.imm(arg_addr),
+                A::Zp0 => self.zp0(arg_addr),
+                A::Zpx => self.zpx(arg_addr),
+                A::Zpy => self.zpy(arg_addr),
+                A::Rel => self.rel(arg_addr),
+                A::Abs => self.abs(arg_addr),
+                A::Abx => self.abx(arg_addr),
+                A::Aby => self.aby(arg_addr),
+                A::Ind => self.ind(arg_addr),
+                A::Izx => self.izx(arg_addr),
+                A::Izy => self.izy(arg_addr),
             };
 
             // Add the size in bytes of the instruction (1, 2, or 3) to the program counter
             self.pc += 1 + instruction.address_mode.arg_size();
 
-            type I = InstructionType;
+            use InstructionType::*;
             let extra_cycle_count = match instruction.instruction_type {
-                I::Adc => self.adc(addr),
-                I::And => self.and(addr),
-                I::Asl => self.asl(addr),
-                I::Bcc => self.bcc(addr),
-                I::Bcs => self.bcs(addr),
-                I::Beq => self.beq(addr),
-                I::Bit => self.bit(addr),
-                I::Bmi => self.bmi(addr),
-                I::Bne => self.bne(addr),
-                I::Bpl => self.bpl(addr),
-                I::Brk => self.brk(),
-                I::Bvc => self.bvc(addr),
-                I::Bvs => self.bvs(addr),
-                I::Clc => self.clc(),
-                I::Cld => self.cld(),
-                I::Cli => self.cli(),
-                I::Clv => self.clv(),
-                I::Cmp => self.cmp(addr),
-                I::Cpx => self.cpx(addr),
-                I::Cpy => self.cpy(addr),
-                I::Dec => self.dec(addr),
-                I::Dex => self.dex(),
-                I::Dey => self.dey(),
-                I::Eor => self.eor(addr),
-                I::Inc => self.inc(addr),
-                I::Inx => self.inx(),
-                I::Iny => self.iny(),
-                I::Jmp => self.jmp(addr),
-                I::Jsr => self.jsr(addr),
-                I::Lda => self.lda(addr),
-                I::Ldx => self.ldx(addr),
-                I::Ldy => self.ldy(addr),
-                I::Lsr => self.lsr(addr),
-                I::Nop => self.nop(),
-                I::Ora => self.ora(addr),
-                I::Pha => self.pha(),
-                I::Php => self.php(),
-                I::Pla => self.pla(),
-                I::Plp => self.plp(),
-                I::Rol => self.rol(addr),
-                I::Ror => self.ror(addr),
-                I::Rti => self.rti(),
-                I::Rts => self.rts(),
-                I::Sbc => self.sbc(addr),
-                I::Sec => self.sec(),
-                I::Sed => self.sed(),
-                I::Sei => self.sei(),
-                I::Sta => self.sta(addr),
-                I::Stx => self.stx(addr),
-                I::Sty => self.sty(addr),
-                I::Tax => self.tax(),
-                I::Tay => self.tay(),
-                I::Tsx => self.tsx(),
-                I::Txa => self.txa(),
-                I::Txs => self.txs(),
-                I::Tya => self.tya(),
-                I::Xxx => self.xxx(),
+                Adc => self.adc(addr),
+                And => self.and(addr),
+                Asl => self.asl(addr, instruction.address_mode),
+                Bcc => self.bcc(addr),
+                Bcs => self.bcs(addr),
+                Beq => self.beq(addr),
+                Bit => self.bit(addr),
+                Bmi => self.bmi(addr),
+                Bne => self.bne(addr),
+                Bpl => self.bpl(addr),
+                Brk => self.brk(),
+                Bvc => self.bvc(addr),
+                Bvs => self.bvs(addr),
+                Clc => self.clc(),
+                Cld => self.cld(),
+                Cli => self.cli(),
+                Clv => self.clv(),
+                Cmp => self.cmp(addr),
+                Cpx => self.cpx(addr),
+                Cpy => self.cpy(addr),
+                Dec => self.dec(addr),
+                Dex => self.dex(),
+                Dey => self.dey(),
+                Eor => self.eor(addr),
+                Inc => self.inc(addr),
+                Inx => self.inx(),
+                Iny => self.iny(),
+                Jmp => self.jmp(addr),
+                Jsr => self.jsr(addr),
+                Lda => self.lda(addr),
+                Ldx => self.ldx(addr),
+                Ldy => self.ldy(addr),
+                Lsr => self.lsr(addr, instruction.address_mode),
+                Nop => self.nop(),
+                Ora => self.ora(addr),
+                Pha => self.pha(),
+                Php => self.php(),
+                Pla => self.pla(),
+                Plp => self.plp(),
+                Rol => self.rol(addr, instruction.address_mode),
+                Ror => self.ror(addr, instruction.address_mode),
+                Rti => self.rti(),
+                Rts => self.rts(),
+                Sbc => self.sbc(addr),
+                Sec => self.sec(),
+                Sed => self.sed(),
+                Sei => self.sei(),
+                Sta => self.sta(addr),
+                Stx => self.stx(addr),
+                Sty => self.sty(addr),
+                Tax => self.tax(),
+                Tay => self.tay(),
+                Tsx => self.tsx(),
+                Txa => self.txa(),
+                Txs => self.txs(),
+                Tya => self.tya(),
+                // Illegal opcodes
+                Slo => self.slo(addr, instruction.address_mode),
+                Rla => self.rla(addr, instruction.address_mode),
+                Sre => self.sre(addr, instruction.address_mode),
+                Rra => self.rra(addr, instruction.address_mode),
+                Sax => self.sax(addr, instruction.address_mode),
+                Lax => self.lax(addr),
+                Dcp => self.dcp(addr),
+                Isc => self.isc(addr),
+                Anc => self.anc(addr),
+                Alr => self.alr(addr),
+                Arr => self.arr(addr),
+                Xaa => self.xaa(addr),
+                Axs => self.axs(),
+                Ahx => self.ahx(),
+                Shy => self.shy(),
+                Shx => self.shx(),
+                Tas => self.tas(addr, arg_addr),
+                Las => self.las(),
+                Stp => self.stp(),
             };
 
             if additional_cycles {
@@ -662,9 +683,7 @@ impl Cpu6502 {
     }
 
     /// Arithmetic shift left.
-    fn asl(&mut self, addr: u16) -> u8 {
-        let addr_mode = Instruction::lookup(self.opcode).address_mode;
-
+    fn asl(&mut self, addr: u16, addr_mode: AddressMode) -> u8 {
         let arg = match addr_mode {
             AddressMode::Acc => self.a,
             _ => self.read(addr),
@@ -936,8 +955,7 @@ impl Cpu6502 {
     }
 
     /// Logical shift right.
-    fn lsr(&mut self, addr: u16) -> u8 {
-        let addr_mode = Instruction::lookup(self.opcode).address_mode;
+    fn lsr(&mut self, addr: u16, addr_mode: AddressMode) -> u8 {
         let arg = match addr_mode {
             AddressMode::Acc => self.a,
             _ => self.read(addr),
@@ -1009,8 +1027,7 @@ impl Cpu6502 {
     }
 
     /// Rotate left.
-    fn rol(&mut self, addr: u16) -> u8 {
-        let addr_mode = Instruction::lookup(self.opcode).address_mode;
+    fn rol(&mut self, addr: u16, addr_mode: AddressMode) -> u8 {
         let arg = match addr_mode {
             AddressMode::Acc => self.a,
             _ => self.read(addr),
@@ -1032,8 +1049,7 @@ impl Cpu6502 {
     }
 
     /// Rotate right.
-    fn ror(&mut self, addr: u16) -> u8 {
-        let addr_mode = Instruction::lookup(self.opcode).address_mode;
+    fn ror(&mut self, addr: u16, addr_mode: AddressMode) -> u8 {
         let arg = match addr_mode {
             AddressMode::Acc => self.a,
             _ => self.read(addr),
@@ -1205,9 +1221,101 @@ impl Cpu6502 {
         0
     }
 
-    // invalid opcode
-    fn xxx(&self) -> u8 {
+    // Illegal opcodes
+    // Resource: http://www.ffd2.com/fridge/docs/6502-NMOS.extra.opcodes
+
+    fn slo(&mut self, addr: u16, addr_mode: AddressMode) -> u8 {
+        self.asl(addr, addr_mode);
+        self.ora(addr)
+    }
+
+    fn rla(&mut self, addr: u16, addr_mode: AddressMode) -> u8 {
+        self.rol(addr, addr_mode);
+        self.and(addr)
+    }
+
+    fn sre(&mut self, addr: u16, addr_mode: AddressMode) -> u8 {
+        self.lsr(addr, addr_mode);
+        self.eor(addr)
+    }
+
+    fn rra(&mut self, addr: u16, addr_mode: AddressMode) -> u8 {
+        self.ror(addr, addr_mode);
+        self.adc(addr)
+    }
+
+    fn sax(&mut self, addr: u16, addr_mode: AddressMode) -> u8 {
+        let res = self.a & self.x;
+        self.write(addr, res);
+
         0
+    }
+
+    fn lax(&mut self, addr: u16) -> u8 {
+        self.lda(addr);
+        self.ldx(addr)
+    }
+
+    fn dcp(&mut self, addr: u16) -> u8 {
+        self.dec(addr);
+        self.cmp(addr)
+    }
+
+    fn isc(&mut self, addr: u16) -> u8 {
+        self.inc(addr);
+        self.sbc(addr)
+    }
+
+    fn anc(&mut self, addr: u16) -> u8 {
+        let cycles = self.and(addr);
+        self.set_flag(StatusFlags::C, self.get_flag(StatusFlags::N));
+
+        cycles
+    }
+
+    fn alr(&mut self, addr: u16) -> u8 {
+        self.and(addr);
+        self.lsr(addr, AddressMode::Acc)
+    }
+
+    fn arr(&mut self, addr: u16) -> u8 {
+        self.and(addr);
+        self.ror(addr, AddressMode::Acc)
+    }
+
+    fn xaa(&mut self, addr: u16) -> u8 {
+        self.txa();
+        self.and(addr)
+    }
+
+    fn axs(&mut self) -> u8 {
+        todo!()
+    }
+
+    fn ahx(&mut self) -> u8 {
+        todo!()
+    }
+
+    fn shy(&mut self) -> u8 {
+        todo!()
+    }
+
+    fn shx(&mut self) -> u8 {
+        todo!()
+    }
+
+    fn tas(&mut self, addr: u16, arg_addr: u16) -> u8 {
+        self.sp = self.a & self.x;
+        self.and(arg_addr + 1);
+        self.sta(addr)
+    }
+
+    fn las(&mut self) -> u8 {
+        todo!()
+    }
+
+    fn stp(&mut self) -> u8 {
+        todo!()
     }
 
     // Interrupts
