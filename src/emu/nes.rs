@@ -127,8 +127,6 @@ impl Nes {
 
 #[cfg(test)]
 mod test {
-    use crate::emu::instructions::{Instruction, InstructionType};
-
     use super::*;
 
     fn rom_test(path: &str) {
@@ -137,8 +135,6 @@ mod test {
         nes.load_cartridge(cartridge);
         nes.reset();
 
-        // Status of 0x80 means the test is still running
-        // while nes.cpu().read_debug(0x6000) == 0x80 {
         for _ in 0..50_000_000 {
             nes.clock();
         }

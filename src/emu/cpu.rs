@@ -227,37 +227,34 @@ impl Cpu6502 {
 
     /// Pushes a byte onto the stack.
     fn push(&mut self, data: u8) {
-        if self.sp == 0 {
-            panic!("Stack overflow");
-        }
         self.write(STACK_BASE_ADDR + self.sp as u16, data);
-        self.sp -= 1;
+        self.sp = self.sp.wrapping_sub(1);
     }
 
     /// Pushes 2 bytes onto the stack.
     fn push_u16(&mut self, data: u16) {
-        if self.sp <= 1 {
-            panic!("Stack overflow");
-        }
         let hi = (data >> 8) & 0x00FF;
         let lo = data & 0x00FF;
 
         let stack_addr = STACK_BASE_ADDR + self.sp as u16;
         self.write(stack_addr, hi as u8);
-        self.write(stack_addr - 1, lo as u8);
-        self.sp -= 2;
+        self.sp = self.sp.wrapping_sub(1);
+
+        let stack_addr = STACK_BASE_ADDR + self.sp as u16;
+        self.write(stack_addr, lo as u8);
+        self.sp = self.sp.wrapping_sub(1);
     }
 
     /// Pops a byte from the stack.
     fn pop(&mut self) -> u8 {
-        self.sp += 1;
+        self.sp = self.sp.wrapping_add(1);
         self.read(STACK_BASE_ADDR + self.sp as u16)
     }
 
     fn pop_u16(&mut self) -> u16 {
-        self.sp += 1;
+        self.sp = self.sp.wrapping_add(1);
         let val = self.read_u16(STACK_BASE_ADDR + self.sp as u16);
-        self.sp += 1;
+        self.sp = self.sp.wrapping_add(1);
 
         val
     }
