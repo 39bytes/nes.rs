@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 use strum_macros::AsRefStr;
 
-#[derive(Clone)]
 pub struct Instruction {
     pub instruction_type: InstructionType,
     pub address_mode: AddressMode,
