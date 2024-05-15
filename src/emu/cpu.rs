@@ -1,3 +1,4 @@
+use super::bit_ext::BitExt;
 use super::cartridge::Cartridge;
 use super::input::ControllerButtons;
 use super::instructions::{AddressMode, Instruction, InstructionType};
@@ -411,7 +412,7 @@ impl Cpu6502 {
                 Rla => self.rla(addr, instruction.address_mode),
                 Sre => self.sre(addr, instruction.address_mode),
                 Rra => self.rra(addr, instruction.address_mode),
-                Sax => self.sax(addr, instruction.address_mode),
+                Sax => self.sax(addr),
                 Lax => self.lax(addr),
                 Dcp => self.dcp(addr),
                 Isc => self.isc(addr),
@@ -419,10 +420,10 @@ impl Cpu6502 {
                 Alr => self.alr(addr),
                 Arr => self.arr(addr),
                 Xaa => self.xaa(addr),
-                Axs => self.axs(),
+                Axs => self.axs(addr),
                 Ahx => self.ahx(),
-                Shy => self.shy(),
-                Shx => self.shx(),
+                Shy => self.shy(addr, arg_addr, additional_cycles),
+                Shx => self.shx(addr, arg_addr, additional_cycles),
                 Tas => self.tas(addr, arg_addr),
                 Las => self.las(),
                 Stp => self.stp(),
@@ -752,6 +753,7 @@ impl Cpu6502 {
     fn brk(&mut self) -> u8 {
         self.push_u16(self.pc);
         self.push((self.status | StatusFlags::B | StatusFlags::U).bits());
+        self.set_flag(StatusFlags::I, true);
 
         self.pc = self.read_u16(0xFFFE);
 
@@ -1242,7 +1244,7 @@ impl Cpu6502 {
         self.adc(addr)
     }
 
-    fn sax(&mut self, addr: u16, addr_mode: AddressMode) -> u8 {
+    fn sax(&mut self, addr: u16) -> u8 {
         let res = self.a & self.x;
         self.write(addr, res);
 
@@ -1278,7 +1280,15 @@ impl Cpu6502 {
 
     fn arr(&mut self, addr: u16) -> u8 {
         self.and(addr);
-        self.ror(addr, AddressMode::Acc)
+        self.ror(addr, AddressMode::Acc);
+
+        let b5 = (self.a & (1 << 5)).into_bit();
+        let b6 = (self.a & (1 << 6)).into_bit();
+
+        self.set_flag(StatusFlags::C, b6 != 0);
+        self.set_flag(StatusFlags::V, (b5 ^ b6) != 0);
+
+        0
     }
 
     fn xaa(&mut self, addr: u16) -> u8 {
@@ -1286,20 +1296,42 @@ impl Cpu6502 {
         self.and(addr)
     }
 
-    fn axs(&mut self) -> u8 {
-        todo!()
+    fn axs(&mut self, addr: u16) -> u8 {
+        let arg = self.read(addr);
+        let and = self.a & self.x;
+        self.x = and.wrapping_sub(arg);
+
+        self.set_flag(StatusFlags::C, and >= arg);
+        self.set_flag(StatusFlags::Z, and == arg);
+        self.set_flag(StatusFlags::N, is_negative(self.x));
+
+        0
     }
 
     fn ahx(&mut self) -> u8 {
-        todo!()
+        0
     }
 
-    fn shy(&mut self) -> u8 {
-        todo!()
+    // Had to see this thread to get these two instructions to work
+    // https://forums.nesdev.org/viewtopic.php?t=8107
+    fn shy(&mut self, addr: u16, arg_addr: u16, page_crossed: bool) -> u8 {
+        let high = self.read(arg_addr + 1);
+        let val = self.y & (high + 1);
+        if !page_crossed {
+            self.write(addr, val);
+        }
+
+        0
     }
 
-    fn shx(&mut self) -> u8 {
-        todo!()
+    fn shx(&mut self, addr: u16, arg_addr: u16, page_crossed: bool) -> u8 {
+        let high = self.read(arg_addr + 1);
+        let val = self.x & (high + 1);
+        if !page_crossed {
+            self.write(addr, val);
+        }
+
+        0
     }
 
     fn tas(&mut self, addr: u16, arg_addr: u16) -> u8 {
@@ -1309,11 +1341,11 @@ impl Cpu6502 {
     }
 
     fn las(&mut self) -> u8 {
-        todo!()
+        0
     }
 
     fn stp(&mut self) -> u8 {
-        todo!()
+        panic!("CPU halted by STP instruction");
     }
 
     // Interrupts
@@ -1528,7 +1560,7 @@ mod test {
         // This rom tests everything
 
         // The address of the last test before the one that
-        // tests the illegal opcodes, which I don't care about
+        // tests the illegal opcodes
         const LAST_TEST_ADDR: u16 = 0xC6A3;
 
         let cartridge = Cartridge::new("assets/roms/nestest.nes").unwrap();
