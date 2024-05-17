@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use crate::renderer::{Color, Pixel, Sprite};
 
 use super::{
-    bit_ext::BitExt,
+    bits::IntoBit,
     cartridge::{Cartridge, Mirroring},
     cpu::Cpu6502,
     palette::Palette,
@@ -39,9 +39,7 @@ bitflags! {
         /// Generate NMI at start of vertical blanking interval
         const GenerateNMI = 1 << 7;
     }
-}
 
-bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct PpuMask: u8 {
         const Greyscale = 1 << 0;
@@ -53,9 +51,7 @@ bitflags! {
         const EmphasizeGreen = 1 << 6;
         const EmphasizeBlue = 1 << 7;
     }
-}
 
-bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct PpuStatus: u8 {
         const SpriteOverflow = 1 << 5;
@@ -122,6 +118,7 @@ pub struct PpuClockResult {
 
 const PALETTE_RAM_SIZE: usize = 32;
 const NAMETABLE_SIZE: usize = 1024;
+const OAM_SIZE: usize = 256;
 
 pub struct Ppu {
     palette: Palette,
@@ -135,7 +132,6 @@ pub struct Ppu {
     mask: PpuMask,
     status: PpuStatus,
     oam_addr: u8,
-    oam_data: u8,
 
     // Internal PPU registers
     // See https://www.nesdev.org/wiki/PPU_scrolling
@@ -161,6 +157,7 @@ pub struct Ppu {
     // Memory
     nametable_ram: [u8; NAMETABLE_SIZE * 2],
     palette_ram: [u8; PALETTE_RAM_SIZE],
+    oam: [u8; OAM_SIZE],
 
     // Other components
     cpu: Rc<RefCell<Cpu6502>>,
@@ -182,7 +179,6 @@ impl Ppu {
             mask: PpuMask::empty(),
             status: PpuStatus::VerticalBlank,
             oam_addr: 0x00,
-            oam_data: 0x00,
 
             vram_addr: VRAMAddr::new(),
             temp_vram_addr: VRAMAddr::new(),
@@ -200,6 +196,7 @@ impl Ppu {
 
             nametable_ram: [0; NAMETABLE_SIZE * 2],
             palette_ram: [0; PALETTE_RAM_SIZE],
+            oam: [0; OAM_SIZE],
 
             cpu,
             cartridge: None,
@@ -220,10 +217,6 @@ impl Ppu {
 
     pub fn oam_addr(&self) -> u8 {
         self.oam_addr
-    }
-
-    pub fn oam_data(&self) -> u8 {
-        self.oam_data
     }
 
     pub fn addr(&self) -> u16 {
@@ -543,8 +536,8 @@ impl Ppu {
             }
             1 => self.mask = PpuMask::from_bits_truncate(data),
             2 => {}
-            3 => {}
-            4 => {}
+            3 => self.oam_addr = data,
+            4 => self.oam[self.oam_addr as usize] = data,
             5 => {
                 if !self.write_latch {
                     self.fine_x = data & 0b0000_0111;
@@ -601,7 +594,7 @@ impl Ppu {
                 data
             }
             3 => 0,
-            4 => 0,
+            4 => self.oam[self.oam_addr as usize],
             5 => 0,
             6 => 0,
             7 => {
@@ -697,6 +690,10 @@ impl Ppu {
             // _ => todo!("Reading from PPU address {:04X} not implemented yet", addr),
             _ => 0,
         }
+    }
+
+    pub fn dma_oam_write(&mut self, index: u8, data: u8) {
+        self.oam[index as usize] = data;
     }
 
     pub fn get_palette_color(&self, palette: u8, pixel: u8) -> Color {

@@ -1,4 +1,4 @@
-mod bit_ext;
+mod bits;
 pub mod cartridge;
 pub mod cpu;
 pub mod input;
