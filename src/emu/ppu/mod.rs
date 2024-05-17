@@ -2,132 +2,22 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::renderer::{Color, Pixel, Sprite};
 
+use self::flags::*;
+pub use self::pattern_table::PatternTable;
+use self::sprite::{Sprite as PpuSprite, SpriteAttribute};
+use self::vram_addr::VRAMAddr;
+
 use super::{
     bits::IntoBit,
     cartridge::{Cartridge, Mirroring},
     cpu::Cpu6502,
     palette::Palette,
 };
-use bitflags::bitflags;
-use modular_bitfield::prelude::*;
 
-pub enum PatternTable {
-    Left,
-    Right,
-}
-
-impl From<bool> for PatternTable {
-    fn from(value: bool) -> Self {
-        match value {
-            false => PatternTable::Left,
-            true => PatternTable::Right,
-        }
-    }
-}
-
-impl PatternTable {
-    fn addr(self) -> u16 {
-        match self {
-            PatternTable::Left => 0x0000,
-            PatternTable::Right => 0x1000,
-        }
-    }
-}
-
-bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct PpuCtrl: u8 {
-        /// Base nametable address
-        /// 0: $2000; 1: $2400; 2: $2800; 3: $2C00
-        const NametableLSB = 1 << 0;
-        const NametableMSB = 1 << 1;
-        /// VRAM address increment per CPU read/write of PPUDATA
-        /// 0: add 1, going across; 1: add 32, going down
-        const VRamAddressIncrement = 1 << 2;
-        /// Sprite pattern table address for 8x8 sprites
-        /// 0: $0000; 1: $1000; ignored in 8x16 mode
-        const SpritePatternTable = 1 << 3;
-        /// Background pattern table address
-        /// 0: $0000; 1: $1000
-        const BackgroundPatternTable = 1 << 4;
-        /// Sprite size
-        /// 0: 8x8; 1: 8x16
-        const SpriteSize = 1 << 5;
-        const MasterSlave = 1 << 6;
-        /// Generate NMI at start of vertical blanking interval
-        const GenerateNMI = 1 << 7;
-    }
-
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct PpuMask: u8 {
-        const Greyscale = 1 << 0;
-        const ShowBackgroundLeft = 1 << 1;
-        const ShowSpritesLeft = 1 << 2;
-        const ShowBackground = 1 << 3;
-        const ShowSprites = 1 << 4;
-        const EmphasizeRed = 1 << 5;
-        const EmphasizeGreen = 1 << 6;
-        const EmphasizeBlue = 1 << 7;
-    }
-
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-    pub struct PpuStatus: u8 {
-        const SpriteOverflow = 1 << 5;
-        const Sprite0Hit = 1 << 6;
-        const VerticalBlank = 1 << 7;
-    }
-}
-
-#[bitfield]
-#[derive(Clone, Copy, Debug)]
-struct VRAMAddr {
-    coarse_x: B5,
-    coarse_y: B5,
-    nametable_x: B1,
-    nametable_y: B1,
-    fine_y: B3,
-    #[skip]
-    padding: B1,
-}
-
-impl VRAMAddr {
-    fn increment_coarse_x(&mut self) {
-        self.set_coarse_x(self.coarse_x() + 1);
-    }
-
-    fn increment_coarse_y(&mut self) {
-        self.set_coarse_y(self.coarse_y() + 1);
-    }
-
-    fn increment_nametable_x(&mut self) {
-        self.set_nametable_x((self.nametable_x() + 1) % 2);
-    }
-
-    fn increment_nametable_y(&mut self) {
-        self.set_nametable_y((self.nametable_x() + 1) % 2);
-    }
-
-    fn increment_fine_y(&mut self) {
-        self.set_fine_y(self.fine_y() + 1);
-    }
-}
-
-impl From<u16> for VRAMAddr {
-    fn from(addr: u16) -> Self {
-        let low = addr & 0x00FF;
-        let high = addr >> 8;
-
-        VRAMAddr::from_bytes([low as u8, high as u8])
-    }
-}
-
-impl From<VRAMAddr> for u16 {
-    fn from(vram_addr: VRAMAddr) -> Self {
-        let [low, high] = vram_addr.into_bytes();
-
-        ((high as u16) << 8) | low as u16
-    }
-}
+mod flags;
+mod pattern_table;
+mod sprite;
+mod vram_addr;
 
 pub struct PpuClockResult {
     pub pixel: Option<Pixel>,
@@ -137,13 +27,6 @@ pub struct PpuClockResult {
 const PALETTE_RAM_SIZE: usize = 32;
 const NAMETABLE_SIZE: usize = 1024;
 const OAM_SIZE: usize = 256;
-
-struct PpuSprite {
-    x: u8,
-    y: u8,
-    tile_id: u8,
-    attribute: u8,
-}
 
 pub struct Ppu {
     palette: Palette,
@@ -331,20 +214,20 @@ impl Ppu {
             }
 
             // TODO: Emulate sprite evaluation properly
-            if self.cycle == 257 && self.scanline >= 0 {
-                self.scanline_sprites = self.next_scanline_sprite_evaluation();
-            }
-
-            // Sprite rendering
-            if self.cycle == 340 {
-                let pattern_table =
-                    PatternTable::from(self.ctrl.contains(PpuCtrl::SpritePatternTable));
-                for sprite in self.scanline_sprites {
-                    if !self.ctrl.contains(PpuCtrl::SpriteSize) {
-                        let tile_row = self.fetch_tile_byte(pattern_table, sprite);
-                    }
-                }
-            }
+            // if self.cycle == 257 && self.scanline >= 0 {
+            //     self.scanline_sprites = self.next_scanline_sprite_evaluation();
+            // }
+            //
+            // // Sprite rendering
+            // if self.cycle == 340 {
+            //     let pattern_table =
+            //         PatternTable::from(self.ctrl.contains(PpuCtrl::SpritePatternTable));
+            //     for sprite in &self.scanline_sprites {
+            //         if !self.ctrl.contains(PpuCtrl::SpriteSize) {
+            //             // let tile_row = sel.fetch_tile_byte(pattern_table, sprite);
+            //         }
+            //     }
+            // }
         }
 
         let mut nmi = false;
@@ -559,7 +442,7 @@ impl Ppu {
             let sprite = PpuSprite {
                 y: sprite[0],
                 tile_id: sprite[1],
-                attribute: sprite[2],
+                attribute: SpriteAttribute::from_bits_truncate(sprite[2]),
                 x: sprite[3],
             };
 
@@ -849,14 +732,14 @@ fn map_addr_to_nametable(mirroring: Mirroring, address: u16) -> usize {
             if (0x2000..0x2800).contains(&address) {
                 0
             } else {
-                0x1000
+                0x400
             }
         }
         Mirroring::Vertical => {
             if (0x2000..0x2400).contains(&address) || (0x2800..0x2C00).contains(&address) {
                 0
             } else {
-                0x100
+                0x400
             }
         }
     } as usize;
