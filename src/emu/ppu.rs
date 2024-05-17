@@ -16,6 +16,24 @@ pub enum PatternTable {
     Right,
 }
 
+impl From<bool> for PatternTable {
+    fn from(value: bool) -> Self {
+        match value {
+            false => PatternTable::Left,
+            true => PatternTable::Right,
+        }
+    }
+}
+
+impl PatternTable {
+    fn addr(self) -> u16 {
+        match self {
+            PatternTable::Left => 0x0000,
+            PatternTable::Right => 0x1000,
+        }
+    }
+}
+
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct PpuCtrl: u8 {
@@ -120,6 +138,13 @@ const PALETTE_RAM_SIZE: usize = 32;
 const NAMETABLE_SIZE: usize = 1024;
 const OAM_SIZE: usize = 256;
 
+struct PpuSprite {
+    x: u8,
+    y: u8,
+    tile_id: u8,
+    attribute: u8,
+}
+
 pub struct Ppu {
     palette: Palette,
 
@@ -153,6 +178,11 @@ pub struct Ppu {
     bg_tile_high_shifter: u16,
     bg_tile_palette_low_shifter: u16,
     bg_tile_palette_high_shifter: u16,
+
+    // Sprite rendering
+    scanline_sprites: Vec<PpuSprite>,
+    sprite_tile_low_shifter: [u8; 8],
+    sprite_tile_high_shifter: [u8; 8],
 
     // Memory
     nametable_ram: [u8; NAMETABLE_SIZE * 2],
@@ -193,6 +223,10 @@ impl Ppu {
             bg_tile_high_shifter: 0x0000,
             bg_tile_palette_low_shifter: 0x0000,
             bg_tile_palette_high_shifter: 0x0000,
+
+            scanline_sprites: Vec::new(),
+            sprite_tile_low_shifter: [0; 8],
+            sprite_tile_high_shifter: [0; 8],
 
             nametable_ram: [0; NAMETABLE_SIZE * 2],
             palette_ram: [0; PALETTE_RAM_SIZE],
@@ -295,6 +329,22 @@ impl Ppu {
                 338 | 340 => self.next_bg_tile_id = self.fetch_nametable_tile_id(),
                 _ => {}
             }
+
+            // TODO: Emulate sprite evaluation properly
+            if self.cycle == 257 && self.scanline >= 0 {
+                self.scanline_sprites = self.next_scanline_sprite_evaluation();
+            }
+
+            // Sprite rendering
+            if self.cycle == 340 {
+                let pattern_table =
+                    PatternTable::from(self.ctrl.contains(PpuCtrl::SpritePatternTable));
+                for sprite in self.scanline_sprites {
+                    if !self.ctrl.contains(PpuCtrl::SpriteSize) {
+                        let tile_row = self.fetch_tile_byte(pattern_table, sprite);
+                    }
+                }
+            }
         }
 
         let mut nmi = false;
@@ -358,34 +408,42 @@ impl Ppu {
     }
 
     fn fetch_tile_row_lsb(&self) -> u8 {
-        let pattern_table_base = if self.ctrl.contains(PpuCtrl::BackgroundPatternTable) {
-            0x1000
-        } else {
-            0x0000
-        };
-
-        // Each tile is 16 bytes
-        let tile_offset = (self.next_bg_tile_id as u16) << 4;
-        // The row of the tile we're gonna read the byte from
-        let row_offset = self.vram_addr.fine_y() as u16;
-
-        self.read(pattern_table_base + tile_offset + row_offset)
+        let pattern_table = PatternTable::from(self.ctrl.contains(PpuCtrl::BackgroundPatternTable));
+        self.fetch_tile_byte(
+            pattern_table,
+            self.next_bg_tile_id,
+            self.vram_addr.fine_y(),
+            false,
+        )
     }
 
     fn fetch_tile_row_msb(&self) -> u8 {
-        let pattern_table_base = if self.ctrl.contains(PpuCtrl::BackgroundPatternTable) {
-            0x1000
-        } else {
-            0x0000
-        };
-
-        // Each tile is 16 bytes
-        let tile_offset = (self.next_bg_tile_id as u16) << 4;
-        // The row of the tile we're gonna read the byte from
-        let row_offset = self.vram_addr.fine_y() as u16;
-
+        let pattern_table = PatternTable::from(self.ctrl.contains(PpuCtrl::BackgroundPatternTable));
         // High plane comes 8 bytes after low plane so need to offset by 8
-        self.read(pattern_table_base + tile_offset + row_offset + 8)
+        self.fetch_tile_byte(
+            pattern_table,
+            self.next_bg_tile_id,
+            self.vram_addr.fine_y(),
+            true,
+        )
+    }
+
+    fn fetch_tile_byte(
+        &self,
+        pattern_table: PatternTable,
+        tile_id: u8,
+        row: u8,
+        high_plane: bool,
+    ) -> u8 {
+        assert!(row < 8);
+        let tile_offset = (tile_id as u16) << 4;
+
+        let addr = pattern_table.addr() + tile_offset + (row as u16);
+        if !high_plane {
+            self.read(addr)
+        } else {
+            self.read(addr + 8)
+        }
     }
 
     fn rendering_enabled(&self) -> bool {
@@ -488,6 +546,40 @@ impl Ppu {
         self.bg_tile_high_shifter <<= 1;
         self.bg_tile_palette_low_shifter <<= 1;
         self.bg_tile_palette_high_shifter <<= 1;
+    }
+
+    fn next_scanline_sprite_evaluation(&mut self) -> Vec<PpuSprite> {
+        let mut next_scanline_sprites = Vec::new();
+
+        for sprite in self.oam.chunks_exact(4) {
+            if next_scanline_sprites.len() >= 9 {
+                break;
+            }
+
+            let sprite = PpuSprite {
+                y: sprite[0],
+                tile_id: sprite[1],
+                attribute: sprite[2],
+                x: sprite[3],
+            };
+
+            let height = if self.ctrl.contains(PpuCtrl::SpriteSize) {
+                16
+            } else {
+                8
+            };
+
+            if (self.scanline..self.scanline + height).contains(&(sprite.y as i16)) {
+                next_scanline_sprites.push(sprite);
+            }
+        }
+
+        if next_scanline_sprites.len() >= 9 {
+            next_scanline_sprites.pop();
+            self.status.insert(PpuStatus::SpriteOverflow);
+        }
+
+        next_scanline_sprites
     }
 
     fn get_pixel(&self) -> Option<Pixel> {
@@ -747,7 +839,7 @@ fn map_addr_to_nametable(mirroring: Mirroring, address: u16) -> usize {
 
     // Address mirroring (0x3000-0x3EFF is mapped to 0x2000-0x2EFF)
     let address = if address >= 0x3000 {
-        address - 1000
+        address - 0x1000
     } else {
         address
     };
@@ -757,14 +849,14 @@ fn map_addr_to_nametable(mirroring: Mirroring, address: u16) -> usize {
             if (0x2000..0x2800).contains(&address) {
                 0
             } else {
-                1024
+                0x1000
             }
         }
         Mirroring::Vertical => {
             if (0x2000..0x2400).contains(&address) || (0x2800..0x2C00).contains(&address) {
                 0
             } else {
-                1024
+                0x100
             }
         }
     } as usize;
