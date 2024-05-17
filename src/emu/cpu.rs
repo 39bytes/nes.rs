@@ -1,4 +1,4 @@
-use super::bit_ext::BitExt;
+use super::bits::IntoBit;
 use super::cartridge::Cartridge;
 use super::input::ControllerButtons;
 use super::instructions::{AddressMode, Instruction, InstructionType};
@@ -31,6 +31,7 @@ bitflags! {
 
 const STACK_BASE_ADDR: u16 = 0x0100;
 const CPU_RAM_SIZE: usize = 2 * 1024;
+const PAGE_SIZE: u16 = 0x0100;
 
 pub struct Cpu6502 {
     /* Registers */
@@ -45,6 +46,19 @@ pub struct Cpu6502 {
     cycles: u8,
 
     total_cycles: u64,
+
+    // Indicates whether or not the CPU is in the middle of performing
+    // a DMA transfer to the PPU
+    dma_transfer: bool,
+    // Whether or not we are waiting to start the DMA
+    // Always waits on the first cycle that DMA is triggered,
+    // then optionally for another alignment cycle
+    // See: https://www.nesdev.org/wiki/DMA
+    dma_halting: bool,
+    // For reading/writing during DMA
+    dma_page: u8,
+    dma_index: u8,
+    dma_data: u8,
 
     // Memory
     ram: [u8; CPU_RAM_SIZE],
@@ -80,6 +94,12 @@ impl Cpu6502 {
             opcode: 0x00,
             cycles: 0,
             total_cycles: 0,
+
+            dma_transfer: false,
+            dma_halting: false,
+            dma_page: 0x00,
+            dma_index: 0x00,
+            dma_data: 0x00,
 
             ram: [0; CPU_RAM_SIZE],
 
@@ -218,6 +238,12 @@ impl Cpu6502 {
                 Some(ppu) => ppu.borrow_mut().cpu_write(addr, data),
                 None => panic!("PPU not attached"),
             },
+            0x4014 => {
+                self.dma_transfer = true;
+                self.dma_halting = true;
+                self.dma_page = data;
+                self.dma_index = 0x00;
+            }
             0x4016..=0x4017 => self.controller_shift_reg = self.controller.bits(),
             0x4020..=0xFFFF => match &self.cartridge {
                 Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap_or(()),
@@ -317,6 +343,12 @@ impl Cpu6502 {
 
     /// Run one clock cycle.
     pub fn clock(&mut self) {
+        if self.dma_transfer {
+            self.dma_clock();
+            self.total_cycles += 1;
+            return;
+        }
+
         if self.cycles == 0 {
             self.opcode = self.read(self.pc);
 
@@ -436,6 +468,36 @@ impl Cpu6502 {
         self.cycles -= 1;
 
         self.total_cycles += 1;
+    }
+
+    fn dma_clock(&mut self) {
+        if self.dma_halting {
+            // If we're on an even cycle, wait again the next cycle so that
+            // we start the DMA transfer on an even cycle
+            self.dma_halting = self.total_cycles % 2 == 0;
+            return;
+        }
+
+        // Even cycles: Get from CPU Page (don't have to do anything in code
+        // Odd cycles: Put (write) to PPU OAM
+        if self.total_cycles == 0 {
+            let page_base_addr = (self.dma_page as u16) << 8;
+            let addr = page_base_addr + (self.dma_index as u16);
+            self.dma_data = self.read(addr);
+        } else {
+            match &self.ppu {
+                Some(ppu) => ppu
+                    .borrow_mut()
+                    .dma_oam_write(self.dma_index, self.dma_data),
+                None => panic!("Attempted to perform DMA without PPU attached to CPU"),
+            }
+
+            if self.dma_index == 0xFF {
+                self.dma_transfer = false;
+            } else {
+                self.dma_index += 1;
+            }
+        }
     }
 
     // Addressing modes

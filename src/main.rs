@@ -268,9 +268,8 @@ fn draw_ppu_info(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
     draw_flags(renderer, ppu.status().bits(), "VSO-----", x + 96, y + 60);
 
     renderer.draw_text(&format!("OAMADDR: {:#06X}", ppu.oam_addr()), x, y + 80);
-    renderer.draw_text(&format!("OAMDATA: {:#06X}", ppu.oam_data()), x, y + 100);
-    renderer.draw_text(&format!("ADDR: {:#06X}", ppu.addr()), x, y + 120);
-    renderer.draw_text(&format!("DATA: {:#06X}", ppu.data()), x, y + 140);
+    renderer.draw_text(&format!("ADDR: {:#06X}", ppu.addr()), x, y + 100);
+    renderer.draw_text(&format!("DATA: {:#06X}", ppu.data()), x, y + 120);
 }
 
 fn draw_pattern_tables(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
