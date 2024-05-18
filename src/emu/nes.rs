@@ -6,7 +6,7 @@ use std::{
 use crate::renderer::{Color, Sprite};
 
 use super::{
-    cartridge::Cartridge, cpu::Cpu6502, input::ControllerButtons, palette::Palette, ppu::Ppu,
+    cartridge::Cartridge, cpu::Cpu6502, input::ControllerInput, palette::Palette, ppu::Ppu,
 };
 
 pub struct Nes {
@@ -62,8 +62,8 @@ impl Nes {
         self.cpu.borrow_mut().reset();
     }
 
-    pub fn trigger_inputs(&mut self, buttons: ControllerButtons) {
-        self.cpu.borrow_mut().trigger_inputs(buttons);
+    pub fn trigger_inputs(&mut self, input: ControllerInput) {
+        self.cpu.borrow_mut().trigger_inputs(input);
     }
 
     pub fn clock(&mut self) {

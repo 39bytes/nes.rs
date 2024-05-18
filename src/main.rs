@@ -2,7 +2,6 @@ use std::env;
 use std::process;
 
 use anyhow::{anyhow, Result};
-use emu::input::ControllerButtons;
 use error_iter::ErrorIter as _;
 use log::error;
 use renderer::{Color, Renderer, Sprite};
@@ -16,6 +15,7 @@ use winit_input_helper::WinitInputHelper;
 
 use emu::cartridge::Cartridge;
 use emu::cpu::Cpu6502;
+use emu::input::{ControllerButtons, ControllerInput};
 use emu::instructions::{AddressMode, Instruction};
 use emu::nes::Nes;
 use emu::palette::Palette;
@@ -151,7 +151,7 @@ pub fn main() -> Result<()> {
             if input.key_held(KeyCode::ArrowRight) {
                 buttons.insert(ControllerButtons::Right);
             }
-            nes.trigger_inputs(buttons);
+            nes.trigger_inputs(ControllerInput::One(buttons));
 
             // Resize the window
             if let Some(size) = input.window_resized() {

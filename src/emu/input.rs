@@ -1,6 +1,7 @@
 use bitflags::bitflags;
 
 bitflags! {
+    #[derive(Clone, Copy)]
     pub struct ControllerButtons: u8 {
         const A = 1 << 0;
         const B = 1 << 1;
@@ -11,4 +12,9 @@ bitflags! {
         const Left = 1 << 6;
         const Right = 1 << 7;
     }
+}
+
+pub enum ControllerInput {
+    One(ControllerButtons),
+    Two(ControllerButtons),
 }

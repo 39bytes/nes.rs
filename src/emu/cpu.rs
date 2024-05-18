@@ -1,6 +1,6 @@
 use super::bits::IntoBit;
 use super::cartridge::Cartridge;
-use super::input::ControllerButtons;
+use super::input::{ControllerButtons, ControllerInput};
 use super::instructions::{AddressMode, Instruction, InstructionType};
 use super::ppu::Ppu;
 use bitflags::bitflags;
@@ -68,8 +68,8 @@ pub struct Cpu6502 {
     cartridge: Option<Rc<RefCell<Cartridge>>>,
 
     // Input
-    controller: ControllerButtons,
-    controller_shift_reg: u8,
+    controllers: [ControllerButtons; 2],
+    controller_shifters: [u8; 2],
 }
 
 struct AddressModeResult {
@@ -106,8 +106,8 @@ impl Cpu6502 {
             cartridge: None,
             ppu: None,
 
-            controller: ControllerButtons::empty(),
-            controller_shift_reg: 0x00,
+            controllers: [ControllerButtons::empty(); 2],
+            controller_shifters: [0; 2],
         }
     }
 
@@ -162,8 +162,11 @@ impl Cpu6502 {
         self.total_cycles
     }
 
-    pub fn trigger_inputs(&mut self, buttons: ControllerButtons) {
-        self.controller = buttons;
+    pub fn trigger_inputs(&mut self, input: ControllerInput) {
+        match input {
+            ControllerInput::One(buttons) => self.controllers[0] = buttons,
+            ControllerInput::Two(buttons) => self.controllers[1] = buttons,
+        }
     }
 
     pub fn read(&mut self, addr: u16) -> u8 {
@@ -179,8 +182,9 @@ impl Cpu6502 {
                 None => panic!("PPU not attached"),
             },
             0x4016..=0x4017 => {
-                let out = self.controller_shift_reg & 0x01;
-                self.controller_shift_reg >>= 1;
+                let i = (addr % 2) as usize;
+                let out = self.controller_shifters[i] & 0x01;
+                self.controller_shifters[i] >>= 1;
                 out
             }
             0x4020..=0xFFFF => match &self.cartridge {
@@ -204,7 +208,10 @@ impl Cpu6502 {
                 Some(ppu) => ppu.borrow().cpu_read_debug(addr),
                 None => panic!("PPU not attached"),
             },
-            0x4016..=0x4017 => self.controller_shift_reg & 0x01,
+            0x4016..=0x4017 => {
+                let i = (addr % 2) as usize;
+                self.controller_shifters[i] & 0x01
+            }
             0x4020..=0xFFFF => match &self.cartridge {
                 Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap_or(0),
                 None => panic!("Cartridge not attached"),
@@ -244,7 +251,10 @@ impl Cpu6502 {
                 self.dma_page = data;
                 self.dma_index = 0x00;
             }
-            0x4016..=0x4017 => self.controller_shift_reg = self.controller.bits(),
+            0x4016..=0x4017 => {
+                let i = (addr % 2) as usize;
+                self.controller_shifters[i] = self.controllers[i].bits();
+            }
             0x4020..=0xFFFF => match &self.cartridge {
                 Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap_or(()),
                 None => panic!("Cartridge not attached"),
