@@ -7,6 +7,7 @@ pub use self::pattern_table::PatternTable;
 use self::sprite::{Sprite as PpuSprite, SpriteAttribute};
 use self::vram_addr::VRAMAddr;
 
+use super::bits::flip_byte;
 use super::{
     bits::IntoBit,
     cartridge::{Cartridge, Mirroring},
@@ -18,6 +19,19 @@ mod flags;
 mod pattern_table;
 mod sprite;
 mod vram_addr;
+
+#[derive(Debug, Default)]
+struct BgPixel {
+    palette: u8,
+    pixel: u8,
+}
+
+#[derive(Debug, Default)]
+struct SpritePixel {
+    palette: u8,
+    pixel: u8,
+    behind_background: bool,
+}
 
 pub struct PpuClockResult {
     pub pixel: Option<Pixel>,
@@ -168,6 +182,10 @@ impl Ppu {
             // Rendering a new frame so reset vertical blank
             if self.scanline == -1 && self.cycle == 1 {
                 self.status.set(PpuStatus::VerticalBlank, false);
+                self.status.set(PpuStatus::SpriteOverflow, false);
+
+                self.sprite_tile_low_shifter = [0; 8];
+                self.sprite_tile_high_shifter = [0; 8];
             }
 
             // TODO: Check that this is correct
@@ -214,20 +232,22 @@ impl Ppu {
             }
 
             // TODO: Emulate sprite evaluation properly
-            // if self.cycle == 257 && self.scanline >= 0 {
-            //     self.scanline_sprites = self.next_scanline_sprite_evaluation();
-            // }
-            //
-            // // Sprite rendering
-            // if self.cycle == 340 {
-            //     let pattern_table =
-            //         PatternTable::from(self.ctrl.contains(PpuCtrl::SpritePatternTable));
-            //     for sprite in &self.scanline_sprites {
-            //         if !self.ctrl.contains(PpuCtrl::SpriteSize) {
-            //             // let tile_row = sel.fetch_tile_byte(pattern_table, sprite);
-            //         }
-            //     }
-            // }
+            if self.cycle == 257 && self.scanline >= 0 {
+                self.scanline_sprites = self.next_scanline_sprite_evaluation();
+            }
+
+            // Sprite rendering
+            if self.cycle == 340 {
+                for (i, sprite) in self.scanline_sprites.iter().enumerate() {
+                    let (lsb, msb) = if !self.ctrl.contains(PpuCtrl::SpriteSize) {
+                        self.fetch_8x8_sprite_row(sprite)
+                    } else {
+                        self.fetch_8x16_sprite_row(sprite)
+                    };
+                    self.sprite_tile_low_shifter[i] = lsb;
+                    self.sprite_tile_high_shifter[i] = msb;
+                }
+            }
         }
 
         let mut nmi = false;
@@ -322,10 +342,53 @@ impl Ppu {
         let tile_offset = (tile_id as u16) << 4;
 
         let addr = pattern_table.addr() + tile_offset + (row as u16);
+        // The high bit plane is located 8 bytes further
         if !high_plane {
             self.read(addr)
         } else {
             self.read(addr + 8)
+        }
+    }
+
+    fn fetch_8x8_sprite_row(&self, sprite: &PpuSprite) -> (u8, u8) {
+        let pattern_table = PatternTable::from(self.ctrl.contains(PpuCtrl::SpritePatternTable));
+        let dy = self.scanline - (sprite.y as i16);
+        let row = if sprite.attribute.contains(SpriteAttribute::FlipVertically) {
+            7 - dy
+        } else {
+            dy
+        };
+
+        let lsb = self.fetch_tile_byte(pattern_table, sprite.tile_id, row as u8, false);
+        let msb = self.fetch_tile_byte(pattern_table, sprite.tile_id, row as u8, true);
+
+        if sprite.attribute.contains(SpriteAttribute::FlipHorizontally) {
+            (flip_byte(lsb), flip_byte(msb))
+        } else {
+            (lsb, msb)
+        }
+    }
+
+    fn fetch_8x16_sprite_row(&self, sprite: &PpuSprite) -> (u8, u8) {
+        let pattern_table = PatternTable::from(sprite.tile_id & 0x01 == 1);
+        let dy = self.scanline - (sprite.y as i16);
+
+        let tile_id = sprite.tile_id & 0xFE;
+        // Top half or bottom half
+        let tile_id = if dy < 8 { tile_id } else { tile_id + 1 };
+        let row = if sprite.attribute.contains(SpriteAttribute::FlipVertically) {
+            7 - dy
+        } else {
+            dy
+        };
+
+        let lsb = self.fetch_tile_byte(pattern_table, tile_id, row as u8, false);
+        let msb = self.fetch_tile_byte(pattern_table, tile_id, row as u8, true);
+
+        if sprite.attribute.contains(SpriteAttribute::FlipHorizontally) {
+            (flip_byte(lsb), flip_byte(msb))
+        } else {
+            (lsb, msb)
         }
     }
 
@@ -421,14 +484,23 @@ impl Ppu {
     }
 
     fn shift_shifters(&mut self) {
-        if !self.mask.contains(PpuMask::ShowBackground) {
-            return;
+        if self.mask.contains(PpuMask::ShowBackground) {
+            self.bg_tile_low_shifter <<= 1;
+            self.bg_tile_high_shifter <<= 1;
+            self.bg_tile_palette_low_shifter <<= 1;
+            self.bg_tile_palette_high_shifter <<= 1;
         }
 
-        self.bg_tile_low_shifter <<= 1;
-        self.bg_tile_high_shifter <<= 1;
-        self.bg_tile_palette_low_shifter <<= 1;
-        self.bg_tile_palette_high_shifter <<= 1;
+        if self.mask.contains(PpuMask::ShowSprites) && (1..258).contains(&self.cycle) {
+            for i in 0..self.scanline_sprites.len() {
+                if self.scanline_sprites[i].x > 0 {
+                    self.scanline_sprites[i].x -= 1;
+                } else {
+                    self.sprite_tile_low_shifter[i] <<= 1;
+                    self.sprite_tile_high_shifter[i] <<= 1;
+                }
+            }
+        }
     }
 
     fn next_scanline_sprite_evaluation(&mut self) -> Vec<PpuSprite> {
@@ -452,7 +524,9 @@ impl Ppu {
                 8
             };
 
-            if (self.scanline..self.scanline + height).contains(&(sprite.y as i16)) {
+            let y = sprite.y as i16;
+
+            if (y..y + height).contains(&self.scanline) {
                 next_scanline_sprites.push(sprite);
             }
         }
@@ -471,21 +545,15 @@ impl Ppu {
             return None;
         }
 
-        let (palette, pixel) = if self.mask.contains(PpuMask::ShowBackground) {
-            let mask = 0x8000 >> self.fine_x;
+        let bg_pixel = self.get_bg_pixel();
+        let sprite_pixel = self.get_sprite_pixel();
 
-            let pixel_low = (self.bg_tile_low_shifter & mask).into_bit();
-            let pixel_high = (self.bg_tile_high_shifter & mask).into_bit();
-
-            let palette_low = (self.bg_tile_palette_low_shifter & mask).into_bit();
-            let palette_high = (self.bg_tile_palette_high_shifter & mask).into_bit();
-
-            let pixel = (pixel_high << 1) | pixel_low;
-            let palette = (palette_high << 1) | palette_low;
-
-            (palette, pixel)
-        } else {
-            (0, 0)
+        let (palette, pixel) = match (bg_pixel.pixel, sprite_pixel.pixel) {
+            (0, 0) => (0, 0),
+            (0, sp_px) => (sprite_pixel.palette, sp_px),
+            (bg_px, 0) => (bg_pixel.palette, bg_px),
+            (bg_px, _sp_px) if sprite_pixel.behind_background => (bg_pixel.palette, bg_px),
+            (_bg_px, sp_px) => (sprite_pixel.palette, sp_px),
         };
 
         let px = Pixel {
@@ -495,6 +563,60 @@ impl Ppu {
         };
 
         Some(px)
+    }
+
+    fn get_bg_pixel(&self) -> BgPixel {
+        if !self.mask.contains(PpuMask::ShowBackground) {
+            return BgPixel::default();
+        }
+
+        let mask = 0x8000 >> self.fine_x;
+
+        let pixel_low = (self.bg_tile_low_shifter & mask).into_bit();
+        let pixel_high = (self.bg_tile_high_shifter & mask).into_bit();
+
+        let palette_low = (self.bg_tile_palette_low_shifter & mask).into_bit();
+        let palette_high = (self.bg_tile_palette_high_shifter & mask).into_bit();
+
+        let pixel = (pixel_high << 1) | pixel_low;
+        let palette = (palette_high << 1) | palette_low;
+
+        BgPixel { palette, pixel }
+    }
+
+    fn get_sprite_pixel(&self) -> SpritePixel {
+        if !self.mask.contains(PpuMask::ShowSprites) {
+            return SpritePixel::default();
+        }
+
+        for i in 0..self.scanline_sprites.len() {
+            let sprite = &self.scanline_sprites[i];
+            if sprite.x != 0 {
+                continue;
+            }
+
+            let pixel_low = (self.sprite_tile_low_shifter[i] & 0x80).into_bit();
+            let pixel_high = (self.sprite_tile_high_shifter[i] & 0x80).into_bit();
+
+            let pixel = (pixel_high << 1) | pixel_low;
+            if pixel == 0 {
+                continue;
+            }
+
+            let palette_low = sprite.attribute.contains(SpriteAttribute::PaletteLSB) as u8;
+            let palette_high = sprite.attribute.contains(SpriteAttribute::PaletteMSB) as u8;
+            let palette = (palette_high << 1) | palette_low;
+
+            let behind_background = sprite.attribute.contains(SpriteAttribute::BehindBackground);
+
+            return SpritePixel {
+                palette,
+                pixel,
+                behind_background,
+            };
+        }
+
+        SpritePixel::default()
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) {

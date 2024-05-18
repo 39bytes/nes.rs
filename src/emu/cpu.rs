@@ -480,7 +480,7 @@ impl Cpu6502 {
 
         // Even cycles: Get from CPU Page (don't have to do anything in code
         // Odd cycles: Put (write) to PPU OAM
-        if self.total_cycles == 0 {
+        if self.total_cycles % 2 == 0 {
             let page_base_addr = (self.dma_page as u16) << 8;
             let addr = page_base_addr + (self.dma_index as u16);
             self.dma_data = self.read(addr);
