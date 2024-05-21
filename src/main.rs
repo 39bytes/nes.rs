@@ -315,12 +315,25 @@ fn draw_palettes(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
 }
 
 fn draw_nametable(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
-    let nametable1 = &ppu.nametables()[..1024];
+    const ATTRIBUTE_MEMORY_OFFSET: u16 = 0x2000 + 0x03C0;
 
-    for j in 0..30 {
-        for i in 0..32 {
-            let tile_index = nametable1[j * 32 + i];
-            renderer.draw_text(&format!("{:02X}", tile_index), i * 24 + x, j * 24 + y);
+    for i in 0..30 {
+        for j in 0..32 {
+            let group_offset = (i / 4) * 8 + j / 4;
+            let mut palette_byte = ppu.read(ATTRIBUTE_MEMORY_OFFSET + group_offset);
+            if i % 4 >= 2 {
+                palette_byte >>= 4;
+            }
+            if j % 4 >= 2 {
+                palette_byte >>= 2;
+            }
+            let palette = palette_byte & 0x03;
+
+            renderer.draw_text(
+                &format!("{:02X}", palette),
+                (j as usize) * 24 + x,
+                (i as usize) * 16 + y,
+            );
         }
     }
 }

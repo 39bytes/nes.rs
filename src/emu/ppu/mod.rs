@@ -485,7 +485,7 @@ impl Ppu {
         };
         self.bg_tile_palette_low_shifter = (self.bg_tile_palette_low_shifter & 0xFF00) | fill;
 
-        let fill = if self.next_bg_tile_palette_id & 0x10 == 0 {
+        let fill = if self.next_bg_tile_palette_id & 0x02 == 0 {
             0x00
         } else {
             0xFF
