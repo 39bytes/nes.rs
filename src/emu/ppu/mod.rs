@@ -574,11 +574,10 @@ impl Ppu {
                 // See https://www.nesdev.org/wiki/PPU_OAM#Sprite_0_hits
                 let left_clipping_enabled = !self.mask.contains(PpuMask::ShowBackgroundLeft)
                     || !self.mask.contains(PpuMask::ShowSpritesLeft);
-                let in_left_clip_window = left_clipping_enabled && !(9..258).contains(&self.cycle);
+                let in_left_clip_window = left_clipping_enabled && self.cycle < 9; // x < 8
 
-                let sprite0_hit = sprite_pixel.sprite0_hit
-                    && self.rendering_enabled()
-                    && (!in_left_clip_window || (1..258).contains(&self.cycle));
+                let sprite0_hit =
+                    sprite_pixel.sprite0_hit && self.rendering_enabled() && !in_left_clip_window;
 
                 (palette, pixel, sprite0_hit)
             }
