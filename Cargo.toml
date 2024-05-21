@@ -16,5 +16,5 @@ modular-bitfield = "0.11.2"
 pixels = "0.13.0"
 rusttype = "0.9.3"
 strum_macros = "0.26.1"
-winit = { version = "0.29.14", features = ["rwh_05"] }
+winit = { version = "0.29.15", features = ["rwh_05"] }
 winit_input_helper = "0.16.0"
