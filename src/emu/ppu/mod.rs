@@ -637,7 +637,8 @@ impl Ppu {
             let behind_background = sprite.attribute.contains(SpriteAttribute::BehindBackground);
 
             return SpritePixel {
-                palette,
+                // need to pick from sprite palettes instead, which is 4 after the bg palettes
+                palette: palette + 4,
                 pixel,
                 behind_background,
                 sprite0_hit: sprite.oam_index == 0,
@@ -822,7 +823,7 @@ impl Ppu {
     }
 
     pub fn get_palette_color(&self, palette: u8, pixel: u8) -> Color {
-        let offset = palette * 4 + pixel;
+        let offset = (palette << 2) + pixel;
         let color_index = self.read(0x3F00 + offset as u16);
 
         self.palette
