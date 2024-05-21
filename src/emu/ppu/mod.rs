@@ -22,15 +22,16 @@ mod vram_addr;
 
 #[derive(Debug, Default)]
 struct BgPixel {
-    palette: u8,
-    pixel: u8,
+    pub palette: u8,
+    pub pixel: u8,
 }
 
 #[derive(Debug, Default)]
 struct SpritePixel {
-    palette: u8,
-    pixel: u8,
-    behind_background: bool,
+    pub palette: u8,
+    pub pixel: u8,
+    pub behind_background: bool,
+    pub sprite0_hit: bool,
 }
 
 pub struct PpuClockResult {
@@ -179,9 +180,10 @@ impl Ppu {
     pub fn clock(&mut self) -> PpuClockResult {
         // Rendering during the visible region
         if self.scanline >= -1 && self.scanline < 240 {
-            // Rendering a new frame so reset vertical blank
+            // Rendering a new frame so reset some flags
             if self.scanline == -1 && self.cycle == 1 {
                 self.status.set(PpuStatus::VerticalBlank, false);
+                self.status.set(PpuStatus::Sprite0Hit, false);
                 self.status.set(PpuStatus::SpriteOverflow, false);
 
                 self.sprite_tile_low_shifter = [0; 8];
@@ -257,7 +259,15 @@ impl Ppu {
             nmi = self.ctrl.contains(PpuCtrl::GenerateNMI);
         }
 
-        let pixel = self.get_pixel();
+        let pixel = match self.get_pixel() {
+            Some((pixel, sprite0_hit)) => {
+                if sprite0_hit {
+                    self.status.set(PpuStatus::Sprite0Hit, true);
+                }
+                Some(pixel)
+            }
+            None => None,
+        };
 
         self.cycle += 1;
         if self.cycle > 340 {
@@ -506,7 +516,7 @@ impl Ppu {
     fn next_scanline_sprite_evaluation(&mut self) -> Vec<PpuSprite> {
         let mut next_scanline_sprites = Vec::new();
 
-        for sprite in self.oam.chunks_exact(4) {
+        for (i, sprite) in self.oam.chunks_exact(4).enumerate() {
             if next_scanline_sprites.len() >= 9 {
                 break;
             }
@@ -516,6 +526,7 @@ impl Ppu {
                 tile_id: sprite[1],
                 attribute: SpriteAttribute::from_bits_truncate(sprite[2]),
                 x: sprite[3],
+                oam_index: i,
             };
 
             let height = if self.ctrl.contains(PpuCtrl::SpriteSize) {
@@ -539,7 +550,7 @@ impl Ppu {
         next_scanline_sprites
     }
 
-    fn get_pixel(&self) -> Option<Pixel> {
+    fn get_pixel(&self) -> Option<(Pixel, bool)> {
         // Don't emit a pixel if we're outside of the visible region
         if !(0..240).contains(&self.scanline) || !(1..257).contains(&self.cycle) {
             return None;
@@ -548,12 +559,29 @@ impl Ppu {
         let bg_pixel = self.get_bg_pixel();
         let sprite_pixel = self.get_sprite_pixel();
 
-        let (palette, pixel) = match (bg_pixel.pixel, sprite_pixel.pixel) {
-            (0, 0) => (0, 0),
-            (0, sp_px) => (sprite_pixel.palette, sp_px),
-            (bg_px, 0) => (bg_pixel.palette, bg_px),
-            (bg_px, _sp_px) if sprite_pixel.behind_background => (bg_pixel.palette, bg_px),
-            (_bg_px, sp_px) => (sprite_pixel.palette, sp_px),
+        let (palette, pixel, sprite0_hit) = match (bg_pixel.pixel, sprite_pixel.pixel) {
+            (0, 0) => (0, 0, false),
+            (0, sp_px) => (sprite_pixel.palette, sp_px, false),
+            (bg_px, 0) => (bg_pixel.palette, bg_px, false),
+            (bg_px, sp_px) => {
+                let (palette, pixel) = if sprite_pixel.behind_background {
+                    (bg_pixel.palette, bg_px)
+                } else {
+                    (sprite_pixel.palette, sp_px)
+                };
+
+                // Sprite 0 hit detection logic
+                // See https://www.nesdev.org/wiki/PPU_OAM#Sprite_0_hits
+                let left_clipping_enabled = !self.mask.contains(PpuMask::ShowBackgroundLeft)
+                    || !self.mask.contains(PpuMask::ShowSpritesLeft);
+                let in_left_clip_window = left_clipping_enabled && !(9..258).contains(&self.cycle);
+
+                let sprite0_hit = sprite_pixel.sprite0_hit
+                    && self.rendering_enabled()
+                    && (!in_left_clip_window || (1..258).contains(&self.cycle));
+
+                (palette, pixel, sprite0_hit)
+            }
         };
 
         let px = Pixel {
@@ -562,7 +590,7 @@ impl Ppu {
             color: self.get_palette_color(palette, pixel),
         };
 
-        Some(px)
+        Some((px, sprite0_hit))
     }
 
     fn get_bg_pixel(&self) -> BgPixel {
@@ -613,6 +641,7 @@ impl Ppu {
                 palette,
                 pixel,
                 behind_background,
+                sprite0_hit: sprite.oam_index == 0,
             };
         }
 

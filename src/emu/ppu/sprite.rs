@@ -18,4 +18,5 @@ pub struct Sprite {
     pub y: u8,
     pub tile_id: u8,
     pub attribute: SpriteAttribute,
+    pub oam_index: usize,
 }
