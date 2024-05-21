@@ -68,6 +68,7 @@ pub struct Cpu6502 {
     cartridge: Option<Rc<RefCell<Cartridge>>>,
 
     // Input
+    controller_strobe: bool,
     controllers: [ControllerButtons; 2],
     controller_shifters: [u8; 2],
 }
@@ -106,6 +107,7 @@ impl Cpu6502 {
             cartridge: None,
             ppu: None,
 
+            controller_strobe: false,
             controllers: [ControllerButtons::empty(); 2],
             controller_shifters: [0; 2],
         }
@@ -184,7 +186,11 @@ impl Cpu6502 {
             0x4016..=0x4017 => {
                 let i = (addr % 2) as usize;
                 let out = self.controller_shifters[i] & 0x01;
-                self.controller_shifters[i] >>= 1;
+                // While the controller strobe is high,
+                // the button data should be continuously reloaded, so we don't shift anything.
+                if !self.controller_strobe {
+                    self.controller_shifters[i] >>= 1;
+                }
                 out
             }
             0x4020..=0xFFFF => match &self.cartridge {
@@ -251,9 +257,17 @@ impl Cpu6502 {
                 self.dma_page = data;
                 self.dma_index = 0x00;
             }
-            0x4016..=0x4017 => {
-                let i = (addr % 2) as usize;
-                self.controller_shifters[i] = self.controllers[i].bits();
+            0x4016 => {
+                let data = data & 0x01;
+                self.controller_strobe = data == 1;
+
+                if data == 1 {
+                    self.controller_strobe = true;
+                } else {
+                    self.controller_strobe = false;
+                    self.controller_shifters[0] = self.controllers[0].bits();
+                    self.controller_shifters[1] = self.controllers[1].bits();
+                }
             }
             0x4020..=0xFFFF => match &self.cartridge {
                 Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap_or(()),
