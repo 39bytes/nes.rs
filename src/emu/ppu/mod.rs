@@ -348,7 +348,6 @@ impl Ppu {
         row: u8,
         high_plane: bool,
     ) -> u8 {
-        assert!(row < 8);
         let tile_offset = (tile_id as u16) << 4;
 
         let addr = pattern_table.addr() + tile_offset + (row as u16);
