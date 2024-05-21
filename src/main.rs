@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::env;
 use std::process;
 
@@ -6,9 +7,10 @@ use error_iter::ErrorIter as _;
 use log::error;
 use renderer::{Color, Renderer, Sprite};
 use rusttype::Font;
+use utils::FpsCounter;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::EventLoop;
+use winit::event_loop::{ControlFlow, EventLoop};
 use winit::keyboard::KeyCode;
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
@@ -24,6 +26,7 @@ use emu::ppu::Ppu;
 
 mod emu;
 mod renderer;
+mod utils;
 
 const WIDTH: usize = 960;
 const HEIGHT: usize = 720;
@@ -34,11 +37,13 @@ const FRAME_CLOCKS: u32 = CLOCK_SPEED / 60;
 pub fn main() -> Result<()> {
     env_logger::init();
     let event_loop = EventLoop::new().unwrap();
+    event_loop.set_control_flow(ControlFlow::Poll);
+
     let mut input = WinitInputHelper::new();
     let window = {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
         WindowBuilder::new()
-            .with_title("Hello Pixels")
+            .with_title("nes.rs")
             .with_inner_size(size)
             .with_min_inner_size(size)
             .build(&event_loop)
@@ -66,54 +71,54 @@ pub fn main() -> Result<()> {
     nes.load_cartridge(cartridge);
     nes.reset();
 
-    let palette_sprite = Sprite::from(palette).scale(16);
-
     let mut displayed_page: u8 = 0;
     let mut paused = true;
 
-    event_loop.run(move |event, target| {
-        // Draw the current frame
-        if let Event::WindowEvent {
-            window_id: _,
-            event: WindowEvent::RedrawRequested,
-        } = event
-        {
-            renderer.clear();
+    let mut fps_counter = FpsCounter::new();
 
-            if !paused {
-                for _ in 0..FRAME_CLOCKS {
-                    nes.clock();
+    event_loop.run(move |event, target| {
+        match event {
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
+                println!("Close button pressed, exiting");
+                target.exit();
+            }
+            Event::AboutToWait => {
+                if !paused {
+                    for _ in 0..FRAME_CLOCKS {
+                        nes.clock();
+                    }
+                }
+
+                fps_counter.tick();
+
+                renderer.clear();
+                renderer.draw_text(&format!("FPS: {}", fps_counter.get_fps().round()), 0, 204);
+
+                draw_ppu_info(&mut renderer, &nes.ppu(), 0, 0);
+                draw_palettes(&mut renderer, &nes.ppu(), 240, 0);
+                draw_pattern_tables(&mut renderer, &nes.ppu(), 596, 0);
+
+                let screen = nes.screen().clone();
+                renderer.draw_sprite(&screen.scale(2), 0, 224);
+
+                // draw_mem_page(&mut renderer, &nes, displayed_page, 0, 320);
+                // draw_nametable(&mut renderer, &nes.ppu(), 0, 0);
+                draw_cpu_info(&mut renderer, &nes, 720, 240);
+
+                if let Err(err) = renderer.render() {
+                    log_error("pixels.render", err);
+                    target.exit();
                 }
             }
 
-            draw_ppu_info(&mut renderer, &nes.ppu(), 0, 0);
-            draw_palettes(&mut renderer, &nes.ppu(), 240, 0);
-            renderer.draw_sprite(&palette_sprite, 240, 88);
-            draw_pattern_tables(&mut renderer, &nes.ppu(), 596, 0);
-            renderer.draw_text(&format!("Scanline: {}", nes.ppu().scanline()), 0, 160);
-            renderer.draw_text(&format!("Cycle: {}", nes.ppu().cycle()), 0, 176);
-            renderer.draw_text(&format!("Global Clock: {}", nes.clock_count()), 0, 192);
-
-            let screen = nes.screen().clone();
-            renderer.draw_sprite(&screen.scale(2), 0, 224);
-
-            // draw_mem_page(&mut renderer, &nes, displayed_page, 0, 320);
-            // draw_nametable(&mut renderer, &nes.ppu(), 0, 0);
-            draw_cpu_info(&mut renderer, &nes, 720, 240);
-
-            if let Err(err) = renderer.render() {
-                log_error("pixels.render", err);
-                target.exit();
-            }
+            _ => (),
         }
 
         // Handle input events
         if input.update(&event) {
-            // Close events
-            if input.close_requested() {
-                target.exit();
-            }
-
             // Emulator meta events
             if input.key_pressed(KeyCode::Space) {
                 paused = !paused;
@@ -160,8 +165,6 @@ pub fn main() -> Result<()> {
                     target.exit();
                 }
             }
-
-            window.request_redraw();
         }
     })?;
 
