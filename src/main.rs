@@ -28,7 +28,7 @@ mod renderer;
 const WIDTH: usize = 960;
 const HEIGHT: usize = 720;
 
-const CLOCK_SPEED: u32 = 5361818;
+const CLOCK_SPEED: u32 = 5369318;
 const FRAME_CLOCKS: u32 = CLOCK_SPEED / 60;
 
 pub fn main() -> Result<()> {
@@ -80,6 +80,12 @@ pub fn main() -> Result<()> {
         {
             renderer.clear();
 
+            if !paused {
+                for _ in 0..FRAME_CLOCKS {
+                    nes.clock();
+                }
+            }
+
             draw_ppu_info(&mut renderer, &nes.ppu(), 0, 0);
             draw_palettes(&mut renderer, &nes.ppu(), 240, 0);
             renderer.draw_sprite(&palette_sprite, 240, 88);
@@ -98,12 +104,6 @@ pub fn main() -> Result<()> {
             if let Err(err) = renderer.render() {
                 log_error("pixels.render", err);
                 target.exit();
-            }
-        }
-
-        if !paused {
-            for _ in 0..FRAME_CLOCKS {
-                nes.clock();
             }
         }
 
