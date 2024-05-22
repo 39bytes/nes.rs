@@ -8,7 +8,7 @@ pub struct Instruction {
 }
 
 impl Instruction {
-    pub fn new(instruction_type: InstructionType, address_mode: AddressMode, cycles: u8) -> Self {
+    fn new(instruction_type: InstructionType, address_mode: AddressMode, cycles: u8) -> Self {
         Instruction {
             instruction_type,
             address_mode,
@@ -381,6 +381,7 @@ pub enum InstructionType {
     Txa,
     Txs,
     Tya,
+    // Unofficial
     Slo,
     Rla,
     Sre,
