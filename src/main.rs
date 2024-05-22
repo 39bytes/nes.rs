@@ -15,7 +15,7 @@ use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
 use emu::cartridge::Cartridge;
-use emu::cpu::Cpu6502;
+use emu::cpu::Cpu;
 use emu::input::{ControllerButtons, ControllerInput};
 use emu::instructions::{AddressMode, Instruction};
 use emu::nes::Nes;
@@ -227,7 +227,7 @@ fn draw_cpu_info(renderer: &mut Renderer, nes: &Nes, x: usize, y: usize) {
     }
 }
 
-fn get_instruction_repr(cpu: &Cpu6502, addr: u16) -> String {
+fn get_instruction_repr(cpu: &Cpu, addr: u16) -> String {
     let instruction = Instruction::lookup(cpu.read_debug(addr));
     let arg_addr = addr + 1;
 

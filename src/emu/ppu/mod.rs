@@ -11,7 +11,7 @@ use super::bits::flip_byte;
 use super::{
     bits::IntoBit,
     cartridge::{Cartridge, Mirroring},
-    cpu::Cpu6502,
+    cpu::Cpu,
     palette::Palette,
 };
 
@@ -88,12 +88,12 @@ pub struct Ppu {
     oam: [u8; OAM_SIZE],
 
     // Other components
-    cpu: Rc<RefCell<Cpu6502>>,
+    cpu: Rc<RefCell<Cpu>>,
     cartridge: Option<Rc<RefCell<Cartridge>>>,
 }
 
 impl Ppu {
-    pub fn new(palette: Palette, cpu: Rc<RefCell<Cpu6502>>) -> Self {
+    pub fn new(palette: Palette, cpu: Rc<RefCell<Cpu>>) -> Self {
         Ppu {
             palette,
 

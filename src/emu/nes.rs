@@ -5,12 +5,10 @@ use std::{
 
 use crate::renderer::{Color, Sprite};
 
-use super::{
-    cartridge::Cartridge, cpu::Cpu6502, input::ControllerInput, palette::Palette, ppu::Ppu,
-};
+use super::{cartridge::Cartridge, cpu::Cpu, input::ControllerInput, palette::Palette, ppu::Ppu};
 
 pub struct Nes {
-    cpu: Rc<RefCell<Cpu6502>>,
+    cpu: Rc<RefCell<Cpu>>,
     ppu: Rc<RefCell<Ppu>>,
     cartridge: Option<Rc<RefCell<Cartridge>>>,
 
@@ -21,7 +19,7 @@ pub struct Nes {
 
 impl Nes {
     pub fn new(palette: Palette) -> Self {
-        let cpu = Rc::new(RefCell::new(Cpu6502::new()));
+        let cpu = Rc::new(RefCell::new(Cpu::new()));
         let ppu = Rc::new(RefCell::new(Ppu::new(palette, cpu.clone())));
         cpu.borrow_mut().with_ppu(ppu.clone());
 
@@ -36,7 +34,7 @@ impl Nes {
         }
     }
 
-    pub fn cpu(&self) -> Ref<Cpu6502> {
+    pub fn cpu(&self) -> Ref<Cpu> {
         self.cpu.borrow()
     }
 
