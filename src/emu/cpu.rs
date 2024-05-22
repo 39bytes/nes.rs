@@ -33,7 +33,7 @@ const STACK_BASE_ADDR: u16 = 0x0100;
 const CPU_RAM_SIZE: usize = 2 * 1024;
 const PAGE_SIZE: u16 = 0x0100;
 
-pub struct Cpu6502 {
+pub struct Cpu {
     /* Registers */
     a: u8,               // Accumulator
     x: u8,               // X register
@@ -83,9 +83,9 @@ struct AddressModeResult {
     additional_cycles: bool,
 }
 
-impl Cpu6502 {
+impl Cpu {
     pub fn new() -> Self {
-        Cpu6502 {
+        Cpu {
             a: 0x00,
             x: 0x00,
             y: 0x00,
@@ -1586,7 +1586,7 @@ mod test {
 
     #[test]
     fn test_adc() {
-        let mut cpu = Cpu6502::new();
+        let mut cpu = Cpu::new();
 
         // Test that 2 + 3 = 5
         cpu.write(0x1000, 3);
@@ -1606,7 +1606,7 @@ mod test {
 
     #[test]
     fn test_adc_flags() {
-        let mut cpu = Cpu6502::new();
+        let mut cpu = Cpu::new();
 
         // Test that the overflow bit is correctly set
         //
@@ -1641,7 +1641,7 @@ mod test {
 
     #[test]
     fn nestest_rom() {
-        let mut cpu = Cpu6502::new();
+        let mut cpu = Cpu::new();
 
         // This rom tests everything
 
