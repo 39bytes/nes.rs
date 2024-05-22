@@ -1,8 +1,8 @@
+pub mod apu;
 mod bits;
 pub mod cartridge;
 pub mod cpu;
 pub mod input;
-pub mod instructions;
 pub mod mapper;
 pub mod nes;
 pub mod palette;

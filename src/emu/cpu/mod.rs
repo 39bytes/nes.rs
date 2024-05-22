@@ -1,11 +1,14 @@
+use self::instructions::{AddressMode, Instruction, InstructionType};
+use super::apu::Apu;
 use super::bits::IntoBit;
 use super::cartridge::Cartridge;
 use super::input::{ControllerButtons, ControllerInput};
-use super::instructions::{AddressMode, Instruction, InstructionType};
 use super::ppu::Ppu;
 use bitflags::bitflags;
 use std::cell::RefCell;
 use std::rc::Rc;
+
+pub mod instructions;
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -64,6 +67,7 @@ pub struct Cpu {
     ram: [u8; CPU_RAM_SIZE],
 
     // Other components
+    apu: Option<Rc<RefCell<Apu>>>,
     ppu: Option<Rc<RefCell<Ppu>>>,
     cartridge: Option<Rc<RefCell<Cartridge>>>,
 
@@ -106,6 +110,7 @@ impl Cpu {
 
             cartridge: None,
             ppu: None,
+            apu: None,
 
             controller_strobe: false,
             controllers: [ControllerButtons::empty(); 2],
@@ -115,6 +120,10 @@ impl Cpu {
 
     pub fn with_ppu(&mut self, ppu: Rc<RefCell<Ppu>>) {
         self.ppu = Some(ppu);
+    }
+
+    pub fn with_apu(&mut self, apu: Rc<RefCell<Apu>>) {
+        self.apu = Some(apu);
     }
 
     pub fn load_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) {
@@ -249,6 +258,10 @@ impl Cpu {
             }
             0x2000..=0x3FFF => match &self.ppu {
                 Some(ppu) => ppu.borrow_mut().cpu_write(addr, data),
+                None => panic!("PPU not attached"),
+            },
+            0x4000..=0x4013 | 0x4015 | 0x4017 => match &self.apu {
+                Some(apu) => apu.borrow_mut().write(addr),
                 None => panic!("PPU not attached"),
             },
             0x4014 => {
