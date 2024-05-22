@@ -18,12 +18,6 @@ pub struct Pixel {
     pub color: Color,
 }
 
-impl Pixel {
-    pub fn new(x: usize, y: usize, color: Color) -> Self {
-        Pixel { x, y, color }
-    }
-}
-
 #[derive(Clone)]
 pub struct Sprite {
     pixels: Vec<Color>,
@@ -99,19 +93,19 @@ impl Sprite {
     }
 }
 
-pub fn outline(width: usize, height: usize, color: Color) -> Sprite {
-    let mut buf = vec![];
-    for i in 0..height {
-        for j in 0..width {
-            if i == 0 || i == height - 1 || j == 0 || j == width - 1 {
-                buf.push(color);
-            } else {
-                buf.push(Color::BLACK);
-            }
-        }
-    }
-    Sprite::new(buf, width, height).unwrap()
-}
+// pub fn outline(width: usize, height: usize, color: Color) -> Sprite {
+//     let mut buf = vec![];
+//     for i in 0..height {
+//         for j in 0..width {
+//             if i == 0 || i == height - 1 || j == 0 || j == width - 1 {
+//                 buf.push(color);
+//             } else {
+//                 buf.push(Color::BLACK);
+//             }
+//         }
+//     }
+//     Sprite::new(buf, width, height).unwrap()
+// }
 
 pub struct Renderer {
     font: Font<'static>,
