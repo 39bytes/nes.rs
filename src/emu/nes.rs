@@ -9,7 +9,8 @@ use crate::{
 };
 
 use super::{
-    apu::Apu, cartridge::Cartridge, cpu::Cpu, input::ControllerInput, palette::Palette, ppu::Ppu,
+    apu::Apu, cartridge::Cartridge, consts::FRAME_CLOCKS, cpu::Cpu, input::ControllerInput,
+    palette::Palette, ppu::Ppu,
 };
 
 pub struct Nes {
@@ -85,6 +86,12 @@ impl Nes {
 
     pub fn trigger_inputs(&mut self, input: ControllerInput) {
         self.cpu.borrow_mut().trigger_inputs(input);
+    }
+
+    pub fn advance_frame(&mut self) {
+        for _ in 0..FRAME_CLOCKS {
+            self.clock();
+        }
     }
 
     pub fn clock(&mut self) {

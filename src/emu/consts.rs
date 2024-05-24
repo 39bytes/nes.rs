@@ -1,0 +1,2 @@
+pub const CLOCK_SPEED: u32 = 5369318;
+pub const FRAME_CLOCKS: u32 = CLOCK_SPEED / 60;

@@ -1,6 +1,7 @@
 pub mod apu;
 mod bits;
 pub mod cartridge;
+mod consts;
 pub mod cpu;
 pub mod input;
 pub mod mapper;

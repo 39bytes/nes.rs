@@ -37,9 +37,6 @@ mod utils;
 const WIDTH: usize = 960;
 const HEIGHT: usize = 720;
 
-const CLOCK_SPEED: u32 = 5369318;
-const FRAME_CLOCKS: u32 = CLOCK_SPEED / 60;
-
 pub fn main() -> Result<()> {
     env_logger::init();
 
@@ -104,11 +101,8 @@ pub fn main() -> Result<()> {
             }
             Event::AboutToWait => {
                 if !paused {
-                    for _ in 0..FRAME_CLOCKS {
-                        nes.clock();
-                    }
+                    nes.advance_frame();
                 }
-
                 fps_counter.tick();
 
                 renderer.clear();
