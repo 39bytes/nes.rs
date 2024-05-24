@@ -3,7 +3,10 @@ use std::{
     rc::Rc,
 };
 
-use crate::renderer::{Color, Sprite};
+use crate::{
+    audio_output::{AudioBufferConsumer, AudioOutput},
+    renderer::{Color, Sprite},
+};
 
 use super::{
     apu::Apu, cartridge::Cartridge, cpu::Cpu, input::ControllerInput, palette::Palette, ppu::Ppu,
@@ -16,6 +19,7 @@ pub struct Nes {
     cartridge: Option<Rc<RefCell<Cartridge>>>,
 
     screen: Sprite,
+    audio_output: Option<AudioOutput>,
 
     clock_count: u64,
 }
@@ -35,9 +39,22 @@ impl Nes {
             cartridge: None,
 
             screen: Sprite::monocolor(Color::BLACK, 256, 240),
+            audio_output: None,
 
             clock_count: 0,
         }
+    }
+
+    /// Returns the `Nes` struct, as well as the consumer for the audio buffer.
+    pub fn with_audio(
+        mut self,
+        audio_sample_rate: usize,
+        channels: usize,
+    ) -> (Self, AudioBufferConsumer) {
+        let (audio_output, consumer) = AudioOutput::new(audio_sample_rate, channels);
+        self.audio_output = Some(audio_output);
+
+        (self, consumer)
     }
 
     pub fn cpu(&self) -> Ref<Cpu> {
@@ -85,6 +102,12 @@ impl Nes {
 
         if self.clock_count % 6 == 0 {
             self.apu.borrow_mut().clock();
+        }
+
+        if let Some(audio_output) = self.audio_output.as_mut() {
+            if let Err(e) = audio_output.try_push_sample(self.apu.borrow().sample()) {
+                log::warn!("{}", e);
+            }
         }
 
         if clock_res.nmi {

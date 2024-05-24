@@ -32,6 +32,10 @@ pub fn flip_byte(mut byte: u8) -> u8 {
     res | byte & 0x01
 }
 
+pub fn rotate_byte_right(byte: u8) -> u8 {
+    (byte >> 1) | (byte << 7)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

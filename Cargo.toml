@@ -14,6 +14,7 @@ error-iter = "0.4.1"
 log = "0.4.21"
 modular-bitfield = "0.11.2"
 pixels = "0.13.0"
+ringbuf = "0.4.1"
 rusttype = "0.9.3"
 strum_macros = "0.26.1"
 winit = { version = "0.29.15", features = ["rwh_05"] }
