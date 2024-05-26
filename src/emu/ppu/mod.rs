@@ -89,6 +89,8 @@ pub struct Ppu {
     // Other components
     cpu: Rc<RefCell<Cpu>>,
     cartridge: Option<Rc<RefCell<Cartridge>>>,
+
+    odd_frame: bool,
 }
 
 impl Ppu {
@@ -128,6 +130,8 @@ impl Ppu {
 
             cpu,
             cartridge: None,
+
+            odd_frame: false,
         }
     }
 
@@ -176,6 +180,10 @@ impl Ppu {
     pub fn clock(&mut self) -> PpuClockResult {
         // Rendering during the visible region
         if self.scanline >= -1 && self.scanline < 240 {
+            if self.scanline == 0 && self.cycle == 0 && self.odd_frame {
+                self.cycle = 1;
+            }
+
             // Rendering a new frame so reset some flags
             if self.scanline == -1 && self.cycle == 1 {
                 self.status.set(PpuStatus::VerticalBlank, false);
@@ -272,6 +280,7 @@ impl Ppu {
 
             if self.scanline > 260 {
                 self.scanline = -1;
+                self.odd_frame = !self.odd_frame
             }
         }
 
