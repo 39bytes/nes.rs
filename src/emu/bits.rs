@@ -32,6 +32,14 @@ pub fn flip_byte(mut byte: u8) -> u8 {
     res | byte & 0x01
 }
 
+pub fn extend_bit(bit: u8) -> u8 {
+    if bit == 0 {
+        0
+    } else {
+        0xFF
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

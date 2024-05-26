@@ -4,10 +4,11 @@ use crate::renderer::{Color, Pixel, Sprite};
 
 use self::flags::*;
 pub use self::pattern_table::PatternTable;
+use self::shift_register::{ShiftRegister16, ShiftRegister8};
 use self::sprite::{Sprite as PpuSprite, SpriteAttribute};
 use self::vram_addr::VRAMAddr;
 
-use super::bits::flip_byte;
+use super::bits::{extend_bit, flip_byte};
 use super::{
     bits::IntoBit,
     cartridge::{Cartridge, Mirroring},
@@ -17,6 +18,7 @@ use super::{
 
 mod flags;
 mod pattern_table;
+mod shift_register;
 mod sprite;
 mod vram_addr;
 
@@ -72,15 +74,12 @@ pub struct Ppu {
     next_bg_tile_msb: u8,
 
     // Shift registers used for rendering
-    bg_tile_low_shifter: u16,
-    bg_tile_high_shifter: u16,
-    bg_tile_palette_low_shifter: u16,
-    bg_tile_palette_high_shifter: u16,
+    bg_tile_id_shifter: ShiftRegister16,
+    bg_tile_palette_shifter: ShiftRegister16,
 
     // Sprite rendering
     scanline_sprites: Vec<PpuSprite>,
-    sprite_tile_low_shifter: [u8; 8],
-    sprite_tile_high_shifter: [u8; 8],
+    sprite_tile_shifters: [ShiftRegister8; 8],
 
     // Memory
     nametable_ram: [u8; NAMETABLE_SIZE * 2],
@@ -117,14 +116,11 @@ impl Ppu {
             next_bg_tile_lsb: 0x00,
             next_bg_tile_msb: 0x00,
 
-            bg_tile_low_shifter: 0x0000,
-            bg_tile_high_shifter: 0x0000,
-            bg_tile_palette_low_shifter: 0x0000,
-            bg_tile_palette_high_shifter: 0x0000,
+            bg_tile_id_shifter: ShiftRegister16::new(),
+            bg_tile_palette_shifter: ShiftRegister16::new(),
 
             scanline_sprites: Vec::new(),
-            sprite_tile_low_shifter: [0; 8],
-            sprite_tile_high_shifter: [0; 8],
+            sprite_tile_shifters: [ShiftRegister8::new(); 8],
 
             nametable_ram: [0; NAMETABLE_SIZE * 2],
             palette_ram: [0; PALETTE_RAM_SIZE],
@@ -186,8 +182,9 @@ impl Ppu {
                 self.status.set(PpuStatus::Sprite0Hit, false);
                 self.status.set(PpuStatus::SpriteOverflow, false);
 
-                self.sprite_tile_low_shifter = [0; 8];
-                self.sprite_tile_high_shifter = [0; 8];
+                for shifter in self.sprite_tile_shifters.iter_mut() {
+                    shifter.clear();
+                }
             }
 
             // TODO: Check that this is correct
@@ -246,8 +243,7 @@ impl Ppu {
                     } else {
                         self.fetch_8x16_sprite_row(sprite)
                     };
-                    self.sprite_tile_low_shifter[i] = lsb;
-                    self.sprite_tile_high_shifter[i] = msb;
+                    self.sprite_tile_shifters[i].load(lsb, msb);
                 }
             }
         }
@@ -472,32 +468,18 @@ impl Ppu {
     }
 
     fn load_bg_shifters(&mut self) {
-        self.bg_tile_low_shifter =
-            (self.bg_tile_low_shifter & 0xFF00) | self.next_bg_tile_lsb as u16;
-        self.bg_tile_high_shifter =
-            (self.bg_tile_high_shifter & 0xFF00) | self.next_bg_tile_msb as u16;
+        self.bg_tile_id_shifter
+            .load(self.next_bg_tile_lsb, self.next_bg_tile_msb);
 
-        let fill = if self.next_bg_tile_palette_id & 0x01 == 0 {
-            0x00
-        } else {
-            0xFF
-        };
-        self.bg_tile_palette_low_shifter = (self.bg_tile_palette_low_shifter & 0xFF00) | fill;
-
-        let fill = if self.next_bg_tile_palette_id & 0x02 == 0 {
-            0x00
-        } else {
-            0xFF
-        };
-        self.bg_tile_palette_high_shifter = (self.bg_tile_palette_high_shifter & 0xFF00) | fill;
+        let fill_low = extend_bit(self.next_bg_tile_palette_id & 0x01);
+        let fill_high = extend_bit(self.next_bg_tile_palette_id & 0x02);
+        self.bg_tile_palette_shifter.load(fill_low, fill_high);
     }
 
     fn shift_shifters(&mut self) {
         if self.mask.contains(PpuMask::ShowBackground) {
-            self.bg_tile_low_shifter <<= 1;
-            self.bg_tile_high_shifter <<= 1;
-            self.bg_tile_palette_low_shifter <<= 1;
-            self.bg_tile_palette_high_shifter <<= 1;
+            self.bg_tile_id_shifter.shift();
+            self.bg_tile_palette_shifter.shift();
         }
 
         if self.mask.contains(PpuMask::ShowSprites) && (1..258).contains(&self.cycle) {
@@ -505,8 +487,7 @@ impl Ppu {
                 if self.scanline_sprites[i].x > 0 {
                     self.scanline_sprites[i].x -= 1;
                 } else {
-                    self.sprite_tile_low_shifter[i] <<= 1;
-                    self.sprite_tile_high_shifter[i] <<= 1;
+                    self.sprite_tile_shifters[i].shift();
                 }
             }
         }
@@ -596,16 +577,8 @@ impl Ppu {
             return BgPixel::default();
         }
 
-        let mask = 0x8000 >> self.fine_x;
-
-        let pixel_low = (self.bg_tile_low_shifter & mask).into_bit();
-        let pixel_high = (self.bg_tile_high_shifter & mask).into_bit();
-
-        let palette_low = (self.bg_tile_palette_low_shifter & mask).into_bit();
-        let palette_high = (self.bg_tile_palette_high_shifter & mask).into_bit();
-
-        let pixel = (pixel_high << 1) | pixel_low;
-        let palette = (palette_high << 1) | palette_low;
+        let pixel = self.bg_tile_id_shifter.get_at(self.fine_x);
+        let palette = self.bg_tile_palette_shifter.get_at(self.fine_x);
 
         BgPixel { palette, pixel }
     }
@@ -621,10 +594,7 @@ impl Ppu {
                 continue;
             }
 
-            let pixel_low = (self.sprite_tile_low_shifter[i] & 0x80).into_bit();
-            let pixel_high = (self.sprite_tile_high_shifter[i] & 0x80).into_bit();
-
-            let pixel = (pixel_high << 1) | pixel_low;
+            let pixel = self.sprite_tile_shifters[i].get();
             if pixel == 0 {
                 continue;
             }

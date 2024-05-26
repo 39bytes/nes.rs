@@ -83,10 +83,6 @@ impl Nes {
             self.cpu.borrow_mut().clock();
         }
 
-        if self.clock_count % 6 == 0 {
-            self.apu.borrow_mut().clock();
-        }
-
         if clock_res.nmi {
             self.cpu.borrow_mut().nmi();
         }
