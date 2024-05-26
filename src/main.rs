@@ -31,14 +31,14 @@ mod emu;
 mod renderer;
 mod utils;
 
-const WIDTH: usize = 960;
-const HEIGHT: usize = 720;
+const WIDTH: usize = 256;
+const HEIGHT: usize = 256;
 
 const CLOCK_SPEED: u32 = 5369318;
 const FRAME_CLOCKS: u32 = CLOCK_SPEED / 60;
 
 pub fn main() -> Result<()> {
-    env_logger::init();
+    env_logger::builder().format_timestamp_micros().init();
 
     let args: Vec<_> = env::args().collect();
     if args.len() <= 1 {
@@ -82,7 +82,7 @@ pub fn main() -> Result<()> {
     nes.reset();
 
     let mut displayed_page: u8 = 0;
-    let mut paused = true;
+    let mut paused = false;
 
     let mut fps_counter = FpsCounter::new();
 
@@ -102,21 +102,21 @@ pub fn main() -> Result<()> {
                     }
                 }
 
-                fps_counter.tick();
+                // fps_counter.tick();
 
                 renderer.clear();
-                renderer.draw_text(&format!("FPS: {}", fps_counter.get_fps().round()), 0, 204);
+                // renderer.draw_text(&format!("FPS: {}", fps_counter.get_fps().round()), 0, 0);
+                //
+                // draw_ppu_info(&mut renderer, &nes.ppu(), 0, 0);
+                // draw_palettes(&mut renderer, &nes.ppu(), 240, 0);
+                // draw_pattern_tables(&mut renderer, &nes.ppu(), 596, 0);
 
-                draw_ppu_info(&mut renderer, &nes.ppu(), 0, 0);
-                draw_palettes(&mut renderer, &nes.ppu(), 240, 0);
-                draw_pattern_tables(&mut renderer, &nes.ppu(), 596, 0);
-
-                let screen = nes.screen().clone();
-                renderer.draw_sprite(&screen.scale(2), 0, 224);
+                let screen = nes.screen();
+                renderer.draw_sprite(screen, 0, 16);
 
                 // draw_mem_page(&mut renderer, &nes, displayed_page, 0, 320);
                 // draw_nametable(&mut renderer, &nes.ppu(), 0, 0);
-                draw_cpu_info(&mut renderer, &nes, 720, 240);
+                // draw_cpu_info(&mut renderer, &nes, 720, 240);
 
                 if let Err(err) = renderer.render() {
                     log_error("pixels.render", err);
@@ -126,7 +126,6 @@ pub fn main() -> Result<()> {
 
             _ => (),
         }
-
         // Handle input events
         if input.update(&event) {
             // Emulator meta events
