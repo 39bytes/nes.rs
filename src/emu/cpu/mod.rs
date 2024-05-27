@@ -739,7 +739,6 @@ impl Cpu {
 
     // Opcodes (instructions)
     // Reference: https://www.nesdev.org/obelisk-6502-guide/reference.html
-    // TODO: Add unofficial opcodes
 
     /// Addition with carry.
     /// Adds the argument and the accumulator, and the carry bit.
@@ -1404,6 +1403,7 @@ impl Cpu {
         0
     }
 
+    // TODO: Figure this one out
     fn ahx(&mut self) -> u8 {
         0
     }
@@ -1436,6 +1436,7 @@ impl Cpu {
         self.sta(addr)
     }
 
+    // TODO: Figure this one out
     fn las(&mut self) -> u8 {
         0
     }
