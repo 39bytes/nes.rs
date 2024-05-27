@@ -118,11 +118,11 @@ impl Ppu {
             next_bg_tile_lsb: 0x00,
             next_bg_tile_msb: 0x00,
 
-            bg_tile_id_shifter: ShiftRegister16::new(),
-            bg_tile_palette_shifter: ShiftRegister16::new(),
+            bg_tile_id_shifter: ShiftRegister16::new(true),
+            bg_tile_palette_shifter: ShiftRegister16::new(false),
 
             scanline_sprites: Vec::new(),
-            sprite_tile_shifters: [ShiftRegister8::new(); 8],
+            sprite_tile_shifters: [ShiftRegister8::new(false); 8],
 
             nametables: [[0; NAMETABLE_SIZE]; 2],
             palette_ram: [0; PALETTE_RAM_SIZE],
@@ -180,10 +180,6 @@ impl Ppu {
     pub fn clock(&mut self) -> PpuClockResult {
         // Rendering during the visible region
         if self.scanline >= -1 && self.scanline < 240 {
-            // if self.scanline == 0 && self.cycle == 0 && self.odd_frame {
-            //     self.cycle = 1;
-            // }
-
             // Rendering a new frame so reset some flags
             if self.scanline == -1 && self.cycle == 1 {
                 self.status.set(PpuStatus::VerticalBlank, false);
@@ -193,6 +189,10 @@ impl Ppu {
                 for shifter in self.sprite_tile_shifters.iter_mut() {
                     shifter.clear();
                 }
+            }
+
+            if self.scanline == 0 && self.cycle == 0 && self.odd_frame {
+                self.cycle = 1;
             }
 
             // TODO: Check that this is correct

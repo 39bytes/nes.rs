@@ -5,13 +5,15 @@ use super::IntoBit;
 pub struct ShiftRegister16 {
     low: u16,
     high: u16,
+    shift_ones: bool,
 }
 
 impl ShiftRegister16 {
-    pub fn new() -> Self {
+    pub fn new(shift_ones: bool) -> Self {
         Self {
             low: 0x0000,
             high: 0x0000,
+            shift_ones,
         }
     }
 
@@ -23,6 +25,10 @@ impl ShiftRegister16 {
     pub fn shift(&mut self) {
         self.low <<= 1;
         self.high <<= 1;
+        if self.shift_ones {
+            self.low |= 0x0001;
+            self.high |= 0x0001;
+        }
     }
 
     pub fn get(&self) -> u8 {
@@ -51,13 +57,15 @@ impl ShiftRegister16 {
 pub struct ShiftRegister8 {
     low: u8,
     high: u8,
+    shift_ones: bool,
 }
 
 impl ShiftRegister8 {
-    pub fn new() -> Self {
+    pub fn new(shift_ones: bool) -> Self {
         Self {
             low: 0x00,
             high: 0x00,
+            shift_ones,
         }
     }
 
@@ -69,6 +77,10 @@ impl ShiftRegister8 {
     pub fn shift(&mut self) {
         self.low <<= 1;
         self.high <<= 1;
+        if self.shift_ones {
+            self.low |= 0x0001;
+            self.high |= 0x0001;
+        }
     }
 
     pub fn get(&self) -> u8 {
