@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
-use pixels::{Pixels, SurfaceTexture};
+use pixels::wgpu::PresentMode;
+use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use rusttype::{point, Font, Scale};
 use winit::window::Window;
 
@@ -122,7 +123,9 @@ impl Renderer {
             let window_size = window.inner_size();
             let surface_texture =
                 SurfaceTexture::new(window_size.width, window_size.height, window);
-            Pixels::new(width as u32, height as u32, surface_texture)?
+            PixelsBuilder::new(width as u32, height as u32, surface_texture)
+                .present_mode(PresentMode::Mailbox)
+                .build()?
         };
 
         Ok(Renderer {

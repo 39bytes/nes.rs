@@ -196,32 +196,35 @@ impl Ppu {
             }
 
             // TODO: Check that this is correct
-            let is_visible_region = self.cycle >= 2 && self.cycle < 258;
-            let is_preparing_next_scanline = self.cycle >= 321 && self.cycle < 338;
+            let is_visible_region = self.cycle >= 1 && self.cycle <= 256;
+            let is_preparing_next_scanline = self.cycle >= 321 && self.cycle <= 337;
 
             // Do the 8 cycle data fetching routine for rendering tile data.
             if is_visible_region || is_preparing_next_scanline {
-                self.shift_shifters();
+                if self.cycle >= 2 {
+                    self.shift_shifters();
+                }
 
-                match (self.cycle - 1) % 8 {
+                match self.cycle % 8 {
                     // Nametable fetch
-                    0 => {
+                    1 => {
                         self.load_bg_shifters();
+                    }
+                    2 => {
                         self.next_bg_tile_id = self.fetch_nametable_tile_id();
                     }
                     // Attribute memory fetch
-                    2 => {
+                    4 => {
                         self.next_bg_tile_palette_id = self.fetch_tile_palette_id();
                     }
                     // Fetch LSB of tile from the pattern memory
-                    4 => {
+                    6 => {
                         self.next_bg_tile_lsb = self.fetch_tile_row_lsb();
                     }
                     // Fetch MSB of tile from the pattern memory
-                    6 => {
+                    0 => {
                         self.next_bg_tile_msb = self.fetch_tile_row_msb();
-                    }
-                    7 => {
+                        // Update v
                         self.increment_scroll_x();
                     }
                     _ => {}
@@ -230,11 +233,17 @@ impl Ppu {
 
             match self.cycle {
                 256 => self.increment_scroll_y(),
-                257 => self.copy_horizontal_position(),
+                257 => {
+                    self.copy_horizontal_position();
+                    // garbage NT fetch
+                    self.next_bg_tile_id = self.fetch_nametable_tile_id();
+                }
+                // garbage NT fetch
+                259 => self.next_bg_tile_id = self.fetch_nametable_tile_id(),
                 // Copy vertical position info at the end of VBlank
                 280..=304 if self.scanline == -1 => self.copy_vertical_position(),
                 // Unused nametable fetches
-                338 | 340 => self.next_bg_tile_id = self.fetch_nametable_tile_id(),
+                337 | 339 => self.next_bg_tile_id = self.fetch_nametable_tile_id(),
                 _ => {}
             }
 
