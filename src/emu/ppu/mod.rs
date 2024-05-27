@@ -82,7 +82,7 @@ pub struct Ppu {
     sprite_tile_shifters: [ShiftRegister8; 8],
 
     // Memory
-    nametable_ram: [u8; NAMETABLE_SIZE * 2],
+    nametables: [[u8; NAMETABLE_SIZE]; 2],
     palette_ram: [u8; PALETTE_RAM_SIZE],
     oam: [u8; OAM_SIZE],
 
@@ -124,7 +124,7 @@ impl Ppu {
             scanline_sprites: Vec::new(),
             sprite_tile_shifters: [ShiftRegister8::new(); 8],
 
-            nametable_ram: [0; NAMETABLE_SIZE * 2],
+            nametables: [[0; NAMETABLE_SIZE]; 2],
             palette_ram: [0; PALETTE_RAM_SIZE],
             oam: [0; OAM_SIZE],
 
@@ -167,8 +167,8 @@ impl Ppu {
         self.cycle
     }
 
-    pub fn nametables(&self) -> &[u8] {
-        &self.nametable_ram
+    pub fn nametables(&self) -> &[[u8; NAMETABLE_SIZE]; 2] {
+        &self.nametables
     }
 
     pub fn load_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) {
@@ -180,9 +180,9 @@ impl Ppu {
     pub fn clock(&mut self) -> PpuClockResult {
         // Rendering during the visible region
         if self.scanline >= -1 && self.scanline < 240 {
-            if self.scanline == 0 && self.cycle == 0 && self.odd_frame {
-                self.cycle = 1;
-            }
+            // if self.scanline == 0 && self.cycle == 0 && self.odd_frame {
+            //     self.cycle = 1;
+            // }
 
             // Rendering a new frame so reset some flags
             if self.scanline == -1 && self.cycle == 1 {
@@ -749,8 +749,8 @@ impl Ppu {
             0x2000..=0x3EFF => {
                 let mirroring = cartridge.borrow().mirroring();
 
-                let index = map_addr_to_nametable(mirroring, addr);
-                self.nametable_ram[index] = data;
+                let (nt, index) = map_addr_to_nametable(mirroring, addr);
+                self.nametables[nt][index] = data;
             }
             0x3F00..=0x3FFF => {
                 // Palette ram is from 0x3F00 to 0x3F1F, but mirrored from 0x3F20-0x3FFF
@@ -777,8 +777,8 @@ impl Ppu {
             0x2000..=0x3EFF => {
                 let mirroring = cartridge.borrow().mirroring();
 
-                let index = map_addr_to_nametable(mirroring, addr);
-                self.nametable_ram[index]
+                let (nt, index) = map_addr_to_nametable(mirroring, addr);
+                self.nametables[nt][index]
             }
             0x3F00..=0x3FFF => {
                 // Palette ram is from 0x3F00 to 0x3F1F, but mirrored from 0x3F20-0x3FFF
@@ -842,38 +842,30 @@ impl Ppu {
     }
 }
 
-/// Returns the index to write to in the nametable.
-fn map_addr_to_nametable(mirroring: Mirroring, address: u16) -> usize {
+/// Returns nametable (0 or 1) as well as the index within the nametable
+/// See: https://www.nesdev.org/wiki/Mirroring
+fn map_addr_to_nametable(mirroring: Mirroring, addr: u16) -> (usize, usize) {
     assert!(
-        (0x2000..=0x3FFF).contains(&address),
+        (0x2000..=0x3FFF).contains(&addr),
         "Invalid nametable address"
     );
 
-    // Address mirroring (0x3000-0x3EFF is mapped to 0x2000-0x2EFF)
-    let address = if address >= 0x3000 {
-        address - 0x1000
-    } else {
-        address
-    };
+    let addr = if addr >= 0x3000 { addr - 0x1000 } else { addr } as usize;
 
-    let offset = match mirroring {
-        Mirroring::Horizontal => {
-            if (0x2000..0x2800).contains(&address) {
-                0
-            } else {
-                0x400
-            }
-        }
-        Mirroring::Vertical => {
-            if (0x2000..0x2400).contains(&address) || (0x2800..0x2C00).contains(&address) {
-                0
-            } else {
-                0x400
-            }
-        }
-    } as usize;
-
-    let index = (address - 0x2000) as usize % NAMETABLE_SIZE;
-
-    offset + index
+    match mirroring {
+        Mirroring::Horizontal => match addr {
+            0x2000..=0x23FF => (0, addr - 0x2000),
+            0x2400..=0x27FF => (0, addr - 0x2400),
+            0x2800..=0x2BFF => (1, addr - 0x2800),
+            0x2C00..=0x2FFF => (1, addr - 0x2C00),
+            _ => unreachable!(),
+        },
+        Mirroring::Vertical => match addr {
+            0x2000..=0x23FF => (0, addr - 0x2000),
+            0x2400..=0x27FF => (1, addr - 0x2400),
+            0x2800..=0x2BFF => (0, addr - 0x2800),
+            0x2C00..=0x2FFF => (1, addr - 0x2C00),
+            _ => unreachable!(),
+        },
+    }
 }
