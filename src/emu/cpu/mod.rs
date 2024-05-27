@@ -260,7 +260,7 @@ impl Cpu {
             },
             0x4000..=0x4013 | 0x4015 | 0x4017 => match &self.apu {
                 Some(apu) => apu.borrow_mut().write(addr),
-                None => panic!("PPU not attached"),
+                None => panic!("APU not attached"),
             },
             0x4014 => {
                 self.dma_transfer = true;
