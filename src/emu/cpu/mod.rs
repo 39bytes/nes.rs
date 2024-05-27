@@ -2,7 +2,8 @@ use self::instructions::{AddressMode, Instruction, InstructionType};
 use super::apu::Apu;
 use super::bits::IntoBit;
 use super::cartridge::Cartridge;
-use super::input::{ControllerButtons, ControllerInput};
+use super::controller::StandardController;
+use super::input::ControllerInput;
 use super::ppu::Ppu;
 use bitflags::bitflags;
 use std::cell::RefCell;
@@ -73,9 +74,7 @@ pub struct Cpu {
 
     // Input
     controller_strobe: bool,
-    controllers: [ControllerButtons; 2],
-    controller_shifters: [u8; 2],
-    n_controller_reads: [u8; 2],
+    controllers: [StandardController; 2],
 }
 
 struct AddressModeResult {
@@ -114,9 +113,7 @@ impl Cpu {
             apu: None,
 
             controller_strobe: false,
-            controllers: [ControllerButtons::empty(); 2],
-            controller_shifters: [0; 2],
-            n_controller_reads: [0; 2],
+            controllers: [StandardController::default(); 2],
         }
     }
 
@@ -177,8 +174,8 @@ impl Cpu {
 
     pub fn trigger_inputs(&mut self, input: ControllerInput) {
         match input {
-            ControllerInput::One(buttons) => self.controllers[0] = buttons,
-            ControllerInput::Two(buttons) => self.controllers[1] = buttons,
+            ControllerInput::One(buttons) => self.controllers[0].notify_input(buttons),
+            ControllerInput::Two(buttons) => self.controllers[1].notify_input(buttons),
         }
     }
 
@@ -199,19 +196,9 @@ impl Cpu {
                 // While the controller strobe is high,
                 // the button data should be continuously reloaded, so we use the latest value from the controller
                 if self.controller_strobe {
-                    return self.controllers[i].bits() & 0x01;
+                    return self.controllers[i].peek_button();
                 }
-
-                // Reading more than 8 times just returns 1
-                // See: https://www.nesdev.org/wiki/Standard_controller
-                if self.n_controller_reads[i] >= 8 {
-                    return 0x01;
-                }
-
-                let data = self.controller_shifters[i] & 0x01;
-                self.controller_shifters[i] >>= 1;
-                self.n_controller_reads[i] += 1;
-                data
+                self.controllers[i].read_button()
             }
             0x4020..=0xFFFF => match &self.cartridge {
                 Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap_or(0),
@@ -236,7 +223,7 @@ impl Cpu {
             },
             0x4016..=0x4017 => {
                 let i = (addr % 2) as usize;
-                self.controller_shifters[i] & 0x01
+                self.controllers[i].peek_button()
             }
             0x4020..=0xFFFF => match &self.cartridge {
                 Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap_or(0),
@@ -288,9 +275,8 @@ impl Cpu {
                     self.controller_strobe = true;
                 } else {
                     self.controller_strobe = false;
-                    self.n_controller_reads = [0; 2];
-                    self.controller_shifters[0] = self.controllers[0].bits();
-                    self.controller_shifters[1] = self.controllers[1].bits();
+                    self.controllers[0].reload();
+                    self.controllers[1].reload();
                 }
             }
             0x4020..=0xFFFF => match &self.cartridge {
