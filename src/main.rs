@@ -35,8 +35,8 @@ const WIDTH: usize = 256;
 const HEIGHT: usize = 256;
 const FPS: u32 = 60;
 
-const CLOCK_SPEED: u32 = 5369318;
-const FRAME_CLOCKS: u32 = CLOCK_SPEED / FPS;
+// https://www.nesdev.org/wiki/Cycle_reference_chart
+const FRAME_CLOCKS: u32 = 89342;
 
 const FRAME_TIME: f64 = 1.0 / FPS as f64;
 
