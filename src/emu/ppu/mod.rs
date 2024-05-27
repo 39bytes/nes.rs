@@ -185,18 +185,13 @@ impl Ppu {
                 self.status.set(PpuStatus::VerticalBlank, false);
                 self.status.set(PpuStatus::Sprite0Hit, false);
                 self.status.set(PpuStatus::SpriteOverflow, false);
-
-                for shifter in self.sprite_tile_shifters.iter_mut() {
-                    shifter.clear();
-                }
             }
 
             if self.scanline == 0 && self.cycle == 0 && self.odd_frame {
                 self.cycle = 1;
             }
 
-            // TODO: Check that this is correct
-            let is_visible_region = self.cycle >= 1 && self.cycle <= 256;
+            let is_visible_region = self.cycle >= 1 && self.cycle <= 257;
             let is_preparing_next_scanline = self.cycle >= 321 && self.cycle <= 337;
 
             // Do the 8 cycle data fetching routine for rendering tile data.
@@ -243,7 +238,7 @@ impl Ppu {
                 // Copy vertical position info at the end of VBlank
                 280..=304 if self.scanline == -1 => self.copy_vertical_position(),
                 // Unused nametable fetches
-                337 | 339 => self.next_bg_tile_id = self.fetch_nametable_tile_id(),
+                338 | 340 => self.next_bg_tile_id = self.fetch_nametable_tile_id(),
                 _ => {}
             }
 
@@ -653,31 +648,27 @@ impl Ppu {
             4 => self.oam[self.oam_addr as usize] = data,
             5 => {
                 if !self.write_latch {
-                    self.fine_x = data & 0b0000_0111;
+                    self.fine_x = data & 0x07;
                     self.temp_vram_addr.set_coarse_x(data >> 3);
-
-                    self.write_latch = true;
                 } else {
-                    self.temp_vram_addr.set_fine_y(data & 0b0000_0111);
+                    self.temp_vram_addr.set_fine_y(data & 0x07);
                     self.temp_vram_addr.set_coarse_y(data >> 3);
-
-                    self.write_latch = false;
                 }
+                self.write_latch = !self.write_latch;
             }
             6 => {
                 let data = data as u16;
-                // Write latch is false on first write, false on second
+                // Write latch is false on first write, true on second
                 // We write the high byte first.
                 if !self.write_latch {
-                    let addr = (u16::from(self.temp_vram_addr) & 0x00FF) | data << 8;
+                    let addr = (u16::from(self.temp_vram_addr) & 0x00FF) | ((data & 0x3F) << 8);
                     self.temp_vram_addr = VRAMAddr::from(addr);
-                    self.write_latch = true;
                 } else {
                     let addr = (u16::from(self.temp_vram_addr) & 0xFF00) | data;
                     self.temp_vram_addr = VRAMAddr::from(addr);
                     self.vram_addr = self.temp_vram_addr;
-                    self.write_latch = false;
                 }
+                self.write_latch = !self.write_latch;
             }
             7 => {
                 self.write(self.vram_addr.into(), data);
@@ -696,8 +687,8 @@ impl Ppu {
 
         let register = addr % 8;
         match register {
-            0 => self.ctrl.bits(),
-            1 => self.mask.bits(),
+            0 => 0,
+            1 => 0,
             2 => {
                 let data = self.status.bits();
 
