@@ -1,5 +1,6 @@
 use std::env;
 use std::process;
+use std::time::Instant;
 
 use anyhow::{anyhow, Result};
 use cpal::{
@@ -10,7 +11,6 @@ use error_iter::ErrorIter as _;
 use log::error;
 use renderer::{Color, Renderer, Sprite};
 use rusttype::Font;
-use utils::FpsCounter;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -33,9 +33,12 @@ mod utils;
 
 const WIDTH: usize = 256;
 const HEIGHT: usize = 256;
+const FPS: u32 = 60;
 
 const CLOCK_SPEED: u32 = 5369318;
-const FRAME_CLOCKS: u32 = CLOCK_SPEED / 60;
+const FRAME_CLOCKS: u32 = CLOCK_SPEED / FPS;
+
+const FRAME_TIME: f64 = 1.0 / FPS as f64;
 
 pub fn main() -> Result<()> {
     env_logger::builder().format_timestamp_micros().init();
@@ -83,8 +86,8 @@ pub fn main() -> Result<()> {
 
     let mut displayed_page: u8 = 0;
     let mut paused = false;
-
-    let mut fps_counter = FpsCounter::new();
+    let mut acc = 0.0;
+    let mut now = Instant::now();
 
     event_loop.run(move |event, target| {
         match event {
@@ -96,13 +99,15 @@ pub fn main() -> Result<()> {
                 target.exit();
             }
             Event::AboutToWait => {
-                if !paused {
+                acc += now.elapsed().as_secs_f64();
+                now = Instant::now();
+                while acc >= FRAME_TIME {
                     for _ in 0..FRAME_CLOCKS {
                         nes.clock();
                     }
-                }
 
-                // fps_counter.tick();
+                    acc -= FRAME_TIME;
+                }
 
                 renderer.clear();
                 // renderer.draw_text(&format!("FPS: {}", fps_counter.get_fps().round()), 0, 0);

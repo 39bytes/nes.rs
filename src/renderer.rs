@@ -123,9 +123,7 @@ impl Renderer {
             let window_size = window.inner_size();
             let surface_texture =
                 SurfaceTexture::new(window_size.width, window_size.height, window);
-            PixelsBuilder::new(width as u32, height as u32, surface_texture)
-                .present_mode(PresentMode::Mailbox)
-                .build()?
+            Pixels::new(width as u32, height as u32, surface_texture)?
         };
 
         Ok(Renderer {
