@@ -111,6 +111,8 @@ pub fn main() -> Result<()> {
                 renderer.clear();
 
                 let screen = nes.screen();
+                // TODO: Implement not drawing overscan
+                // https://www.nesdev.org/wiki/Overscan
                 renderer.draw_sprite(screen, 0, 16);
 
                 if let Err(err) = renderer.render() {
