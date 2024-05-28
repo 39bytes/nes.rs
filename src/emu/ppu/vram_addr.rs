@@ -26,7 +26,7 @@ impl VRAMAddr {
     }
 
     pub(crate) fn increment_nametable_y(&mut self) {
-        self.set_nametable_y((self.nametable_x() + 1) % 2);
+        self.set_nametable_y((self.nametable_y() + 1) % 2);
     }
 
     pub(crate) fn increment_fine_y(&mut self) {

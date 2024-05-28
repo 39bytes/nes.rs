@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
-use pixels::{Pixels, SurfaceTexture};
+use pixels::wgpu::PresentMode;
+use pixels::{Pixels, PixelsBuilder, SurfaceTexture};
 use rusttype::{point, Font, Scale};
 use winit::window::Window;
 

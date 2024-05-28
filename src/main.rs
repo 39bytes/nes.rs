@@ -3,6 +3,7 @@ use ringbuf::traits::*;
 use std::env;
 use std::process;
 use std::thread;
+use std::time::Instant;
 
 use anyhow::{anyhow, Result};
 use audio_output::AudioBufferConsumer;
@@ -14,7 +15,6 @@ use error_iter::ErrorIter as _;
 use log::error;
 use renderer::Renderer;
 use rusttype::Font;
-use utils::FpsCounter;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -23,10 +23,10 @@ use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
 use emu::cartridge::Cartridge;
+use emu::consts::FRAME_TIME;
 use emu::input::{ControllerButtons, ControllerInput};
 use emu::nes::Nes;
 use emu::palette::Palette;
-use ui::*;
 
 mod audio_output;
 mod emu;
@@ -34,11 +34,11 @@ mod renderer;
 mod ui;
 mod utils;
 
-const WIDTH: usize = 960;
-const HEIGHT: usize = 720;
+const WIDTH: usize = 256;
+const HEIGHT: usize = 256;
 
 pub fn main() -> Result<()> {
-    env_logger::init();
+    env_logger::builder().format_timestamp_micros().init();
 
     let args: Vec<_> = env::args().collect();
     if args.len() <= 1 {
@@ -88,7 +88,8 @@ pub fn main() -> Result<()> {
     let mut displayed_page: u8 = 0;
     let mut paused = false;
 
-    let mut fps_counter = FpsCounter::new();
+    let mut acc = 0.0;
+    let mut now = Instant::now();
 
     event_loop.run(move |event, target| {
         match event {
@@ -100,24 +101,17 @@ pub fn main() -> Result<()> {
                 target.exit();
             }
             Event::AboutToWait => {
-                if !paused {
+                acc += now.elapsed().as_secs_f64();
+                now = Instant::now();
+                while acc >= FRAME_TIME {
                     nes.advance_frame();
+                    acc -= FRAME_TIME;
                 }
-                fps_counter.tick();
 
                 renderer.clear();
-                renderer.draw_text(&format!("FPS: {}", fps_counter.get_fps().round()), 0, 204);
 
-                draw_ppu_info(&mut renderer, &nes.ppu(), 0, 0);
-                draw_palettes(&mut renderer, &nes.ppu(), 240, 0);
-                draw_pattern_tables(&mut renderer, &nes.ppu(), 596, 0);
-
-                let screen = nes.screen().clone();
-                renderer.draw_sprite(&screen.scale(2), 0, 224);
-
-                // draw_mem_page(&mut renderer, &nes, displayed_page, 0, 320);
-                // draw_nametable(&mut renderer, &nes.ppu(), 0, 0);
-                draw_cpu_info(&mut renderer, &nes, 720, 240);
+                let screen = nes.screen();
+                renderer.draw_sprite(screen, 0, 16);
 
                 if let Err(err) = renderer.render() {
                     log_error("pixels.render", err);
@@ -127,7 +121,6 @@ pub fn main() -> Result<()> {
 
             _ => (),
         }
-
         // Handle input events
         if input.update(&event) {
             // Emulator meta events
