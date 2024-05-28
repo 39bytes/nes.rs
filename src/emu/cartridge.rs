@@ -6,9 +6,7 @@ use std::io::prelude::*;
 use std::io::SeekFrom;
 use std::path::Path;
 
-use super::mapper::MapRead;
-use super::mapper::MapWrite;
-use super::mapper::{Mapper, Mapper0};
+use super::mappers::*;
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -111,8 +109,10 @@ impl Cartridge {
             _ => panic!("Invalid file type"),
         };
 
-        let mapper = match header.mapper_num {
+        let mapper: Box<dyn Mapper> = match header.mapper_num {
             0 => Box::new(Mapper0::new(header.prg_rom_chunks)),
+            2 => Box::new(Mapper2::new(header.prg_rom_chunks, header.chr_rom_chunks)),
+            3 => Box::new(Mapper3::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             _ => Err(anyhow!("Unimplemented mapper {}", header.mapper_num))?,
         };
 
@@ -132,49 +132,57 @@ impl Cartridge {
         let prg_rom_size = (header.prg_rom_chunks as usize) * 16 * 1024;
         log::info!("Reading {} bytes of program ROM", prg_rom_size);
 
-        let mut prg_rom = vec![0u8; prg_rom_size];
-        f.read_exact(prg_rom.as_mut_slice())?;
-        log::info!("Program ROM size: {}", prg_rom.len());
+        let mut prg_mem = vec![0u8; prg_rom_size];
+        f.read_exact(prg_mem.as_mut_slice())?;
 
-        let chr_rom_size = (header.chr_rom_chunks as usize) * 8 * 1024;
-        log::info!("Reading {} bytes of character ROM", chr_rom_size);
+        let mut chr_mem;
 
-        let mut chr_rom = vec![0u8; chr_rom_size];
-        f.read_exact(chr_rom.as_mut_slice())?;
-        log::info!("Character ROM size: {}", chr_rom.len());
+        if header.chr_rom_chunks == 0 {
+            log::info!("No character ROM, allocating 8 KB of character RAM");
 
-        Ok((prg_rom, chr_rom))
+            chr_mem = vec![0u8; 8 * 1024];
+        } else {
+            let chr_rom_size = (header.chr_rom_chunks as usize) * 8 * 1024;
+            log::info!("Reading {} bytes of character ROM", chr_rom_size);
+
+            chr_mem = vec![0u8; chr_rom_size];
+            f.read_exact(chr_mem.as_mut_slice())?;
+        }
+
+        Ok((prg_mem, chr_mem))
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) -> Result<()> {
-        match self.mapper.cpu_map_write(addr, data)? {
-            MapWrite::Address(addr) => {
-                self.prg_memory[addr as usize] = data;
-                Ok(())
-            }
-            MapWrite::RAMWritten => Ok(()),
+        if let MapWrite::Address(addr) = self.mapper.cpu_map_write(addr, data)? {
+            self.prg_memory[addr] = data;
         }
+        Ok(())
     }
 
     pub fn cpu_read(&self, addr: u16) -> Result<u8> {
         match self.mapper.cpu_map_read(addr)? {
-            MapRead::Address(addr) => Ok(self.prg_memory[addr as usize]),
+            MapRead::Address(addr) => Ok(self.prg_memory[addr]),
             MapRead::RAMData(data) => Ok(data),
         }
     }
 
     pub fn ppu_write(&mut self, addr: u16, data: u8) -> Result<()> {
-        let addr = self.mapper.ppu_map_write(addr)? as usize;
-        self.chr_memory[addr] = data;
+        if let MapWrite::Address(addr) = self.mapper.ppu_map_write(addr)? {
+            self.chr_memory[addr] = data;
+        }
         Ok(())
     }
 
     pub fn ppu_read(&self, addr: u16) -> Result<u8> {
-        let data = self
-            .chr_memory
-            .get(self.mapper.ppu_map_read(addr)? as usize)
-            .ok_or(anyhow!("Invalid PPU read address: {:#X}", addr))?;
-
-        Ok(*data)
+        match self.mapper.ppu_map_read(addr)? {
+            MapRead::Address(addr) => {
+                let data = self
+                    .chr_memory
+                    .get(addr)
+                    .ok_or(anyhow!("Invalid PPU read address: {:#X}", addr))?;
+                Ok(*data)
+            }
+            _ => todo!(),
+        }
     }
 }

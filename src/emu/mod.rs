@@ -5,7 +5,7 @@ pub mod consts;
 mod controller;
 pub mod cpu;
 pub mod input;
-pub mod mapper;
+pub mod mappers;
 pub mod nes;
 pub mod palette;
 pub mod ppu;
