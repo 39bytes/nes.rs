@@ -211,7 +211,7 @@ where
     let mut next_value = move || match consumer.try_pop() {
         Some(sample) => sample,
         None => {
-            log::warn!("Audio buffer was exhausted, outputting 0");
+            log::debug!("Audio buffer was exhausted, outputting 0");
             0.0
         }
     };

@@ -113,7 +113,7 @@ impl Nes {
 
         if let Some(audio_output) = self.audio_output.as_mut() {
             if let Err(e) = audio_output.try_push_sample(self.apu.borrow().sample()) {
-                log::warn!("{}", e);
+                log::debug!("{}", e);
             }
         }
 

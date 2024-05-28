@@ -10,6 +10,24 @@ use crate::{
     renderer::{Color, Renderer, Sprite},
 };
 
+pub fn draw_oam(renderer: &mut Renderer, oam: &[u8], x: usize, y: usize) {
+    for (i, sprite) in oam.chunks_exact(4).enumerate().take(8) {
+        let sp_y = sprite[0];
+        let tile_id = sprite[1];
+        let attr = sprite[2];
+        let sp_x = sprite[3];
+
+        renderer.draw_text(
+            &format!(
+                "X: {:02X}, Y: {:02X}, Tile: {:02X}, Attr: {:02X}",
+                sp_x, sp_y, tile_id, attr
+            ),
+            x,
+            y + (20 + i * 20),
+        );
+    }
+}
+
 pub fn draw_mem_page(renderer: &mut Renderer, nes: &Nes, page: u8, x: usize, y: usize) {
     let page_start = (page as u16) * 0x100;
     let page_end = page_start + 0xFF;

@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 
 bitflags! {
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct SpriteAttribute: u8 {
         const PaletteLSB = 1 << 0;
         const PaletteMSB = 1 << 1;
@@ -12,7 +12,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Sprite {
     pub x: u8,
     pub y: u8,

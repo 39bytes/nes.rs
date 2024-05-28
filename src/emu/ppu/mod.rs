@@ -174,6 +174,10 @@ impl Ppu {
         &self.nametables
     }
 
+    pub fn oam(&self) -> &[u8; OAM_SIZE] {
+        &self.oam
+    }
+
     pub fn load_cartridge(&mut self, cartridge: Rc<RefCell<Cartridge>>) {
         self.cartridge = Some(cartridge);
     }
@@ -188,6 +192,8 @@ impl Ppu {
                 self.status.set(PpuStatus::VerticalBlank, false);
                 self.status.set(PpuStatus::Sprite0Hit, false);
                 self.status.set(PpuStatus::SpriteOverflow, false);
+
+                self.scanline_sprites = Vec::new();
             }
 
             // Odd frame cycle skip
@@ -516,15 +522,22 @@ impl Ppu {
         let mut next_scanline_sprites = Vec::new();
 
         let in_range = |y: u8| {
+            // Outside of visible region anyway, so a sprite wouldn't be visible here
+            if self.scanline == -1 || self.scanline >= 240 {
+                return false;
+            }
+
             let height = if self.ctrl.contains(PpuCtrl::SpriteSize) {
                 16
             } else {
                 8
             };
 
-            let y = y as i16;
+            let bottom = y.wrapping_add(height) as i16;
+            let dy = bottom - self.scanline;
+            dy > 0 && dy <= height.into()
 
-            (y..y + height).contains(&self.scanline)
+            // (y..y + height).contains(&(self.scanline as u8))
         };
 
         for (i, sprite) in self.oam.chunks_exact(4).enumerate() {
@@ -577,7 +590,12 @@ impl Ppu {
         }
 
         let bg_pixel = self.get_bg_pixel();
-        let sprite_pixel = self.get_sprite_pixel();
+        let (sprite_pixel, sprite) = self.get_sprite_pixel();
+
+        if self.scanline == 0 && sprite_pixel.pixel != 0 {
+            println!("{:?}", self.scanline_sprites);
+            println!("{:?} {:?}", sprite_pixel, sprite);
+        }
 
         let (palette, pixel, sprite0_hit) = match (bg_pixel.pixel, sprite_pixel.pixel) {
             (0, 0) => (0, 0, false),
@@ -623,9 +641,9 @@ impl Ppu {
         BgPixel { palette, pixel }
     }
 
-    fn get_sprite_pixel(&self) -> SpritePixel {
+    fn get_sprite_pixel(&self) -> (SpritePixel, Option<PpuSprite>) {
         if !self.mask.contains(PpuMask::ShowSprites) {
-            return SpritePixel::default();
+            return (SpritePixel::default(), None);
         }
 
         for i in 0..self.scanline_sprites.len() {
@@ -645,16 +663,19 @@ impl Ppu {
 
             let behind_background = sprite.attribute.contains(SpriteAttribute::BehindBackground);
 
-            return SpritePixel {
-                // need to pick from sprite palettes instead, which is 4 after the bg palettes
-                palette: palette + 4,
-                pixel,
-                behind_background,
-                sprite0_hit: sprite.oam_index == 0,
-            };
+            return (
+                SpritePixel {
+                    // need to pick from sprite palettes instead, which is 4 after the bg palettes
+                    palette: palette + 4,
+                    pixel,
+                    behind_background,
+                    sprite0_hit: sprite.oam_index == 0,
+                },
+                Some(sprite.clone()),
+            );
         }
 
-        SpritePixel::default()
+        (SpritePixel::default(), None)
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) {
