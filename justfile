@@ -6,3 +6,6 @@ nestest:
 
 mario:
     RUST_LOG=info cargo run --release assets/roms/mario.nes
+
+debug ROM_PATH:
+    RUST_LOG=info cargo run {{ROM_PATH}}
