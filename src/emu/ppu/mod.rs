@@ -44,6 +44,7 @@ pub struct PpuClockResult {
 const PALETTE_RAM_SIZE: usize = 32;
 const NAMETABLE_SIZE: usize = 1024;
 const OAM_SIZE: usize = 256;
+const SECONDARY_OAM_SIZE: usize = 32;
 
 pub struct Ppu {
     palette: Palette,
@@ -84,6 +85,7 @@ pub struct Ppu {
     // Memory
     nametables: [[u8; NAMETABLE_SIZE]; 2],
     palette_ram: [u8; PALETTE_RAM_SIZE],
+
     oam: [u8; OAM_SIZE],
 
     // Other components
@@ -126,6 +128,7 @@ impl Ppu {
 
             nametables: [[0; NAMETABLE_SIZE]; 2],
             palette_ram: [0; PALETTE_RAM_SIZE],
+
             oam: [0; OAM_SIZE],
 
             cpu,
@@ -187,6 +190,7 @@ impl Ppu {
                 self.status.set(PpuStatus::SpriteOverflow, false);
             }
 
+            // Odd frame cycle skip
             if self.scanline == 0 && self.cycle == 0 && self.odd_frame {
                 self.cycle = 1;
             }
@@ -194,6 +198,7 @@ impl Ppu {
             let is_visible_region = self.cycle >= 1 && self.cycle <= 257;
             let is_preparing_next_scanline = self.cycle >= 321 && self.cycle <= 337;
 
+            // Background data fetching
             // Do the 8 cycle data fetching routine for rendering tile data.
             if is_visible_region || is_preparing_next_scanline {
                 if self.cycle >= 2 {
@@ -242,7 +247,7 @@ impl Ppu {
                 _ => {}
             }
 
-            // TODO: Emulate sprite evaluation properly
+            // Sprite evaluation
             if self.cycle == 257 && self.scanline >= 0 {
                 self.scanline_sprites = self.next_scanline_sprite_evaluation();
             }
@@ -506,11 +511,24 @@ impl Ppu {
         }
     }
 
+    // See: https://www.nesdev.org/wiki/PPU_sprite_evaluation
     fn next_scanline_sprite_evaluation(&mut self) -> Vec<PpuSprite> {
         let mut next_scanline_sprites = Vec::new();
 
+        let in_range = |y: u8| {
+            let height = if self.ctrl.contains(PpuCtrl::SpriteSize) {
+                16
+            } else {
+                8
+            };
+
+            let y = y as i16;
+
+            (y..y + height).contains(&self.scanline)
+        };
+
         for (i, sprite) in self.oam.chunks_exact(4).enumerate() {
-            if next_scanline_sprites.len() >= 9 {
+            if next_scanline_sprites.len() == 8 {
                 break;
             }
 
@@ -522,22 +540,31 @@ impl Ppu {
                 oam_index: i,
             };
 
-            let height = if self.ctrl.contains(PpuCtrl::SpriteSize) {
-                16
-            } else {
-                8
-            };
-
-            let y = sprite.y as i16;
-
-            if (y..y + height).contains(&self.scanline) {
+            if in_range(sprite.y) {
                 next_scanline_sprites.push(sprite);
             }
         }
 
-        if next_scanline_sprites.len() >= 9 {
-            next_scanline_sprites.pop();
-            self.status.insert(PpuStatus::SpriteOverflow);
+        if next_scanline_sprites.len() < 8 {
+            next_scanline_sprites.resize_with(8, PpuSprite::default);
+            return next_scanline_sprites;
+        }
+
+        // Sprite overflow check
+        let mut n = next_scanline_sprites.last().unwrap().oam_index + 1;
+        let mut m = 0;
+
+        while n * 4 + m <= OAM_SIZE - 4 {
+            let i = n * 4 + m;
+            let y = self.oam[i];
+
+            // Emulate the sprite overflow bug
+            if in_range(y) {
+                self.status.insert(PpuStatus::SpriteOverflow);
+                break;
+            }
+            n += 1;
+            m += 1;
         }
 
         next_scanline_sprites
@@ -698,7 +725,12 @@ impl Ppu {
                 data
             }
             3 => 0,
-            4 => self.oam[self.oam_addr as usize],
+            4 => {
+                if (0..240).contains(&self.scanline) && (1..65).contains(&self.cycle) {
+                    return 0xFF;
+                }
+                self.oam[self.oam_addr as usize]
+            }
             5 => 0,
             6 => 0,
             7 => {

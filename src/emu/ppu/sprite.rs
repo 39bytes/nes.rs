@@ -20,3 +20,15 @@ pub struct Sprite {
     pub attribute: SpriteAttribute,
     pub oam_index: usize,
 }
+
+impl Default for Sprite {
+    fn default() -> Self {
+        Sprite {
+            x: 0xFF,
+            y: 0xFF,
+            tile_id: 0xFF,
+            attribute: SpriteAttribute::from_bits_truncate(0xFF),
+            oam_index: 0x40,
+        }
+    }
+}
