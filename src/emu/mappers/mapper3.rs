@@ -20,7 +20,7 @@ impl Mapper3 {
 }
 
 impl Mapper for Mapper3 {
-    fn cpu_map_read(&self, addr: u16) -> Result<MapRead> {
+    fn map_prg_read(&self, addr: u16) -> Result<MapRead> {
         match addr {
             0x8000..=0xFFFF => {
                 let addr = if self.prg_banks == 1 {
@@ -35,17 +35,17 @@ impl Mapper for Mapper3 {
         }
     }
 
-    fn cpu_map_write(&mut self, addr: u16, data: u8) -> Result<MapWrite> {
+    fn map_prg_write(&mut self, addr: u16, data: u8) -> Result<MapWrite> {
         match addr {
             0x8000..=0xFFFF => {
-                self.bank_select = data;
+                self.bank_select = data & 0x03;
                 Ok(MapWrite::WroteRegister)
             }
             _ => Err(anyhow!("Address {:#06X} out of range", addr)),
         }
     }
 
-    fn ppu_map_read(&self, addr: u16) -> Result<MapRead> {
+    fn map_chr_read(&self, addr: u16) -> Result<MapRead> {
         if addr > 0x1FFF {
             return Err(anyhow!("Address {:#06X} out of range", addr));
         }
@@ -55,7 +55,7 @@ impl Mapper for Mapper3 {
         Ok(MapRead::Address(addr))
     }
 
-    fn ppu_map_write(&self, addr: u16) -> Result<MapWrite> {
+    fn map_chr_write(&self, addr: u16) -> Result<MapWrite> {
         if addr > 0x1FFF {
             return Err(anyhow!("Address {:#06X} out of range", addr));
         }

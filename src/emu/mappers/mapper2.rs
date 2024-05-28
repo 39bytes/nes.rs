@@ -20,7 +20,7 @@ impl Mapper2 {
 }
 
 impl Mapper for Mapper2 {
-    fn cpu_map_read(&self, addr: u16) -> Result<MapRead> {
+    fn map_prg_read(&self, addr: u16) -> Result<MapRead> {
         match addr {
             0x8000..=0xBFFF => {
                 let bank = self.bank_select as usize;
@@ -35,7 +35,7 @@ impl Mapper for Mapper2 {
             _ => Err(anyhow!("Address {:#06X} out of range", addr)),
         }
     }
-    fn cpu_map_write(&mut self, addr: u16, data: u8) -> Result<MapWrite> {
+    fn map_prg_write(&mut self, addr: u16, data: u8) -> Result<MapWrite> {
         match addr {
             0x8000..=0xFFFF => {
                 self.bank_select = data & 0x0F;
@@ -45,7 +45,7 @@ impl Mapper for Mapper2 {
         }
     }
 
-    fn ppu_map_read(&self, addr: u16) -> Result<MapRead> {
+    fn map_chr_read(&self, addr: u16) -> Result<MapRead> {
         if addr > 0x1FFF {
             return Err(anyhow!("Address {:#06X} out of range", addr));
         }
@@ -53,7 +53,7 @@ impl Mapper for Mapper2 {
         Ok(MapRead::Address(addr as usize))
     }
 
-    fn ppu_map_write(&self, addr: u16) -> Result<MapWrite> {
+    fn map_chr_write(&self, addr: u16) -> Result<MapWrite> {
         if addr > 0x1FFF {
             return Err(anyhow!("Address {:#06X} out of range", addr));
         }

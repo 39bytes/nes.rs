@@ -20,7 +20,7 @@ impl Mapper0 {
 }
 
 impl Mapper for Mapper0 {
-    fn cpu_map_read(&self, addr: u16) -> Result<MapRead> {
+    fn map_prg_read(&self, addr: u16) -> Result<MapRead> {
         match addr {
             0x6000..=0x7FFF => Ok(MapRead::RAMData(self.ram[(addr - 0x6000) as usize])),
             0x8000..=0xFFFF => {
@@ -36,7 +36,7 @@ impl Mapper for Mapper0 {
         }
     }
 
-    fn cpu_map_write(&mut self, addr: u16, data: u8) -> Result<MapWrite> {
+    fn map_prg_write(&mut self, addr: u16, data: u8) -> Result<MapWrite> {
         match addr {
             0x6000..=0x7FFF => {
                 self.ram[(addr - 0x6000) as usize] = data;
@@ -47,7 +47,7 @@ impl Mapper for Mapper0 {
         }
     }
 
-    fn ppu_map_read(&self, addr: u16) -> Result<MapRead> {
+    fn map_chr_read(&self, addr: u16) -> Result<MapRead> {
         if addr > 0x1FFF {
             return Err(anyhow!("Address {:#06X} out of range", addr));
         }
@@ -55,7 +55,7 @@ impl Mapper for Mapper0 {
         Ok(MapRead::Address(addr as usize))
     }
 
-    fn ppu_map_write(&self, _addr: u16) -> Result<MapWrite> {
+    fn map_chr_write(&self, _addr: u16) -> Result<MapWrite> {
         Err(anyhow!("Can't write to ROM"))
     }
 }

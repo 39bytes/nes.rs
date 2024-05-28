@@ -153,28 +153,28 @@ impl Cartridge {
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) -> Result<()> {
-        if let MapWrite::Address(addr) = self.mapper.cpu_map_write(addr, data)? {
+        if let MapWrite::Address(addr) = self.mapper.map_prg_write(addr, data)? {
             self.prg_memory[addr] = data;
         }
         Ok(())
     }
 
     pub fn cpu_read(&self, addr: u16) -> Result<u8> {
-        match self.mapper.cpu_map_read(addr)? {
+        match self.mapper.map_prg_read(addr)? {
             MapRead::Address(addr) => Ok(self.prg_memory[addr]),
             MapRead::RAMData(data) => Ok(data),
         }
     }
 
     pub fn ppu_write(&mut self, addr: u16, data: u8) -> Result<()> {
-        if let MapWrite::Address(addr) = self.mapper.ppu_map_write(addr)? {
+        if let MapWrite::Address(addr) = self.mapper.map_chr_write(addr)? {
             self.chr_memory[addr] = data;
         }
         Ok(())
     }
 
     pub fn ppu_read(&self, addr: u16) -> Result<u8> {
-        match self.mapper.ppu_map_read(addr)? {
+        match self.mapper.map_chr_read(addr)? {
             MapRead::Address(addr) => {
                 let data = self
                     .chr_memory
