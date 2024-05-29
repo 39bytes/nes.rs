@@ -590,12 +590,7 @@ impl Ppu {
         }
 
         let bg_pixel = self.get_bg_pixel();
-        let (sprite_pixel, sprite) = self.get_sprite_pixel();
-
-        if self.scanline == 0 && sprite_pixel.pixel != 0 {
-            println!("{:?}", self.scanline_sprites);
-            println!("{:?} {:?}", sprite_pixel, sprite);
-        }
+        let sprite_pixel = self.get_sprite_pixel();
 
         let (palette, pixel, sprite0_hit) = match (bg_pixel.pixel, sprite_pixel.pixel) {
             (0, 0) => (0, 0, false),
@@ -641,9 +636,9 @@ impl Ppu {
         BgPixel { palette, pixel }
     }
 
-    fn get_sprite_pixel(&self) -> (SpritePixel, Option<PpuSprite>) {
+    fn get_sprite_pixel(&self) -> SpritePixel {
         if !self.mask.contains(PpuMask::ShowSprites) {
-            return (SpritePixel::default(), None);
+            return SpritePixel::default();
         }
 
         for i in 0..self.scanline_sprites.len() {
@@ -663,19 +658,16 @@ impl Ppu {
 
             let behind_background = sprite.attribute.contains(SpriteAttribute::BehindBackground);
 
-            return (
-                SpritePixel {
-                    // need to pick from sprite palettes instead, which is 4 after the bg palettes
-                    palette: palette + 4,
-                    pixel,
-                    behind_background,
-                    sprite0_hit: sprite.oam_index == 0,
-                },
-                Some(sprite.clone()),
-            );
+            return SpritePixel {
+                // need to pick from sprite palettes instead, which is 4 after the bg palettes
+                palette: palette + 4,
+                pixel,
+                behind_background,
+                sprite0_hit: sprite.oam_index == 0,
+            };
         }
 
-        (SpritePixel::default(), None)
+        SpritePixel::default()
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) {
