@@ -10,6 +10,7 @@ const PRG_ROM_BANK_SIZE: usize = 16 * 1024;
 const CHR_BANK_SIZE: usize = 4 * 1024;
 
 #[bitfield]
+#[derive(Debug)]
 struct ControlRegister {
     mirroring: B2,
     prg_rom_bank_mode: B2,
@@ -18,6 +19,7 @@ struct ControlRegister {
     padding: B3,
 }
 
+#[derive(Debug)]
 pub struct Mapper1 {
     prg_bank_count: u8,
     chr_bank_count: u8,
@@ -41,7 +43,7 @@ impl Mapper1 {
             load: 0x00,
             load_write_count: 0,
 
-            control: ControlRegister::new(),
+            control: ControlRegister::from_bytes([0x0C]),
             chr_bank0: 0x00,
             chr_bank1: 0x00,
             prg_bank: 0x00,
@@ -65,7 +67,7 @@ impl Mapper for Mapper1 {
                 let addr = match bank_mode {
                     // 32 KB mode
                     0 | 1 => {
-                        let bank = (self.prg_bank & 0x0E) as usize;
+                        let bank = (self.prg_bank >> 1) as usize;
                         bank * PRG_ROM_BANK_SIZE * 2 + (addr & 0x3FFF) as usize
                     }
                     // 16 KB mode
@@ -106,19 +108,28 @@ impl Mapper for Mapper1 {
                     return Ok(MapWrite::WroteRegister);
                 }
 
-                self.load |= data & 0x01;
-                if self.load_write_count < 5 {
-                    self.load <<= 1;
-                } else {
-                    self.load_write_count = 0;
-
+                self.load >>= 1;
+                self.load |= (data & 0x01) << 4;
+                self.load_write_count += 1;
+                if self.load_write_count == 5 {
                     match addr {
-                        0x8000..=0x9FFF => self.control = ControlRegister::from_bytes([self.load]),
-                        0xA000..=0xBFFF => self.chr_bank0 = self.load,
-                        0xC000..=0xDFFF => self.chr_bank1 = self.load,
-                        0xE000..=0xFFFF => self.prg_bank = self.load,
+                        0x8000..=0x9FFF => {
+                            self.control = ControlRegister::from_bytes([self.load]);
+                        }
+                        0xA000..=0xBFFF => {
+                            self.chr_bank0 = self.load;
+                        }
+                        0xC000..=0xDFFF => {
+                            self.chr_bank1 = self.load;
+                        }
+                        0xE000..=0xFFFF => {
+                            self.prg_bank = self.load;
+                        }
                         _ => unreachable!(),
                     }
+
+                    self.load = 0x00;
+                    self.load_write_count = 0;
                 }
                 Ok(MapWrite::WroteRegister)
             }
@@ -134,7 +145,7 @@ impl Mapper for Mapper1 {
         let addr = match self.control.chr_bank_mode() {
             // 8 KB mode
             0 => {
-                let bank = (self.chr_bank0 & 0x1E) as usize;
+                let bank = (self.chr_bank0 >> 1) as usize;
                 bank * CHR_BANK_SIZE * 2 + addr as usize
             }
             // 4 KB mode, bank 0

@@ -28,14 +28,16 @@ use emu::input::{ControllerButtons, ControllerInput};
 use emu::nes::Nes;
 use emu::palette::Palette;
 
+use ui::*;
+
 mod audio_output;
 mod emu;
 mod renderer;
 mod ui;
 mod utils;
 
-const WIDTH: usize = 256;
-const HEIGHT: usize = 256;
+const WIDTH: usize = 960;
+const HEIGHT: usize = 720;
 
 pub fn main() -> Result<()> {
     env_logger::builder().format_timestamp_micros().init();
@@ -86,7 +88,7 @@ pub fn main() -> Result<()> {
     });
 
     let mut displayed_page: u8 = 0;
-    let mut paused = false;
+    let mut paused = true;
 
     let mut acc = 0.0;
     let mut now = Instant::now();
@@ -101,11 +103,13 @@ pub fn main() -> Result<()> {
                 target.exit();
             }
             Event::AboutToWait => {
-                acc += now.elapsed().as_secs_f64();
-                now = Instant::now();
-                while acc >= FRAME_TIME {
-                    nes.advance_frame();
-                    acc -= FRAME_TIME;
+                if !paused {
+                    acc += now.elapsed().as_secs_f64();
+                    now = Instant::now();
+                    while acc >= FRAME_TIME {
+                        nes.advance_frame();
+                        acc -= FRAME_TIME;
+                    }
                 }
 
                 renderer.clear();
@@ -113,7 +117,9 @@ pub fn main() -> Result<()> {
                 let screen = nes.screen();
                 // TODO: Implement not drawing overscan
                 // https://www.nesdev.org/wiki/Overscan
-                renderer.draw_sprite(screen, 0, 16);
+                renderer.draw_sprite(screen, 0, 0);
+
+                draw_cpu_info(&mut renderer, &nes, 720, 0);
 
                 if let Err(err) = renderer.render() {
                     log_error("pixels.render", err);
@@ -128,6 +134,7 @@ pub fn main() -> Result<()> {
             // Emulator meta events
             if input.key_pressed(KeyCode::Space) {
                 paused = !paused;
+                now = Instant::now();
             } else if input.key_pressed(KeyCode::KeyN) {
                 nes.next_instruction();
             } else if input.key_pressed(KeyCode::KeyV) {

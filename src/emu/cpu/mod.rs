@@ -360,6 +360,7 @@ impl Cpu {
 
     pub fn reset(&mut self) {
         let reset_addr = self.read_u16(0xFFFC);
+        log::info!("CPU Reset, read reset vector {:#06X}", reset_addr);
         self.reset_to(reset_addr);
     }
 
