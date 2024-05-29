@@ -68,6 +68,8 @@ impl Header {
 pub enum Mirroring {
     Horizontal,
     Vertical,
+    SingleScreenLower,
+    SingleScreenUpper,
 }
 
 pub struct Cartridge {
@@ -111,6 +113,7 @@ impl Cartridge {
 
         let mapper: Box<dyn Mapper> = match header.mapper_num {
             0 => Box::new(Mapper0::new(header.prg_rom_chunks)),
+            1 => Box::new(Mapper1::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             2 => Box::new(Mapper2::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             3 => Box::new(Mapper3::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             _ => Err(anyhow!("Unimplemented mapper {}", header.mapper_num))?,
@@ -125,6 +128,9 @@ impl Cartridge {
     }
 
     pub fn mirroring(&self) -> Mirroring {
+        if let Some(mirroring) = self.mapper.mirroring() {
+            return mirroring;
+        }
         self.mirroring
     }
 

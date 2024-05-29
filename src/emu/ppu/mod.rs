@@ -920,5 +920,7 @@ fn map_addr_to_nametable(mirroring: Mirroring, addr: u16) -> (usize, usize) {
             0x2C00..=0x2FFF => (1, addr - 0x2C00),
             _ => unreachable!(),
         },
+        Mirroring::SingleScreenLower => (0, addr & 0x03FF),
+        Mirroring::SingleScreenUpper => (1, addr & 0x03FF),
     }
 }

@@ -10,6 +10,8 @@ pub use mapper1::Mapper1;
 pub use mapper2::Mapper2;
 pub use mapper3::Mapper3;
 
+use super::cartridge::Mirroring;
+
 pub enum MapRead {
     Address(usize), // Mapper returns an address to index into the cartridge
     RAMData(u8),    // Mapper returns data from its onboard RAM
@@ -26,4 +28,7 @@ pub trait Mapper {
     fn map_prg_write(&mut self, addr: u16, data: u8) -> Result<MapWrite>;
     fn map_chr_read(&self, addr: u16) -> Result<MapRead>;
     fn map_chr_write(&self, addr: u16) -> Result<MapWrite>;
+    fn mirroring(&self) -> Option<Mirroring> {
+        None
+    }
 }
