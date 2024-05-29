@@ -11,7 +11,7 @@ const BANK_SIZE: usize = 8 * 1024;
 
 impl Mapper3 {
     pub fn new(prg_banks: u8, chr_banks: u8) -> Self {
-        Mapper3 {
+        Self {
             prg_banks,
             chr_banks,
             bank_select: 0,
