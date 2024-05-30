@@ -9,3 +9,6 @@ mario:
 
 debug ROM_PATH:
     RUST_LOG=info cargo run {{ROM_PATH}}
+
+profile:
+    valgrind --tool=cachegrind target/release/nesrs assets/roms/mario.nes
