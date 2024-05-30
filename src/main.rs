@@ -2,16 +2,14 @@ use cpal::StreamConfig;
 use ringbuf::traits::*;
 use std::env;
 use std::process;
-use std::sync::mpsc;
 use std::thread;
-use std::time::Duration;
 use std::time::Instant;
 
 use anyhow::{anyhow, Result};
 use audio_output::AudioBufferConsumer;
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    FromSample, Sample, SizedSample,
+    FromSample, SizedSample,
 };
 use error_iter::ErrorIter as _;
 use log::error;
@@ -29,8 +27,6 @@ use emu::consts::FRAME_TIME;
 use emu::input::{ControllerButtons, ControllerInput};
 use emu::nes::Nes;
 use emu::palette::Palette;
-
-use ui::*;
 
 mod audio_output;
 mod emu;
@@ -85,15 +81,14 @@ pub fn main() -> Result<()> {
     nes.load_cartridge(cartridge);
     nes.reset();
 
-    // thread::spawn(move || {
-    //     start_audio::<f32>(&device, &stream_config, audio_consumer).expect("Could not start audio")
-    // });
-
-    let mut displayed_page: u8 = 0;
     let mut paused = false;
 
     let mut acc = 0.0;
     let mut now = Instant::now();
+
+    thread::spawn(move || {
+        start_audio::<f32>(&device, &stream_config, audio_consumer).expect("Could not start audio")
+    });
 
     event_loop.run(move |event, target| {
         match event {
@@ -109,17 +104,11 @@ pub fn main() -> Result<()> {
                     acc += now.elapsed().as_secs_f64();
                     now = Instant::now();
                     while acc >= FRAME_TIME {
-                        let now = Instant::now();
                         nes.advance_frame();
-                        println!(
-                            "Took {} seconds to compute next frame",
-                            now.elapsed().as_secs_f64()
-                        );
                         acc -= FRAME_TIME;
                     }
                 }
 
-                let now = Instant::now();
                 renderer.clear();
 
                 let screen = nes.screen();
@@ -133,10 +122,6 @@ pub fn main() -> Result<()> {
                     log_error("pixels.render", err);
                     target.exit();
                 }
-                println!(
-                    "Took {} seconds to render frame",
-                    now.elapsed().as_secs_f64()
-                );
             }
 
             _ => (),
@@ -147,12 +132,8 @@ pub fn main() -> Result<()> {
             if input.key_pressed(KeyCode::Space) {
                 paused = !paused;
                 now = Instant::now();
-            } else if input.key_pressed(KeyCode::KeyN) {
+            } else if input.key_pressed(KeyCode::KeyN) && paused {
                 nes.next_instruction();
-            } else if input.key_pressed(KeyCode::KeyV) {
-                displayed_page = displayed_page.wrapping_sub(1);
-            } else if input.key_pressed(KeyCode::KeyB) {
-                displayed_page = displayed_page.wrapping_add(1);
             }
 
             // Console input
@@ -197,7 +178,12 @@ pub fn main() -> Result<()> {
 }
 
 fn setup_audio() -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
-    let host = cpal::default_host();
+    let host = cpal::host_from_id(cpal::available_hosts()
+        .into_iter()
+        .find(|id| *id == cpal::HostId::Jack)
+        .expect(
+            "make sure --features jack is specified. only works on OSes where jack is available",
+        )).expect("jack host unavailable");
 
     let device = host
         .default_output_device()
@@ -229,55 +215,34 @@ where
         channels
     );
 
-    let (sender, receiver) = mpsc::channel::<usize>();
-
-    let mut sample_clock = 0f32;
-    let mut next_value = move || {
-        sender.send(1).unwrap();
-        sample_clock = (sample_clock + 1.0) % sample_rate;
-        (sample_clock * 440.0 * 2.0 * std::f32::consts::PI / sample_rate).sin()
+    let mut next_sample = move || match consumer.try_pop() {
+        Some(sample) => sample,
+        None => {
+            log::warn!("Audio buffer was exhausted, outputting 0");
+            0.0
+        }
     };
-
-    // let mut next_value = move || match consumer.try_pop() {
-    //     Some(sample) => sample,
-    //     None => {
-    //         log::warn!("Audio buffer was exhausted, outputting 0");
-    //         0.0
-    //     }
-    // };
 
     let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
 
     let stream = device.build_output_stream(
         config,
         move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-            write_data(data, channels, &mut next_value)
+            for frame in data.chunks_mut(channels) {
+                let value: T = T::from_sample(next_sample());
+                for sample in frame.iter_mut() {
+                    *sample = value;
+                }
+            }
         },
         err_fn,
         None,
     )?;
     stream.play()?;
 
-    std::thread::sleep(Duration::from_millis(60000));
-    drop(stream);
-
-    log::info!("Samples: {}", receiver.iter().sum::<usize>());
-
-    // std::thread::park();
+    std::thread::park();
 
     Ok(())
-}
-
-fn write_data<T>(output: &mut [T], channels: usize, next_sample: &mut dyn FnMut() -> f32)
-where
-    T: Sample + FromSample<f32>,
-{
-    for frame in output.chunks_mut(channels) {
-        let value: T = T::from_sample(next_sample());
-        for sample in frame.iter_mut() {
-            *sample = value;
-        }
-    }
 }
 
 fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {

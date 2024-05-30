@@ -1,6 +1,7 @@
 use std::{
     cell::{Ref, RefCell},
     rc::Rc,
+    time::Instant,
 };
 
 use crate::{
@@ -23,6 +24,7 @@ pub struct Nes {
     audio_output: Option<AudioOutput>,
 
     clock_count: u64,
+    audio_time: f64,
 }
 
 impl Nes {
@@ -43,6 +45,7 @@ impl Nes {
             audio_output: None,
 
             clock_count: 0,
+            audio_time: 0.0,
         }
     }
 
@@ -89,9 +92,11 @@ impl Nes {
     }
 
     pub fn advance_frame(&mut self) {
+        // self.audio_time = 0.0;
         for _ in 0..FRAME_CLOCKS {
             self.clock();
         }
+        // log::info!("Audio time: {}", self.audio_time);
     }
 
     #[inline]
@@ -111,6 +116,12 @@ impl Nes {
         if self.clock_count % 6 == 0 {
             self.apu.borrow_mut().clock();
         }
+
+        // let now = Instant::now();
+        if let Some(audio_output) = &mut self.audio_output {
+            audio_output.try_push_sample(self.apu.borrow().sample());
+        }
+        // self.audio_time += now.elapsed().as_secs_f64();
 
         if clock_res.nmi {
             self.cpu.borrow_mut().nmi();
