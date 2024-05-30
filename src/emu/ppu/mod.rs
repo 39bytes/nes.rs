@@ -184,6 +184,7 @@ impl Ppu {
 
     /// See: https://www.nesdev.org/wiki/PPU_rendering
     /// for details on how this works.
+    #[inline]
     pub fn clock(&mut self) -> PpuClockResult {
         // Rendering during the visible region
         if self.scanline >= -1 && self.scanline < 240 {

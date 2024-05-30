@@ -32,7 +32,7 @@ impl Mapper for Mapper0 {
 
                 Ok(MapRead::Address(addr as usize))
             }
-            _ => Err(anyhow!("Address {:#06X} out of range", addr)),
+            _ => Err(anyhow!("Address out of range")),
         }
     }
 
@@ -43,13 +43,13 @@ impl Mapper for Mapper0 {
                 Ok(MapWrite::RAMWritten)
             }
             0x8000..=0xFFFF => Err(anyhow!("PRG ROM not writable")),
-            _ => Err(anyhow!("Address {:#06X} out of range", addr)),
+            _ => Err(anyhow!("Address out of range")),
         }
     }
 
     fn map_chr_read(&self, addr: u16) -> Result<MapRead> {
         if addr > 0x1FFF {
-            return Err(anyhow!("Address {:#06X} out of range", addr));
+            return Err(anyhow!("Address out of range"));
         }
 
         Ok(MapRead::Address(addr as usize))

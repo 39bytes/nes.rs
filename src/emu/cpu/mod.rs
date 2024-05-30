@@ -377,6 +377,7 @@ impl Cpu {
     }
 
     /// Run one clock cycle.
+    #[inline]
     pub fn clock(&mut self) {
         if self.dma_transfer {
             self.dma_clock();
