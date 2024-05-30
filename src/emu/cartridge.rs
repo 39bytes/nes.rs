@@ -128,10 +128,7 @@ impl Cartridge {
     }
 
     pub fn mirroring(&self) -> Mirroring {
-        if let Some(mirroring) = self.mapper.mirroring() {
-            return mirroring;
-        }
-        self.mirroring
+        self.mapper.mirroring().unwrap_or(self.mirroring)
     }
 
     fn from_type1(mut f: File, header: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
@@ -181,13 +178,7 @@ impl Cartridge {
 
     pub fn ppu_read(&self, addr: u16) -> Result<u8> {
         match self.mapper.map_chr_read(addr)? {
-            MapRead::Address(addr) => {
-                let data = self
-                    .chr_memory
-                    .get(addr)
-                    .ok_or(anyhow!("Invalid PPU read address: {:#X}", addr))?;
-                Ok(*data)
-            }
+            MapRead::Address(addr) => Ok(self.chr_memory[addr]),
             _ => todo!(),
         }
     }
