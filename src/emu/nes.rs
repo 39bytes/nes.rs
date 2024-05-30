@@ -117,11 +117,9 @@ impl Nes {
             self.apu.borrow_mut().clock();
         }
 
-        // let now = Instant::now();
         if let Some(audio_output) = &mut self.audio_output {
             audio_output.try_push_sample(self.apu.borrow().sample());
         }
-        // self.audio_time += now.elapsed().as_secs_f64();
 
         if clock_res.nmi {
             self.cpu.borrow_mut().nmi();
