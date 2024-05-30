@@ -2,7 +2,9 @@ use cpal::StreamConfig;
 use ringbuf::traits::*;
 use std::env;
 use std::process;
+use std::sync::mpsc;
 use std::thread;
+use std::time::Duration;
 use std::time::Instant;
 
 use anyhow::{anyhow, Result};
@@ -83,9 +85,9 @@ pub fn main() -> Result<()> {
     nes.load_cartridge(cartridge);
     nes.reset();
 
-    thread::spawn(move || {
-        start_audio::<f32>(&device, &stream_config, audio_consumer).expect("Could not start audio")
-    });
+    // thread::spawn(move || {
+    //     start_audio::<f32>(&device, &stream_config, audio_consumer).expect("Could not start audio")
+    // });
 
     let mut displayed_page: u8 = 0;
     let mut paused = false;
@@ -107,11 +109,17 @@ pub fn main() -> Result<()> {
                     acc += now.elapsed().as_secs_f64();
                     now = Instant::now();
                     while acc >= FRAME_TIME {
+                        let now = Instant::now();
                         nes.advance_frame();
+                        println!(
+                            "Took {} seconds to compute next frame",
+                            now.elapsed().as_secs_f64()
+                        );
                         acc -= FRAME_TIME;
                     }
                 }
 
+                let now = Instant::now();
                 renderer.clear();
 
                 let screen = nes.screen();
@@ -125,6 +133,10 @@ pub fn main() -> Result<()> {
                     log_error("pixels.render", err);
                     target.exit();
                 }
+                println!(
+                    "Took {} seconds to render frame",
+                    now.elapsed().as_secs_f64()
+                );
             }
 
             _ => (),
@@ -217,13 +229,22 @@ where
         channels
     );
 
-    let mut next_value = move || match consumer.try_pop() {
-        Some(sample) => sample,
-        None => {
-            log::debug!("Audio buffer was exhausted, outputting 0");
-            0.0
-        }
+    let (sender, receiver) = mpsc::channel::<usize>();
+
+    let mut sample_clock = 0f32;
+    let mut next_value = move || {
+        sender.send(1).unwrap();
+        sample_clock = (sample_clock + 1.0) % sample_rate;
+        (sample_clock * 440.0 * 2.0 * std::f32::consts::PI / sample_rate).sin()
     };
+
+    // let mut next_value = move || match consumer.try_pop() {
+    //     Some(sample) => sample,
+    //     None => {
+    //         log::warn!("Audio buffer was exhausted, outputting 0");
+    //         0.0
+    //     }
+    // };
 
     let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
 
@@ -237,7 +258,12 @@ where
     )?;
     stream.play()?;
 
-    std::thread::park();
+    std::thread::sleep(Duration::from_millis(60000));
+    drop(stream);
+
+    log::info!("Samples: {}", receiver.iter().sum::<usize>());
+
+    // std::thread::park();
 
     Ok(())
 }

@@ -111,11 +111,9 @@ impl Nes {
             self.apu.borrow_mut().clock();
         }
 
-        if let Some(audio_output) = self.audio_output.as_mut() {
-            if let Err(e) = audio_output.try_push_sample(self.apu.borrow().sample()) {
-                log::debug!("{}", e);
-            }
-        }
+        // if let Some(audio_output) = self.audio_output.as_mut() {
+        //     audio_output.try_push_sample(self.apu.borrow().sample());
+        // }
 
         if clock_res.nmi {
             self.cpu.borrow_mut().nmi();
