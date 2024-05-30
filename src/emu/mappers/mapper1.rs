@@ -9,6 +9,8 @@ const PRG_RAM_BANK_SIZE: usize = 8 * 1024;
 const PRG_ROM_BANK_SIZE: usize = 16 * 1024;
 const CHR_BANK_SIZE: usize = 4 * 1024;
 
+// TODO: Emulate PRG RAM bank switching
+
 #[bitfield]
 #[derive(Debug)]
 struct ControlRegister {
@@ -102,6 +104,7 @@ impl Mapper for Mapper1 {
                 self.prg_ram[(addr - 0x6000) as usize] = data;
                 Ok(MapWrite::RAMWritten)
             }
+            // TODO: Emulate ignoring consecutive writes
             0x8000..=0xFFFF => {
                 if data & 0x80 != 0 {
                     self.reset();
