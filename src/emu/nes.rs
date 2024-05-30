@@ -94,6 +94,7 @@ impl Nes {
         }
     }
 
+    #[inline]
     pub fn clock(&mut self) {
         self.clock_count += 1;
         let clock_res = self.ppu.borrow_mut().clock();
@@ -110,10 +111,6 @@ impl Nes {
         if self.clock_count % 6 == 0 {
             self.apu.borrow_mut().clock();
         }
-
-        // if let Some(audio_output) = self.audio_output.as_mut() {
-        //     audio_output.try_push_sample(self.apu.borrow().sample());
-        // }
 
         if clock_res.nmi {
             self.cpu.borrow_mut().nmi();
