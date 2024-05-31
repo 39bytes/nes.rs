@@ -35,7 +35,7 @@ mod ui;
 mod utils;
 
 const WIDTH: usize = 256;
-const HEIGHT: usize = 256;
+const HEIGHT: usize = 240;
 
 pub fn main() -> Result<()> {
     env_logger::builder().format_timestamp_micros().init();
@@ -104,12 +104,7 @@ pub fn main() -> Result<()> {
                     acc += now.elapsed().as_secs_f64();
                     now = Instant::now();
                     while acc >= FRAME_TIME {
-                        let bruh = Instant::now();
                         nes.advance_frame();
-                        if bruh.elapsed().as_secs_f64() > FRAME_TIME / 2.0 {
-                            log::warn!("Kinda slow: {:?}", bruh.elapsed());
-                        }
-                        // println!("Frame time: {:?}", bruh.elapsed());
                         acc -= FRAME_TIME;
                     }
                 }
@@ -119,9 +114,7 @@ pub fn main() -> Result<()> {
                 let screen = nes.screen();
                 // TODO: Implement not drawing overscan
                 // https://www.nesdev.org/wiki/Overscan
-                renderer.draw_sprite(screen, 0, 16);
-
-                // draw_cpu_info(&mut renderer, &nes, 720, 0);
+                renderer.draw_sprite(screen, 0, 0);
 
                 if let Err(err) = renderer.render() {
                     log_error("pixels.render", err);
@@ -183,12 +176,17 @@ pub fn main() -> Result<()> {
 }
 
 fn setup_audio() -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
+    // Use jack on linux
+    #[cfg(target_os="linux")]
     let host = cpal::host_from_id(cpal::available_hosts()
         .into_iter()
         .find(|id| *id == cpal::HostId::Jack)
         .expect(
             "make sure --features jack is specified. only works on OSes where jack is available",
         )).expect("jack host unavailable");
+    // Fall back to default on other OSes
+    #[cfg(not(target_os = "linux"))]
+    let host = cpal::default_host();
 
     let device = host
         .default_output_device()
