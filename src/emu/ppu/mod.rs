@@ -534,11 +534,8 @@ impl Ppu {
                 8
             };
 
-            let bottom = y.wrapping_add(height) as i16;
-            let dy = bottom - self.scanline;
-            dy > 0 && dy <= height.into()
-
-            // (y..y + height).contains(&(self.scanline as u8))
+            let dy = self.scanline - y as i16;
+            dy >= 0 && dy < height
         };
 
         for (i, sprite) in self.oam.chunks_exact(4).enumerate() {
