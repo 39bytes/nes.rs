@@ -12,7 +12,6 @@ use super::bits::{extend_bit, flip_byte};
 use super::{
     bits::IntoBit,
     cartridge::{Cartridge, Mirroring},
-    cpu::Cpu,
     palette::Palette,
 };
 
@@ -44,7 +43,6 @@ pub struct PpuClockResult {
 const PALETTE_RAM_SIZE: usize = 32;
 const NAMETABLE_SIZE: usize = 1024;
 const OAM_SIZE: usize = 256;
-const SECONDARY_OAM_SIZE: usize = 32;
 
 pub struct Ppu {
     palette: Palette,
@@ -89,14 +87,13 @@ pub struct Ppu {
     oam: [u8; OAM_SIZE],
 
     // Other components
-    cpu: Rc<RefCell<Cpu>>,
     cartridge: Option<Rc<RefCell<Cartridge>>>,
 
     odd_frame: bool,
 }
 
 impl Ppu {
-    pub fn new(palette: Palette, cpu: Rc<RefCell<Cpu>>) -> Self {
+    pub fn new(palette: Palette) -> Self {
         Ppu {
             palette,
 
@@ -131,7 +128,6 @@ impl Ppu {
 
             oam: [0; OAM_SIZE],
 
-            cpu,
             cartridge: None,
 
             odd_frame: false,
@@ -162,18 +158,22 @@ impl Ppu {
         self.data_buffer
     }
 
+    #[allow(dead_code)]
     pub fn scanline(&self) -> i16 {
         self.scanline
     }
 
+    #[allow(dead_code)]
     pub fn cycle(&self) -> u16 {
         self.cycle
     }
 
+    #[allow(dead_code)]
     pub fn nametables(&self) -> &[[u8; NAMETABLE_SIZE]; 2] {
         &self.nametables
     }
 
+    #[allow(dead_code)]
     pub fn oam(&self) -> &[u8; OAM_SIZE] {
         &self.oam
     }

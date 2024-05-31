@@ -31,6 +31,7 @@ impl ShiftRegister16 {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get(&self) -> u8 {
         self.get_at(0)
     }
@@ -46,6 +47,7 @@ impl ShiftRegister16 {
         (high << 1) | low
     }
 
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.low = 0x0000;
         self.high = 0x0000;
@@ -98,6 +100,7 @@ impl ShiftRegister8 {
         (high << 1) | low
     }
 
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.low = 0x00;
         self.high = 0x00;

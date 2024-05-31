@@ -35,7 +35,6 @@ bitflags! {
 
 const STACK_BASE_ADDR: u16 = 0x0100;
 const CPU_RAM_SIZE: usize = 2 * 1024;
-const PAGE_SIZE: u16 = 0x0100;
 
 pub struct Cpu {
     /* Registers */
@@ -160,6 +159,7 @@ impl Cpu {
         self.status
     }
 
+    #[allow(dead_code)]
     pub fn opcode(&self) -> u8 {
         self.opcode
     }
@@ -1565,6 +1565,7 @@ impl Cpu {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_log_line(&mut self) -> String {
         format!(
             "{:04X} {:02X} {:31} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{}",

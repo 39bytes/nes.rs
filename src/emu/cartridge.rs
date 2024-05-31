@@ -36,6 +36,7 @@ bitflags! {
 
 /// The iNES format file header
 #[derive(Debug)]
+#[allow(dead_code)]
 struct Header {
     name: [u8; 4],
     prg_rom_chunks: u8,

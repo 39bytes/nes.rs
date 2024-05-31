@@ -16,7 +16,7 @@ pub struct AudioOutput {
 }
 
 impl AudioOutput {
-    pub fn new(sample_rate: usize, channels: usize) -> (Self, AudioBufferConsumer) {
+    pub fn new(sample_rate: usize) -> (Self, AudioBufferConsumer) {
         let sample_rate = sample_rate as f64;
 
         let latency_frames = (100.0 / 1000.0) * sample_rate;

@@ -1,7 +1,6 @@
 use std::{
     cell::{Ref, RefCell},
     rc::Rc,
-    time::Instant,
 };
 
 use crate::{
@@ -18,22 +17,17 @@ pub struct Nes {
     apu: Rc<RefCell<Apu>>,
     cpu: Rc<RefCell<Cpu>>,
     ppu: Rc<RefCell<Ppu>>,
-    cartridge: Option<Rc<RefCell<Cartridge>>>,
 
     screen: Sprite,
     audio_output: Option<AudioOutput>,
 
     clock_count: u64,
-    cpu_time: f64,
-    ppu_time: f64,
-    apu_time: f64,
-    audio_time: f64,
 }
 
 impl Nes {
     pub fn new(palette: Palette) -> Self {
         let cpu = Rc::new(RefCell::new(Cpu::new()));
-        let ppu = Rc::new(RefCell::new(Ppu::new(palette, cpu.clone())));
+        let ppu = Rc::new(RefCell::new(Ppu::new(palette)));
         let apu = Rc::new(RefCell::new(Apu::new()));
         cpu.borrow_mut().with_ppu(ppu.clone());
         cpu.borrow_mut().with_apu(apu.clone());
@@ -42,36 +36,28 @@ impl Nes {
             cpu,
             ppu,
             apu,
-            cartridge: None,
 
             screen: Sprite::monocolor(Color::BLACK, 256, 240),
             audio_output: None,
 
             clock_count: 0,
-
-            cpu_time: 0.0,
-            ppu_time: 0.0,
-            apu_time: 0.0,
-            audio_time: 0.0,
         }
     }
 
     /// Returns the `Nes` struct, as well as the consumer for the audio buffer.
-    pub fn with_audio(
-        mut self,
-        audio_sample_rate: usize,
-        channels: usize,
-    ) -> (Self, AudioBufferConsumer) {
-        let (audio_output, consumer) = AudioOutput::new(audio_sample_rate, channels);
+    pub fn with_audio(mut self, audio_sample_rate: usize) -> (Self, AudioBufferConsumer) {
+        let (audio_output, consumer) = AudioOutput::new(audio_sample_rate);
         self.audio_output = Some(audio_output);
 
         (self, consumer)
     }
 
+    #[allow(dead_code)]
     pub fn cpu(&self) -> Ref<Cpu> {
         self.cpu.borrow()
     }
 
+    #[allow(dead_code)]
     pub fn ppu(&self) -> Ref<Ppu> {
         self.ppu.borrow()
     }
@@ -80,6 +66,7 @@ impl Nes {
         &self.screen
     }
 
+    #[allow(dead_code)]
     pub fn clock_count(&self) -> u64 {
         self.clock_count
     }
@@ -99,27 +86,15 @@ impl Nes {
     }
 
     pub fn advance_frame(&mut self) {
-        // self.cpu_time = 0.0;
-        // self.ppu_time = 0.0;
-        // self.apu_time = 0.0;
-        // self.audio_time = 0.0;
-
         for _ in 0..FRAME_CLOCKS {
             self.clock();
         }
-
-        // log::info!("CPU time: {}", self.cpu_time);
-        // log::info!("PPU time: {}", self.ppu_time);
-        // log::info!("APU time: {}", self.apu_time);
-        // log::info!("Audio time: {}", self.audio_time);
     }
 
     pub fn clock(&mut self) {
         self.clock_count += 1;
 
-        // let now = Instant::now();
         let clock_res = self.ppu.borrow_mut().clock();
-        // self.ppu_time += now.elapsed().as_secs_f64();
 
         if let Some(pixel) = clock_res.pixel {
             if let Err(e) = self.screen.set_pixel(pixel.x, pixel.y, pixel.color) {
@@ -128,20 +103,13 @@ impl Nes {
         }
 
         if self.clock_count % 3 == 0 {
-            // let now = Instant::now();
             self.cpu.borrow_mut().clock();
-            // self.cpu_time += now.elapsed().as_secs_f64();
-
-            // let now = Instant::now();
             self.apu.borrow_mut().clock();
-            // self.apu_time += now.elapsed().as_secs_f64();
         }
 
-        // let now = Instant::now();
         if let Some(audio_output) = &mut self.audio_output {
             audio_output.try_push_sample(self.apu.borrow().sample());
         }
-        // self.audio_time += now.elapsed().as_secs_f64();
 
         if clock_res.nmi {
             self.cpu.borrow_mut().nmi();

@@ -2,7 +2,6 @@ use anyhow::{anyhow, Result};
 
 use super::{MapRead, MapWrite, Mapper};
 
-const BANK_SIZE: u16 = 16 * 1024;
 const RAM_SIZE: usize = 8 * 1024;
 
 pub struct Mapper0 {

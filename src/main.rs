@@ -31,6 +31,7 @@ use emu::palette::Palette;
 mod audio_output;
 mod emu;
 mod renderer;
+#[allow(dead_code)]
 mod ui;
 mod utils;
 
@@ -72,10 +73,8 @@ pub fn main() -> Result<()> {
 
     let mut renderer = Renderer::new(font, &window, WIDTH, HEIGHT)?;
 
-    let (mut nes, audio_consumer) = Nes::new(palette.clone()).with_audio(
-        stream_config.sample_rate.0 as usize,
-        stream_config.channels as usize,
-    );
+    let (mut nes, audio_consumer) =
+        Nes::new(palette.clone()).with_audio(stream_config.sample_rate.0 as usize);
 
     let cartridge = Cartridge::new(rom_path)?;
     nes.load_cartridge(cartridge);

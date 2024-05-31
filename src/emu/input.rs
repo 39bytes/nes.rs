@@ -15,6 +15,7 @@ bitflags! {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum ControllerInput {
     One(ControllerButtons),
     Two(ControllerButtons),
