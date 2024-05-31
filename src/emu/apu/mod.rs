@@ -51,7 +51,7 @@ impl Apu {
         let pulse_out = 95.88 / ((8128.0 / (p1 + p2)) + 100.0);
 
         let triangle = self.triangle.sample() as f32;
-        let noise = 0 as f32;
+        let noise = self.noise.sample() as f32;
         let dmc = 0 as f32;
 
         let tnd = 1.0 / ((triangle / 8227.0) + (noise / 12241.0) + (dmc / 22638.0));
@@ -68,6 +68,7 @@ impl Apu {
             self.pulse2.clock();
         }
         self.triangle.clock();
+        self.noise.clock();
 
         if self.status_write_effect_timer > 0 {
             self.status_write_effect_timer -= 1;
@@ -76,6 +77,7 @@ impl Apu {
                 self.clock_quarter_frame();
                 self.clock_half_frame();
             }
+            return;
         }
 
         // See: https://www.nesdev.org/wiki/APU_Frame_Counter
@@ -126,12 +128,14 @@ impl Apu {
         self.pulse1.envelope.clock();
         self.pulse2.envelope.clock();
         self.triangle.linear_counter.clock();
+        self.noise.envelope.clock();
     }
 
     fn clock_half_frame(&mut self) {
         self.pulse1.length_counter.clock();
         self.pulse2.length_counter.clock();
         self.triangle.length_counter.clock();
+        self.noise.length_counter.clock();
 
         if let Some(target) = self.pulse1.sweep.clock(self.pulse1.timer.reload) {
             self.pulse1.timer.reload = target;
@@ -159,10 +163,10 @@ impl Apu {
             0x4009 => {}
             0x400A => self.triangle.write_reg2(data),
             0x400B => self.triangle.write_reg3(data),
-            0x400C => {}
+            0x400C => self.noise.write_reg1(data),
             0x400D => {}
-            0x400E => {}
-            0x400F => {}
+            0x400E => self.noise.write_reg2(data),
+            0x400F => self.noise.write_reg3(data),
             0x4010 => {}
             0x4011 => {}
             0x4012 => {}

@@ -104,7 +104,12 @@ pub fn main() -> Result<()> {
                     acc += now.elapsed().as_secs_f64();
                     now = Instant::now();
                     while acc >= FRAME_TIME {
+                        let bruh = Instant::now();
                         nes.advance_frame();
+                        if bruh.elapsed().as_secs_f64() > FRAME_TIME / 2.0 {
+                            log::warn!("Kinda slow: {:?}", bruh.elapsed());
+                        }
+                        // println!("Frame time: {:?}", bruh.elapsed());
                         acc -= FRAME_TIME;
                     }
                 }

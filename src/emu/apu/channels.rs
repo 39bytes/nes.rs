@@ -1,3 +1,5 @@
+use crate::emu::bits::IntoBit;
+
 use super::components::{Divider, Envelope, LengthCounter, LinearCounter, Sweep};
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -43,7 +45,7 @@ impl PulseChannel {
             return 0;
         }
 
-        self.envelope.get_volume()
+        self.envelope.volume()
     }
 
     pub fn write_reg1(&mut self, data: u8) {
@@ -142,9 +144,28 @@ impl TriangleChannel {
     }
 }
 
-#[derive(Default)]
+const NOISE_PERIOD_LOOKUP: [u16; 16] = [
+    4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
+];
+
 pub(crate) struct NoiseChannel {
-    enabled: bool,
+    pub length_counter: LengthCounter,
+    pub envelope: Envelope,
+    mode: bool,
+    timer: Divider<u16>,
+    shift_register: u16,
+}
+
+impl Default for NoiseChannel {
+    fn default() -> Self {
+        Self {
+            length_counter: LengthCounter::default(),
+            envelope: Envelope::default(),
+            mode: false,
+            timer: Divider::default(),
+            shift_register: 1,
+        }
+    }
 }
 
 impl NoiseChannel {
@@ -152,11 +173,50 @@ impl NoiseChannel {
         NoiseChannel::default()
     }
 
+    pub fn sample(&self) -> u8 {
+        if self.length_counter.silenced() || self.shift_register & 0x01 != 0 {
+            return 0;
+        }
+
+        self.envelope.volume()
+    }
+
+    pub fn write_reg1(&mut self, data: u8) {
+        self.length_counter.set_halted(data & 0b0010_0000 != 0);
+        self.envelope.set_constant_volume(data & 0b0001_0000 != 0);
+        self.envelope.set_param(data & 0b0000_1111);
+    }
+
+    pub fn write_reg2(&mut self, data: u8) {
+        self.mode = data & 0b1000_0000 != 0;
+        self.timer.reload = NOISE_PERIOD_LOOKUP[(data & 0x0F) as usize];
+    }
+
+    pub fn write_reg3(&mut self, data: u8) {
+        self.length_counter.set_counter((data & 0xF8) >> 3);
+        self.envelope.restart();
+    }
+
     pub fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
+        self.length_counter.set_enabled(enabled);
+    }
+
+    pub fn clock(&mut self) {
+        let bit0 = (self.shift_register & 0x01).into_bit();
+        let other_bit = if self.mode {
+            self.shift_register & 0x0040
+        } else {
+            self.shift_register & 0x0002
+        }
+        .into_bit();
+
+        let feedback = (bit0 ^ other_bit) as u16;
+        self.shift_register >>= 1;
+        self.shift_register |= feedback << 14;
     }
 }
 
+// TODO: Implement this channel
 #[derive(Default)]
 pub(crate) struct DCPMChannel {
     enabled: bool,

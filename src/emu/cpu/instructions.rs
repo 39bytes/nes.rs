@@ -16,7 +16,6 @@ impl Instruction {
         }
     }
 
-    #[inline]
     pub fn lookup(opcode: u8) -> Self {
         use AddressMode::*;
         use Instruction as I;

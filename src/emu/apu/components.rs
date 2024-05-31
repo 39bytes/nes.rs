@@ -154,7 +154,7 @@ impl Envelope {
         }
     }
 
-    pub fn get_volume(&self) -> u8 {
+    pub fn volume(&self) -> u8 {
         // The divider's reload specifies the volume when constant volume is set
         if self.constant_volume {
             return self.divider.reload;
@@ -169,6 +169,7 @@ impl Envelope {
 }
 
 // Clocked on half frames
+// FIXME: I don't think this works properly
 #[derive(Default, Debug)]
 pub struct Sweep {
     pub enabled: bool,

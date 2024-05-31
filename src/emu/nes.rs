@@ -24,6 +24,9 @@ pub struct Nes {
     audio_output: Option<AudioOutput>,
 
     clock_count: u64,
+    cpu_time: f64,
+    ppu_time: f64,
+    apu_time: f64,
     audio_time: f64,
 }
 
@@ -45,6 +48,10 @@ impl Nes {
             audio_output: None,
 
             clock_count: 0,
+
+            cpu_time: 0.0,
+            ppu_time: 0.0,
+            apu_time: 0.0,
             audio_time: 0.0,
         }
     }
@@ -92,17 +99,28 @@ impl Nes {
     }
 
     pub fn advance_frame(&mut self) {
+        // self.cpu_time = 0.0;
+        // self.ppu_time = 0.0;
+        // self.apu_time = 0.0;
         // self.audio_time = 0.0;
+
         for _ in 0..FRAME_CLOCKS {
             self.clock();
         }
+
+        // log::info!("CPU time: {}", self.cpu_time);
+        // log::info!("PPU time: {}", self.ppu_time);
+        // log::info!("APU time: {}", self.apu_time);
         // log::info!("Audio time: {}", self.audio_time);
     }
 
-    #[inline]
     pub fn clock(&mut self) {
         self.clock_count += 1;
+
+        // let now = Instant::now();
         let clock_res = self.ppu.borrow_mut().clock();
+        // self.ppu_time += now.elapsed().as_secs_f64();
+
         if let Some(pixel) = clock_res.pixel {
             if let Err(e) = self.screen.set_pixel(pixel.x, pixel.y, pixel.color) {
                 panic!("{}", e);
@@ -110,13 +128,20 @@ impl Nes {
         }
 
         if self.clock_count % 3 == 0 {
+            // let now = Instant::now();
             self.cpu.borrow_mut().clock();
+            // self.cpu_time += now.elapsed().as_secs_f64();
+
+            // let now = Instant::now();
             self.apu.borrow_mut().clock();
+            // self.apu_time += now.elapsed().as_secs_f64();
         }
 
+        // let now = Instant::now();
         if let Some(audio_output) = &mut self.audio_output {
             audio_output.try_push_sample(self.apu.borrow().sample());
         }
+        // self.audio_time += now.elapsed().as_secs_f64();
 
         if clock_res.nmi {
             self.cpu.borrow_mut().nmi();
