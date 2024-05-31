@@ -2,8 +2,7 @@
 
 (WIP) An emulator for the [(Nintendo Entertainment System)](https://en.wikipedia.org/wiki/Nintendo_Entertainment_System) written in Rust.
 
-[![video](https://github.com/39bytes/nes.rs/assets/47371088/6206ec77-0d29-4c09-b8a4-913615860527)]
-
+![video](https://github.com/39bytes/nes.rs/assets/47371088/b5996972-2741-4f7c-b9a5-0d2ac140ac03)
 
 This isn't meant to be a full-featured or 100% accurate emulator, but rather a fun educational project.
 It still aims to be fairly accurate, emulating some hardware quirks such as:
