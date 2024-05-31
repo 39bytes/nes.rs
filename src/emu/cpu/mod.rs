@@ -1661,9 +1661,9 @@ mod test {
         // tests the illegal opcodes
         const LAST_TEST_ADDR: u16 = 0xC6A3;
 
-        let cartridge = Cartridge::new("assets/roms/nestest.nes").unwrap();
+        let cartridge = Cartridge::new("assets/test_roms/nestest.nes").unwrap();
         cpu.load_cartridge(Rc::new(RefCell::new(cartridge)));
-        let correct_log_file = File::open("assets/roms/nestest.log").unwrap();
+        let correct_log_file = File::open("assets/test_roms/nestest.log").unwrap();
         let mut log_reader = BufReader::new(correct_log_file);
 
         cpu.reset_to(0xC000);

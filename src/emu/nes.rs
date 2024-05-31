@@ -214,81 +214,81 @@ mod test {
 
     #[test]
     fn instr_test_v5_01_basics() {
-        rom_test("assets/roms/instr_test-v5/01-basics.nes");
+        rom_test("assets/test_roms/instr_test-v5/01-basics.nes");
     }
 
     #[test]
     fn instr_test_v5_02_implied() {
-        rom_test("assets/roms/instr_test-v5/02-implied.nes");
+        rom_test("assets/test_roms/instr_test-v5/02-implied.nes");
     }
 
     #[test]
     fn instr_test_v5_03_immediate() {
-        rom_test("assets/roms/instr_test-v5/03-immediate.nes");
+        rom_test("assets/test_roms/instr_test-v5/03-immediate.nes");
     }
 
     #[test]
     fn instr_test_v5_04_zero_page() {
-        rom_test("assets/roms/instr_test-v5/04-zero_page.nes");
+        rom_test("assets/test_roms/instr_test-v5/04-zero_page.nes");
     }
 
     #[test]
     fn instr_test_v5_05_zp_xy() {
-        rom_test("assets/roms/instr_test-v5/05-zp_xy.nes");
+        rom_test("assets/test_roms/instr_test-v5/05-zp_xy.nes");
     }
 
     #[test]
     fn instr_test_v5_06_absolute() {
-        rom_test("assets/roms/instr_test-v5/06-absolute.nes");
+        rom_test("assets/test_roms/instr_test-v5/06-absolute.nes");
     }
 
     #[test]
     fn instr_test_v5_07_abs_xy() {
-        rom_test("assets/roms/instr_test-v5/07-abs_xy.nes");
+        rom_test("assets/test_roms/instr_test-v5/07-abs_xy.nes");
     }
 
     #[test]
     fn instr_test_v5_08_ind_x() {
-        rom_test("assets/roms/instr_test-v5/08-ind_x.nes");
+        rom_test("assets/test_roms/instr_test-v5/08-ind_x.nes");
     }
 
     #[test]
     fn instr_test_v5_09_ind_y() {
-        rom_test("assets/roms/instr_test-v5/09-ind_y.nes");
+        rom_test("assets/test_roms/instr_test-v5/09-ind_y.nes");
     }
 
     #[test]
     fn instr_test_v5_10_branches() {
-        rom_test("assets/roms/instr_test-v5/10-branches.nes");
+        rom_test("assets/test_roms/instr_test-v5/10-branches.nes");
     }
 
     #[test]
     fn instr_test_v5_11_stack() {
-        rom_test("assets/roms/instr_test-v5/11-stack.nes");
+        rom_test("assets/test_roms/instr_test-v5/11-stack.nes");
     }
 
     #[test]
     fn instr_test_v5_12_jmp_jsr() {
-        rom_test("assets/roms/instr_test-v5/12-jmp_jsr.nes");
+        rom_test("assets/test_roms/instr_test-v5/12-jmp_jsr.nes");
     }
 
     #[test]
     fn instr_test_v5_13_rts() {
-        rom_test("assets/roms/instr_test-v5/13-rts.nes");
+        rom_test("assets/test_roms/instr_test-v5/13-rts.nes");
     }
 
     #[test]
     fn instr_test_v5_14_rti() {
-        rom_test("assets/roms/instr_test-v5/14-rti.nes");
+        rom_test("assets/test_roms/instr_test-v5/14-rti.nes");
     }
 
     #[test]
     fn instr_test_v5_15_brk() {
-        rom_test("assets/roms/instr_test-v5/15-brk.nes");
+        rom_test("assets/test_roms/instr_test-v5/15-brk.nes");
     }
 
     #[test]
     fn instr_test_v5_16_special() {
-        rom_test("assets/roms/instr_test-v5/16-special.nes");
+        rom_test("assets/test_roms/instr_test-v5/16-special.nes");
     }
 }
