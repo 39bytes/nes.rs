@@ -1,5 +1,3 @@
-use std::iter::{self, Cycle, Peekable};
-
 use super::components::{Divider, Envelope, LengthCounter, LinearCounter, Sweep};
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -107,10 +105,6 @@ impl TriangleChannel {
     }
 
     pub fn sample(&self) -> u8 {
-        if self.length_counter.silenced() || self.linear_counter.silenced() {
-            return 0;
-        }
-
         TRIANGLE_SEQUENCE[self.sequence_position]
     }
 
