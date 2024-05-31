@@ -18,10 +18,6 @@ pub struct LengthCounter {
 }
 
 impl LengthCounter {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
         if !self.enabled {
@@ -56,16 +52,50 @@ impl LengthCounter {
 }
 
 #[derive(Default, Debug)]
+pub struct LinearCounter {
+    reload: u8,
+    pub control: bool,
+    pub reload_flag: bool,
+
+    counter: u8,
+}
+
+impl LinearCounter {
+    pub fn set_control(&mut self, control: bool) {
+        self.control = control;
+    }
+
+    pub fn set_reload(&mut self, reload: u8) {
+        self.reload = reload;
+    }
+
+    pub fn set_reload_flag(&mut self, reload_flag: bool) {
+        self.reload_flag = reload_flag;
+    }
+
+    pub fn clock(&mut self) {
+        if self.reload_flag {
+            self.counter = self.reload;
+        } else if self.counter > 0 {
+            self.counter -= 1;
+        }
+        if !self.control {
+            self.reload_flag = false;
+        }
+    }
+
+    pub fn silenced(&self) -> bool {
+        self.counter == 0
+    }
+}
+
+#[derive(Default, Debug)]
 pub struct Divider<U: Unsigned + Integer + Default + Copy> {
     pub reload: U,
     counter: U,
 }
 
 impl<U: Unsigned + Integer + Default + Copy> Divider<U> {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn force_reload(&mut self) {
         self.counter = self.reload;
     }
@@ -93,10 +123,6 @@ pub struct Envelope {
 }
 
 impl Envelope {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn set_param(&mut self, param: u8) {
         self.divider.reload = param;
     }
@@ -118,10 +144,12 @@ impl Envelope {
         }
 
         if self.divider.clock() {
-            if self.decay_level == 0 && self.loop_ {
-                self.decay_level = 15;
-            } else {
+            if self.decay_level > 0 {
                 self.decay_level -= 1;
+                return;
+            }
+            if self.loop_ {
+                self.decay_level = 15;
             }
         }
     }

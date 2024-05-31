@@ -1,4 +1,6 @@
-use super::components::{Divider, Envelope, LengthCounter, Sweep};
+use std::iter::{self, Cycle, Peekable};
+
+use super::components::{Divider, Envelope, LengthCounter, LinearCounter, Sweep};
 
 #[derive(Default, Debug, PartialEq, Eq)]
 pub enum PulseChannelNumber {
@@ -82,24 +84,67 @@ impl PulseChannel {
             _ => panic!("Invalid duty cycle {}", duty_cycle),
         };
     }
-
-    pub fn set_period(&mut self, period: u16) {
-        self.timer.reload = period;
-    }
 }
 
-#[derive(Default)]
+#[rustfmt::skip]
+const TRIANGLE_SEQUENCE: [u8; 32] = [
+    15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+];
+
+#[derive(Default, Debug)]
 pub(crate) struct TriangleChannel {
-    enabled: bool,
+    pub length_counter: LengthCounter,
+    pub linear_counter: LinearCounter,
+
+    timer: Divider<u16>,
+    sequence_position: usize,
 }
 
 impl TriangleChannel {
     pub fn new() -> Self {
-        TriangleChannel::default()
+        Self::default()
+    }
+
+    pub fn sample(&self) -> u8 {
+        if self.length_counter.silenced() || self.linear_counter.silenced() {
+            return 0;
+        }
+
+        TRIANGLE_SEQUENCE[self.sequence_position]
+    }
+
+    pub fn write_reg1(&mut self, data: u8) {
+        let control = data & 0x80 > 0;
+        self.linear_counter.set_control(control);
+        self.length_counter.set_halted(control);
+        self.linear_counter.set_reload(data & 0x7F);
+    }
+
+    pub fn write_reg2(&mut self, data: u8) {
+        self.timer.reload = (self.timer.reload & 0xFF00) | data as u16;
+    }
+
+    pub fn write_reg3(&mut self, data: u8) {
+        let timer_high = (data & 0x07) as u16;
+        let length_counter_load = (data & 0xF8) >> 3;
+
+        self.timer.reload = (self.timer.reload & 0x00FF) | (timer_high << 8);
+        self.timer.force_reload();
+        self.length_counter.set_counter(length_counter_load);
+
+        self.linear_counter.set_reload_flag(true);
+    }
+
+    pub fn clock(&mut self) {
+        if self.timer.clock() && !self.length_counter.silenced() && !self.linear_counter.silenced()
+        {
+            self.sequence_position = (self.sequence_position + 1) % 32;
+        }
     }
 
     pub fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
+        self.length_counter.set_enabled(enabled);
     }
 }
 
