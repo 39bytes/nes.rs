@@ -1,6 +1,9 @@
 use channels::{DCPMChannel, NoiseChannel, PulseChannel, TriangleChannel};
 
+use self::channels::PulseChannelNumber;
+
 mod channels;
+mod components;
 
 pub struct Apu {
     pulse1: PulseChannel,
@@ -13,8 +16,8 @@ pub struct Apu {
 impl Apu {
     pub fn new() -> Apu {
         Apu {
-            pulse1: PulseChannel::new(),
-            pulse2: PulseChannel::new(),
+            pulse1: PulseChannel::new(PulseChannelNumber::One),
+            pulse2: PulseChannel::new(PulseChannelNumber::Two),
             triangle: TriangleChannel::new(),
             noise: NoiseChannel::new(),
             dcpm: DCPMChannel::new(),
@@ -32,26 +35,29 @@ impl Apu {
     pub fn write(&mut self, addr: u16, data: u8) {
         match addr {
             0x4000 => {
-                let duty_cycle = (data & 0xC0) >> 6;
-                let length_counter_halt = (data & 0x20) != 0;
-                let constant_volume = (data & 0x10) != 0;
-                let envelope_divider_period = data & 0x0F;
+                self.pulse1.set_duty_cycle((data & 0b1100_0000) >> 6);
+                let l = (data & 0b0010_0000) != 0;
+                self.pulse1.envelope.set_loop(l);
+                self.pulse1.length_counter.set_halted(l);
 
-                self.pulse1.set_duty_cycle(duty_cycle);
-                self.pulse1.set_length_counter_halt(length_counter_halt);
-                self.pulse1.set_constant_volume(constant_volume);
-                self.pulse1.set_divider_period(envelope_divider_period);
+                self.pulse1
+                    .envelope
+                    .set_constant_volume((data & 0b0001_0000) != 0);
+                self.pulse1.envelope.set_param(data & 0b0000_1111);
             }
-            0x4001 => {}
+            0x4001 => {
+                self.pulse1.sweep.write(data);
+            }
             0x4002 => {
-                self.pulse1.set_timer_low(data);
+                self.pulse1.timer.reload = (self.pulse1.timer.reload & 0xFF00) | (data as u16);
             }
             0x4003 => {
-                let timer_high = data & 0x07;
+                let timer_high = (data & 0x07) as u16;
                 let length_counter_load = (data & 0xF8) >> 3;
 
-                self.pulse1.set_timer_high(timer_high);
-                self.pulse1.set_length_counter(length_counter_load);
+                self.pulse1.timer.reload = (self.pulse1.timer.reload & 0x00FF) | (timer_high << 8);
+                self.pulse1.timer.force_reload();
+                self.pulse1.length_counter.set_counter(length_counter_load);
             }
             0x4004 => {}
             0x4005 => {}

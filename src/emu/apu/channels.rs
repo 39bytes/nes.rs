@@ -1,24 +1,32 @@
 use crate::emu::bits::{rotate_byte_right, IntoBit};
 
+use super::components::{Divider, Envelope, LengthCounter, Sweep};
+
+#[derive(Default, Debug, PartialEq, Eq)]
+pub enum PulseChannelNumber {
+    #[default]
+    One,
+    Two,
+}
+
 #[derive(Default, Debug)]
-pub(crate) struct PulseChannel {
+pub struct PulseChannel {
     enabled: bool,
     sequence: u8,
+    sequence_position: u8,
 
-    timer_reset: u16,
-    timer: u16,
-
-    length_counter: u8,
-    length_counter_halt: bool,
-
-    constant_volume: bool,
-
-    envelope_divider_period: u8,
+    pub timer: Divider<u16>,
+    pub envelope: Envelope,
+    pub length_counter: LengthCounter,
+    pub sweep: Sweep,
 }
 
 impl PulseChannel {
-    pub fn new() -> Self {
-        PulseChannel::default()
+    pub fn new(channel: PulseChannelNumber) -> Self {
+        Self {
+            sweep: Sweep::new(channel),
+            ..Default::default()
+        }
     }
 
     pub fn clock(&mut self) {
@@ -26,16 +34,17 @@ impl PulseChannel {
             return;
         }
 
-        if self.timer == 0 {
-            self.timer = self.timer_reset;
-            self.sequence = rotate_byte_right(self.sequence);
-        } else {
-            self.timer -= 1;
+        if self.timer.clock() {
+            if self.sequence_position == 0 {
+                self.sequence_position = 7;
+            } else {
+                self.sequence_position -= 1;
+            }
         }
     }
 
     pub fn sample(&self) -> u8 {
-        (self.sequence & 0x80).into_bit()
+        ((self.sequence << self.sequence_position) & 0x80).into_bit()
     }
 
     pub fn set_enabled(&mut self, enabled: bool) {
@@ -53,29 +62,9 @@ impl PulseChannel {
         self.sequence = sequence;
     }
 
-    pub fn set_length_counter(&mut self, length_counter: u8) {
-        self.length_counter = length_counter;
-    }
-
-    pub fn set_length_counter_halt(&mut self, length_counter_halt: bool) {
-        self.length_counter_halt = length_counter_halt;
-    }
-
-    pub fn set_constant_volume(&mut self, constant_volume: bool) {
-        self.constant_volume = constant_volume;
-    }
-
-    pub fn set_divider_period(&mut self, divider_period: u8) {
-        self.envelope_divider_period = divider_period;
-    }
-
-    pub fn set_timer_high(&mut self, timer_high: u8) {
-        self.timer_reset = (self.timer_reset & 0x00FF) | ((timer_high as u16) << 8);
-        self.timer = self.timer_reset;
-    }
-
-    pub fn set_timer_low(&mut self, timer_low: u8) {
-        self.timer_reset = (self.timer_reset & 0xFF00) | (timer_low as u16);
+    pub fn restart(&mut self) {
+        self.sequence_position = 0;
+        self.envelope.restart();
     }
 }
 
