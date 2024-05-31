@@ -1,5 +1,3 @@
-use crate::emu::bits::IntoBit;
-
 use super::components::{Divider, Envelope, LengthCounter, Sweep};
 
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -11,7 +9,6 @@ pub enum PulseChannelNumber {
 
 #[derive(Default, Debug)]
 pub struct PulseChannel {
-    enabled: bool,
     sequence: u8,
     sequence_position: u8,
 
@@ -30,10 +27,6 @@ impl PulseChannel {
     }
 
     pub fn clock(&mut self) {
-        if !self.enabled {
-            return;
-        }
-
         if self.timer.clock() {
             if self.sequence_position == 0 {
                 self.sequence_position = 7;
@@ -44,11 +37,39 @@ impl PulseChannel {
     }
 
     pub fn sample(&self) -> u8 {
-        ((self.sequence << self.sequence_position) & 0x80).into_bit()
+        let sample = (self.sequence << self.sequence_position) & 0x80;
+
+        if sample == 0 || self.sweep.muted(self.timer.reload) || self.length_counter.silenced() {
+            return 0;
+        }
+
+        self.envelope.get_volume()
+    }
+
+    pub fn write_reg1(&mut self, data: u8) {
+        self.set_duty_cycle((data & 0b1100_0000) >> 6);
+        let l = (data & 0b0010_0000) != 0;
+        self.envelope.set_loop(l);
+        self.length_counter.set_halted(l);
+
+        self.envelope.set_constant_volume((data & 0b0001_0000) != 0);
+        self.envelope.set_param(data & 0b0000_1111);
+    }
+
+    pub fn write_reg4(&mut self, data: u8) {
+        let timer_high = (data & 0x07) as u16;
+        let length_counter_load = (data & 0xF8) >> 3;
+
+        self.timer.reload = (self.timer.reload & 0x00FF) | (timer_high << 8);
+        self.timer.force_reload();
+        self.length_counter.set_counter(length_counter_load);
+
+        self.sequence_position = 0;
+        self.envelope.restart();
     }
 
     pub fn set_enabled(&mut self, enabled: bool) {
-        self.enabled = enabled;
+        self.length_counter.set_enabled(enabled);
     }
 
     pub fn set_duty_cycle(&mut self, duty_cycle: u8) {
@@ -62,9 +83,8 @@ impl PulseChannel {
         self.sequence = sequence;
     }
 
-    pub fn restart(&mut self) {
-        self.sequence_position = 0;
-        self.envelope.restart();
+    pub fn set_period(&mut self, period: u16) {
+        self.timer.reload = period;
     }
 }
 

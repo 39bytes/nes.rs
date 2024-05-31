@@ -111,9 +111,6 @@ impl Nes {
 
         if self.clock_count % 3 == 0 {
             self.cpu.borrow_mut().clock();
-        }
-
-        if self.clock_count % 6 == 0 {
             self.apu.borrow_mut().clock();
         }
 

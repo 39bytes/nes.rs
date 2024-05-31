@@ -14,6 +14,7 @@ const LENGTHS: [u8; 32] = [
 pub struct LengthCounter {
     counter: u8,
     halted: bool,
+    enabled: bool,
 }
 
 impl LengthCounter {
@@ -21,8 +22,19 @@ impl LengthCounter {
         Self::default()
     }
 
+    pub fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+        if !self.enabled {
+            self.counter = 0;
+        }
+    }
+
     pub fn set_counter(&mut self, val: u8) {
         assert!(val < 32);
+        if !self.enabled {
+            return;
+        }
+
         self.counter = LENGTHS[val as usize];
     }
 
@@ -99,7 +111,9 @@ impl Envelope {
 
     pub fn clock(&mut self) {
         if self.start {
-            self.restart();
+            self.start = false;
+            self.decay_level = 15;
+            self.divider.force_reload();
             return;
         }
 
@@ -112,7 +126,7 @@ impl Envelope {
         }
     }
 
-    pub fn get_output(&mut self) -> u8 {
+    pub fn get_volume(&self) -> u8 {
         // The divider's reload specifies the volume when constant volume is set
         if self.constant_volume {
             return self.divider.reload;
@@ -122,9 +136,7 @@ impl Envelope {
     }
 
     pub fn restart(&mut self) {
-        self.start = false;
-        self.decay_level = 15;
-        self.divider.force_reload();
+        self.start = true;
     }
 }
 
@@ -160,7 +172,7 @@ impl Sweep {
         cur_period < 8 || self.get_target_period(cur_period) > 0x7FF
     }
 
-    pub fn get_target_period(&self, cur_period: u16) -> u16 {
+    fn get_target_period(&self, cur_period: u16) -> u16 {
         let mut change = cur_period >> self.shift_count;
         if !self.negate {
             return cur_period + change;
@@ -177,14 +189,18 @@ impl Sweep {
         cur_period - change
     }
 
-    pub fn clock(&mut self) -> bool {
-        let res = self.divider.clock();
+    pub fn clock(&mut self, cur_period: u16) -> Option<u16> {
+        let clocked = self.divider.clock();
 
         if self.reload {
             self.divider.force_reload();
             self.reload = false;
         }
 
-        res
+        if clocked && self.enabled && self.shift_count > 0 && !self.muted(cur_period) {
+            return Some(self.get_target_period(cur_period));
+        }
+
+        None
     }
 }
