@@ -73,14 +73,14 @@ impl PulseChannel {
     }
 
     pub fn set_duty_cycle(&mut self, duty_cycle: u8) {
-        let sequence = match duty_cycle {
+        assert!(duty_cycle < 4);
+        self.sequence = match duty_cycle {
             0 => 0b0000_0001,
             1 => 0b0000_0011,
             2 => 0b0000_1111,
             3 => 0b1111_1100,
             _ => panic!("Invalid duty cycle {}", duty_cycle),
         };
-        self.sequence = sequence;
     }
 
     pub fn set_period(&mut self, period: u16) {
