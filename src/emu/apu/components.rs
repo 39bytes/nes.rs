@@ -197,7 +197,7 @@ impl Sweep {
     }
 
     pub fn muted(&self, cur_period: u16) -> bool {
-        cur_period < 8 || self.get_target_period(cur_period) > 0x7FF
+        cur_period < 8 || self.get_target_period(cur_period) > 0x07FF
     }
 
     fn get_target_period(&self, cur_period: u16) -> u16 {
@@ -220,7 +220,7 @@ impl Sweep {
     pub fn clock(&mut self, cur_period: u16) -> Option<u16> {
         let clocked = self.divider.clock();
 
-        if self.reload {
+        if self.reload || clocked {
             self.divider.force_reload();
             self.reload = false;
         }
