@@ -1,4 +1,4 @@
-use crate::emu::bits::{rotate_byte_right, IntoBit};
+use crate::emu::bits::IntoBit;
 
 use super::components::{Divider, Envelope, LengthCounter, Sweep};
 
