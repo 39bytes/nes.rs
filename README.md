@@ -25,6 +25,7 @@ Controls are bound to:
 - Arrow keys: Up/Down/Left/Right
 
 **NOTE:** Audio emulation is not fully completed yet so game audio will sound a bit off.
+
 The emulator has only been tested on Linux x86_64 (Wayland), but should work on most platforms.
 
 ## Testing
