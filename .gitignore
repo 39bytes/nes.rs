@@ -9,6 +9,7 @@ target/
 assets/test_roms/*
 !assets/test_roms/nestest.log
 !assets/test_roms/nestest.nes
+!assets/test_roms/instr_test-v5/
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
