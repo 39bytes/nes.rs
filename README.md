@@ -17,6 +17,12 @@ cargo build --release
 cd target/release
 ./nesrs <path-to-rom>
 ```
+Controls are bound to:
+- Z: B
+- X: A
+- A: Select
+- S: Start
+- Arrow keys: Up/Down/Left/Right
 **NOTE:** Audio emulation is not fully completed yet so game audio will sound a bit off.
 
 ## Testing
@@ -35,6 +41,7 @@ Any game that uses a different mapper will not work for now.
 To find out which mapper a game uses, search it on [NesCartDB](https://nescartdb.com/).
 
 ## TODO
+### Emulation
 - [ ] Accurate audio emulation
     - [ ] Implement DCPM channel for APU
     - [ ] Investigate issues with envelope/sweep unit
@@ -43,6 +50,10 @@ To find out which mapper a game uses, search it on [NesCartDB](https://nescartdb
 - [ ] Run test ROMs for PPU emulation
 - [ ] Open bus behavior emulation
 - [ ] Cycle accurate sprite evaluation/drawing
+
+### QOL
+- [ ] Select ROM from emulator instead of passing as a command line argument
+- [ ] Remappable controls
 
 ## Resources
 - [Nesdev Wiki](https://www.nesdev.org/wiki/Nesdev_Wiki)
