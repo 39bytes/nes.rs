@@ -1,6 +1,6 @@
 # nes.rs
 
-(WIP) An emulator for the [(Nintendo Entertainment System)](https://en.wikipedia.org/wiki/Nintendo_Entertainment_System) written in Rust.
+(WIP) An emulator for the [Nintendo Entertainment System](https://en.wikipedia.org/wiki/Nintendo_Entertainment_System) written in Rust.
 
 https://github.com/39bytes/nes.rs/assets/47371088/69a3ce36-a5a2-4d11-b13a-cede656cec81
 
