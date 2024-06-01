@@ -8,7 +8,7 @@ This isn't meant to be a full-featured or 100% accurate emulator, but rather a f
 It still aims to be fairly accurate, emulating some hardware quirks such as:
 - Unofficial CPU opcodes
 - Sprite evaluation bug
-- CPU Page boundary bug
+- CPU page boundary bug
 
 ## Running
 Ensure that you have [cargo](https://doc.rust-lang.org/cargo/) installed.
