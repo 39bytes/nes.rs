@@ -2,8 +2,13 @@ use cpal::StreamConfig;
 use ringbuf::traits::*;
 use std::env;
 use std::process;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
+use ui::draw_cpu_info;
+use ui::draw_ppu_info;
 
 use anyhow::{anyhow, Result};
 use audio_output::AudioBufferConsumer;
@@ -80,13 +85,15 @@ pub fn main() -> Result<()> {
     nes.load_cartridge(cartridge);
     nes.reset();
 
-    let mut paused = false;
+    let paused = Arc::new(AtomicBool::new(false));
 
     let mut acc = 0.0;
     let mut now = Instant::now();
 
+    let p = paused.clone();
     thread::spawn(move || {
-        start_audio::<f32>(&device, &stream_config, audio_consumer).expect("Could not start audio")
+        start_audio::<f32>(&device, &stream_config, audio_consumer, p)
+            .expect("Could not start audio")
     });
 
     event_loop.run(move |event, target| {
@@ -99,7 +106,7 @@ pub fn main() -> Result<()> {
                 target.exit();
             }
             Event::AboutToWait => {
-                if !paused {
+                if !paused.load(Ordering::Relaxed) {
                     acc += now.elapsed().as_secs_f64();
                     now = Instant::now();
                     while acc >= FRAME_TIME {
@@ -115,6 +122,9 @@ pub fn main() -> Result<()> {
                 // https://www.nesdev.org/wiki/Overscan
                 renderer.draw_sprite(screen, 0, 0);
 
+                // draw_ppu_info(&mut renderer, &nes.ppu(), 0, 0);
+                // draw_cpu_info(&mut renderer, &nes, 480, 0);
+
                 if let Err(err) = renderer.render() {
                     log_error("pixels.render", err);
                     target.exit();
@@ -127,9 +137,9 @@ pub fn main() -> Result<()> {
         if input.update(&event) {
             // Emulator meta events
             if input.key_pressed(KeyCode::Space) {
-                paused = !paused;
+                paused.store(!paused.load(Ordering::Relaxed), Ordering::Relaxed);
                 now = Instant::now();
-            } else if input.key_pressed(KeyCode::KeyN) && paused {
+            } else if input.key_pressed(KeyCode::KeyN) && paused.load(Ordering::Relaxed) {
                 nes.next_instruction();
             }
 
@@ -204,6 +214,7 @@ pub fn start_audio<T>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
     mut consumer: AudioBufferConsumer,
+    paused: Arc<AtomicBool>,
 ) -> Result<()>
 where
     T: SizedSample + FromSample<f32>,
@@ -217,11 +228,16 @@ where
         channels
     );
 
-    let mut next_sample = move || match consumer.try_pop() {
-        Some(sample) => sample,
-        None => {
-            log::warn!("Audio buffer was exhausted, outputting 0");
-            0.0
+    let mut next_sample = move || {
+        if paused.load(Ordering::Relaxed) {
+            return 0.0;
+        }
+        match consumer.try_pop() {
+            Some(sample) => sample,
+            None => {
+                log::warn!("Audio buffer was exhausted, outputting 0");
+                0.0
+            }
         }
     };
 

@@ -70,7 +70,7 @@ impl Mapper for Mapper1 {
                     // 32 KB mode
                     0 | 1 => {
                         let bank = (self.prg_bank >> 1) as usize;
-                        bank * PRG_ROM_BANK_SIZE * 2 + (addr & 0x3FFF) as usize
+                        bank * PRG_ROM_BANK_SIZE * 2 + (addr & 0x7FFF) as usize
                     }
                     // 16 KB mode
                     // Fix first bank at 0x8000
@@ -85,7 +85,7 @@ impl Mapper for Mapper1 {
                         let bank = self.prg_bank as usize;
                         bank * PRG_ROM_BANK_SIZE + (addr & 0x3FFF) as usize
                     }
-                    // Fix last bank at 0x8000
+                    // Fix last bank at 0xC000
                     3 if addr >= 0xC000 => {
                         let bank = (self.prg_bank_count - 1) as usize;
                         bank * PRG_ROM_BANK_SIZE + (addr & 0x3FFF) as usize
