@@ -23,6 +23,7 @@ Controls are bound to:
 - A: Select
 - S: Start
 - Arrow keys: Up/Down/Left/Right
+
 **NOTE:** Audio emulation is not fully completed yet so game audio will sound a bit off.
 
 ## Testing
