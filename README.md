@@ -57,7 +57,7 @@ To find out which mapper a game uses, search it on [NesCartDB](https://nescartdb
 
 ## Resources
 - [Nesdev Wiki](https://www.nesdev.org/wiki/Nesdev_Wiki)
-- [6502 CPU opcode reference](https://www.nesdev.org/obelisk-6502-guide/reference.html), 
+- [6502 CPU opcode reference](https://www.nesdev.org/obelisk-6502-guide/reference.html)
 - [Unofficial opcodes](https://www.oxyron.de/html/opcodes02.html)
 - [NES test roms](https://github.com/christopherpow/nes-test-roms)
 - [NesCartDB](https://nescartdb.com/)
