@@ -4,8 +4,6 @@
 
 https://github.com/39bytes/nes.rs/assets/47371088/69a3ce36-a5a2-4d11-b13a-cede656cec81
 
-
-
 This isn't meant to be a full-featured or 100% accurate emulator, but rather a fun educational project.
 It still aims to be fairly accurate, emulating some hardware quirks such as:
 - Unofficial CPU opcodes
