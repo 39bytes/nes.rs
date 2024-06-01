@@ -48,6 +48,7 @@ To find out which mapper a game uses, search it on [NesCartDB](https://nescartdb
 - [ ] Accurate audio emulation
     - [ ] Implement DCPM channel for APU
     - [ ] Investigate issues with envelope/sweep unit
+    - [ ] Fix issues with buffer underrun/overrun and reduce audio latency
 - [ ] Investigate performance issues
 - [ ] Implement mappers 4, 5, 7, 9, 10 and 66
 - [ ] Run test ROMs for PPU emulation
