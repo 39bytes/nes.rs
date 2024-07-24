@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use std::{
-    fmt::Display,
     fs::File,
     io::{prelude::*, SeekFrom},
     path::Path,
