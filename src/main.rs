@@ -1,14 +1,16 @@
 use cpal::StreamConfig;
 use ringbuf::traits::*;
-use std::env;
-use std::process;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::thread;
 use std::time::Instant;
 use ui::draw_cpu_info;
+use ui::draw_palettes;
+use ui::draw_pattern_tables;
 use ui::draw_ppu_info;
+use utils::FpsCounter;
 
 use anyhow::{anyhow, Result};
 use audio_output::AudioBufferConsumer;
@@ -33,6 +35,9 @@ use emu::input::{ControllerButtons, ControllerInput};
 use emu::nes::Nes;
 use emu::palette::Palette;
 
+use clap::arg;
+use clap::Parser;
+
 mod audio_output;
 mod emu;
 mod renderer;
@@ -40,24 +45,36 @@ mod renderer;
 mod ui;
 mod utils;
 
-const WIDTH: usize = 256;
-const HEIGHT: usize = 240;
+#[derive(Parser)]
+struct Args {
+    rom_path: PathBuf,
+
+    #[arg(long, action)]
+    disable_audio: bool,
+
+    #[arg(long, action)]
+    draw_debug_info: bool,
+}
 
 pub fn main() -> Result<()> {
     env_logger::builder().format_timestamp_micros().init();
 
-    let args: Vec<_> = env::args().collect();
-    if args.len() <= 1 {
-        println!("Usage: {} <rom path>", args[0]);
-        process::exit(1);
-    }
+    let args = Args::parse();
 
+    // Window setup
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut input = WinitInputHelper::new();
+
+    let (width, height) = if args.draw_debug_info {
+        (900, 720)
+    } else {
+        (256, 240)
+    };
+
     let window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+        let size = LogicalSize::new(width, height);
         WindowBuilder::new()
             .with_title("nes.rs")
             .with_inner_size(size)
@@ -66,35 +83,42 @@ pub fn main() -> Result<()> {
             .unwrap()
     };
 
-    let (device, config) = setup_audio()?;
-    let stream_config: StreamConfig = config.into();
-
-    let rom_path = &args[1];
-
+    // Emulator setup
     let font_data = include_bytes!("../assets/fonts/nes-arcade-font-2-1-monospaced.ttf");
     let font = Font::try_from_bytes(font_data as &[u8]).ok_or(anyhow!("Error loading font"))?;
 
     let palette = Palette::load("assets/palettes/2C02G.pal")?;
-
-    let mut renderer = Renderer::new(font, &window, WIDTH, HEIGHT)?;
-
-    let (mut nes, audio_consumer) =
-        Nes::new(palette.clone()).with_audio(stream_config.sample_rate.0 as usize);
-
-    let cartridge = Cartridge::new(rom_path)?;
-    nes.load_cartridge(cartridge);
-    nes.reset();
+    let cartridge = Cartridge::new(args.rom_path)?;
 
     let paused = Arc::new(AtomicBool::new(false));
+
+    let mut nes = if !args.disable_audio {
+        let (device, config) = setup_audio()?;
+        let stream_config: StreamConfig = config.into();
+
+        let (nes, audio_consumer) =
+            Nes::new(palette.clone()).with_audio(stream_config.sample_rate.0 as usize);
+
+        let p = paused.clone();
+        thread::spawn(move || {
+            start_audio::<f32>(&device, &stream_config, audio_consumer, p)
+                .expect("Could not start audio")
+        });
+
+        nes
+    } else {
+        Nes::new(palette.clone())
+    };
+
+    // Start
+    nes.load_cartridge(cartridge);
+    nes.reset();
 
     let mut acc = 0.0;
     let mut now = Instant::now();
 
-    let p = paused.clone();
-    thread::spawn(move || {
-        start_audio::<f32>(&device, &stream_config, audio_consumer, p)
-            .expect("Could not start audio")
-    });
+    let mut renderer = Renderer::new(font, &window, width as usize, height as usize)?;
+    let mut fps_counter = FpsCounter::new();
 
     event_loop.run(move |event, target| {
         match event {
@@ -102,7 +126,7 @@ pub fn main() -> Result<()> {
                 event: WindowEvent::CloseRequested,
                 ..
             } => {
-                println!("Close button pressed, exiting");
+                log::info!("Close button pressed, exiting");
                 target.exit();
             }
             Event::AboutToWait => {
@@ -110,20 +134,20 @@ pub fn main() -> Result<()> {
                     acc += now.elapsed().as_secs_f64();
                     now = Instant::now();
                     while acc >= FRAME_TIME {
+                        fps_counter.tick();
                         nes.advance_frame();
                         acc -= FRAME_TIME;
                     }
                 }
 
                 renderer.clear();
-
-                let screen = nes.screen();
                 // TODO: Implement not drawing overscan
                 // https://www.nesdev.org/wiki/Overscan
-                renderer.draw_sprite(screen, 0, 0);
-
-                // draw_ppu_info(&mut renderer, &nes.ppu(), 0, 0);
-                // draw_cpu_info(&mut renderer, &nes, 480, 0);
+                if args.draw_debug_info {
+                    draw_with_debug_info(&mut renderer, &nes, &fps_counter)
+                } else {
+                    renderer.draw(nes.screen(), 0, 0);
+                }
 
                 if let Err(err) = renderer.render() {
                     log_error("pixels.render", err);
@@ -241,7 +265,7 @@ where
         }
     };
 
-    let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
+    let err_fn = |err| log::error!("an error occurred on stream: {}", err);
 
     let stream = device.build_output_stream(
         config,
@@ -261,6 +285,17 @@ where
     std::thread::park();
 
     Ok(())
+}
+
+pub fn draw_with_debug_info(renderer: &mut Renderer, nes: &Nes, fps_counter: &FpsCounter) {
+    renderer.draw(&nes.screen().scale(2), 0, 180);
+
+    renderer.draw_text(&format!("FPS: {:.1}", fps_counter.get_fps()), 0, 160);
+
+    draw_ppu_info(renderer, &nes.ppu(), 0, 0);
+    draw_palettes(renderer, &nes.ppu(), 240, 0);
+    draw_pattern_tables(renderer, &nes.ppu(), 576, 0);
+    draw_cpu_info(renderer, nes, 576, 180);
 }
 
 fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
