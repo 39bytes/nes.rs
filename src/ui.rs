@@ -130,8 +130,8 @@ pub fn draw_pattern_tables(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usiz
     let right_pattern_table = ppu.get_pattern_table(PatternTable::Right);
 
     renderer.draw_text("Pattern Tables", x, y);
-    renderer.draw_sprite(&left_pattern_table, x, y + 24);
-    renderer.draw_sprite(&right_pattern_table, x + 144, y + 24);
+    renderer.draw(&left_pattern_table, x, y + 24);
+    renderer.draw(&right_pattern_table, x + 144, y + 24);
 }
 
 fn palette_sprite(ppu: &Ppu, palette_index: u8) -> Sprite {
@@ -140,16 +140,14 @@ fn palette_sprite(ppu: &Ppu, palette_index: u8) -> Sprite {
     let color2 = ppu.get_palette_color(palette_index, 2);
     let color3 = ppu.get_palette_color(palette_index, 3);
 
-    Sprite::new(vec![bg_color, color1, color2, color3], 4, 1)
-        .unwrap()
-        .scale(16)
+    Sprite::new(vec![bg_color, color1, color2, color3], 4, 1).unwrap()
 }
 
 pub fn draw_palettes(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
     renderer.draw_text("Background", x, y);
     for i in 0..4 {
-        renderer.draw_sprite(
-            &palette_sprite(ppu, i),
+        renderer.draw(
+            &palette_sprite(ppu, i).scale(16),
             x + 72 * (i as usize % 2),
             y + 24 * (i as usize / 2) + 24,
         );
@@ -157,10 +155,9 @@ pub fn draw_palettes(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
 
     renderer.draw_text("Sprites", x + 160, y);
     for i in 4..8 {
-        let sprite = palette_sprite(ppu, i);
         let i = i - 4;
-        renderer.draw_sprite(
-            &sprite,
+        renderer.draw(
+            &palette_sprite(ppu, i).scale(16),
             x + 72 * (i as usize % 2) + 160,
             y + 24 * (i as usize / 2) + 24,
         );

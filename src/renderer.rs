@@ -18,6 +18,12 @@ pub struct Pixel {
     pub color: Color,
 }
 
+pub trait Draw {
+    fn width(&self) -> usize;
+    fn height(&self) -> usize;
+    fn get_pixel(&self, x: usize, y: usize) -> &Color;
+}
+
 #[derive(Clone)]
 pub struct Sprite {
     pixels: Vec<Color>,
@@ -57,26 +63,11 @@ impl Sprite {
         }
     }
 
-    pub fn width(&self) -> usize {
-        self.width
-    }
-
-    pub fn height(&self) -> usize {
-        self.height
-    }
-
-    pub fn scale(self, scale: usize) -> Sprite {
-        let new_width = self.width * scale;
-        let new_height = self.height * scale;
-        let mut scaled = Vec::with_capacity(new_width * new_height);
-
-        for i in 0..new_height {
-            for j in 0..new_width {
-                scaled.push(self.pixels[(i / scale) * self.width + (j / scale)]);
-            }
+    pub fn scale(&self, scale: usize) -> Scaled {
+        Scaled {
+            original: self,
+            scale,
         }
-
-        Sprite::new(scaled, self.width * scale, self.height * scale).unwrap()
     }
 
     pub fn set_pixel(&mut self, x: usize, y: usize, color: Color) -> Result<()> {
@@ -93,19 +84,38 @@ impl Sprite {
     }
 }
 
-// pub fn outline(width: usize, height: usize, color: Color) -> Sprite {
-//     let mut buf = vec![];
-//     for i in 0..height {
-//         for j in 0..width {
-//             if i == 0 || i == height - 1 || j == 0 || j == width - 1 {
-//                 buf.push(color);
-//             } else {
-//                 buf.push(Color::BLACK);
-//             }
-//         }
-//     }
-//     Sprite::new(buf, width, height).unwrap()
-// }
+impl Draw for Sprite {
+    fn width(&self) -> usize {
+        self.width
+    }
+
+    fn height(&self) -> usize {
+        self.height
+    }
+
+    fn get_pixel(&self, x: usize, y: usize) -> &Color {
+        &self.pixels[self.width * y + x]
+    }
+}
+
+pub struct Scaled<'a> {
+    original: &'a Sprite,
+    scale: usize,
+}
+
+impl<'a> Draw for Scaled<'a> {
+    fn width(&self) -> usize {
+        self.original.width() * self.scale
+    }
+
+    fn height(&self) -> usize {
+        self.original.height() * self.scale
+    }
+
+    fn get_pixel(&self, x: usize, y: usize) -> &Color {
+        self.original.get_pixel(x / self.scale, y / self.scale)
+    }
+}
 
 pub struct Renderer {
     font: Font<'static>,
@@ -148,13 +158,13 @@ impl Renderer {
         self.pixels.render()
     }
 
-    pub fn draw_sprite(&mut self, sprite: &Sprite, x: usize, y: usize) {
-        for i in 0..sprite.height() {
-            for j in 0..sprite.width() {
+    pub fn draw<D: Draw>(&mut self, obj: &D, x: usize, y: usize) {
+        for i in 0..obj.height() {
+            for j in 0..obj.width() {
                 let px = self.pixel_index(x + j, y + i);
                 if let Some(px) = px {
                     let frame = self.pixels.frame_mut();
-                    let pixel = sprite.pixels[i * sprite.width + j];
+                    let pixel = obj.get_pixel(j, i);
 
                     frame[px] = pixel.0;
                     frame[px + 1] = pixel.1;
