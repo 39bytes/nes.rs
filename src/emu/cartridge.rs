@@ -82,8 +82,10 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
-    pub fn new<T: AsRef<Path> + Display>(rom_path: T) -> Result<Self> {
-        log::info!("Loading ROM: {}", rom_path);
+    pub fn new<T: AsRef<Path>>(rom_path: T) -> Result<Self> {
+        let path = rom_path.as_ref();
+
+        log::info!("Loading ROM: {}", path.display());
         let mut f = File::open(rom_path)?;
 
         let mut header_buf = [0; 16];
@@ -117,7 +119,10 @@ impl Cartridge {
             1 => Box::new(Mapper1::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             2 => Box::new(Mapper2::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             3 => Box::new(Mapper3::new(header.prg_rom_chunks, header.chr_rom_chunks)),
-            _ => Err(anyhow!("Unimplemented mapper {}", header.mapper_num))?,
+            _ => Err(anyhow!(
+                "This game uses mapper {}, which isn't implemented",
+                header.mapper_num
+            ))?,
         };
 
         Ok(Cartridge {
