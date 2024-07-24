@@ -53,7 +53,6 @@ To find out which mapper a game uses, search it on [NesCartDB](https://nescartdb
 - [ ] Implement mappers 4, 5, 7, 9, 10 and 66
 - [ ] Run test ROMs for PPU emulation
 - [ ] Open bus behavior emulation
-- [ ] Cycle accurate sprite evaluation/drawing
 
 ### QOL
 - [ ] Select ROM from emulator instead of passing as a command line argument
