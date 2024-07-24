@@ -63,7 +63,7 @@ pub fn main() -> Result<()> {
 
     // Window setup
     let event_loop = EventLoop::new().unwrap();
-    event_loop.set_control_flow(ControlFlow::Poll);
+    event_loop.set_control_flow(ControlFlow::Wait);
 
     let mut input = WinitInputHelper::new();
 
@@ -83,39 +83,13 @@ pub fn main() -> Result<()> {
             .unwrap()
     };
 
-    // Emulator setup
-    let font_data = include_bytes!("../assets/fonts/nes-arcade-font-2-1-monospaced.ttf");
-    let font = Font::try_from_bytes(font_data as &[u8]).ok_or(anyhow!("Error loading font"))?;
-
-    let palette = Palette::load("assets/palettes/2C02G.pal")?;
-    let cartridge = Cartridge::new(args.rom_path)?;
-
-    let paused = Arc::new(AtomicBool::new(false));
-
-    let mut nes = if !args.disable_audio {
-        let (device, config) = setup_audio()?;
-        let stream_config: StreamConfig = config.into();
-
-        let (nes, audio_consumer) =
-            Nes::new(palette.clone()).with_audio(stream_config.sample_rate.0 as usize);
-
-        let p = paused.clone();
-        thread::spawn(move || {
-            start_audio::<f32>(&device, &stream_config, audio_consumer, p)
-                .expect("Could not start audio")
-        });
-
-        nes
-    } else {
-        Nes::new(palette.clone())
-    };
-
-    // Start
-    nes.load_cartridge(cartridge);
-    nes.reset();
+    let (mut nes, paused) = setup_emulator(&args)?;
 
     let mut acc = 0.0;
     let mut now = Instant::now();
+
+    let font_data = include_bytes!("../assets/fonts/nes-arcade-font-2-1-monospaced.ttf");
+    let font = Font::try_from_bytes(font_data as &[u8]).ok_or(anyhow!("Error loading font"))?;
 
     let mut renderer = Renderer::new(font, &window, width as usize, height as usize)?;
     let mut fps_counter = FpsCounter::new();
@@ -129,17 +103,10 @@ pub fn main() -> Result<()> {
                 log::info!("Close button pressed, exiting");
                 target.exit();
             }
-            Event::AboutToWait => {
-                if !paused.load(Ordering::Relaxed) {
-                    acc += now.elapsed().as_secs_f64();
-                    now = Instant::now();
-                    while acc >= FRAME_TIME {
-                        fps_counter.tick();
-                        nes.advance_frame();
-                        acc -= FRAME_TIME;
-                    }
-                }
-
+            Event::WindowEvent {
+                event: WindowEvent::RedrawRequested,
+                ..
+            } => {
                 renderer.clear();
                 // TODO: Implement not drawing overscan
                 // https://www.nesdev.org/wiki/Overscan
@@ -202,6 +169,17 @@ pub fn main() -> Result<()> {
                     target.exit();
                 }
             }
+
+            if !paused.load(Ordering::Relaxed) {
+                acc += now.elapsed().as_secs_f64();
+                now = Instant::now();
+                while acc >= FRAME_TIME {
+                    fps_counter.tick();
+                    nes.advance_frame();
+                    acc -= FRAME_TIME;
+                }
+            }
+            window.request_redraw();
         }
     })?;
 
@@ -234,7 +212,7 @@ fn setup_audio() -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
     Ok((device, config))
 }
 
-pub fn start_audio<T>(
+fn start_audio<T>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
     mut consumer: AudioBufferConsumer,
@@ -287,7 +265,39 @@ where
     Ok(())
 }
 
-pub fn draw_with_debug_info(renderer: &mut Renderer, nes: &Nes, fps_counter: &FpsCounter) {
+fn setup_emulator(args: &Args) -> Result<(Nes, Arc<AtomicBool>)> {
+    // Emulator setup
+    let palette = Palette::load("assets/palettes/2C02G.pal")?;
+    let cartridge = Cartridge::new(args.rom_path.as_path())?;
+
+    let paused = Arc::new(AtomicBool::new(false));
+
+    let mut nes = if !args.disable_audio {
+        let (device, config) = setup_audio()?;
+        let stream_config: StreamConfig = config.into();
+
+        let (nes, audio_consumer) =
+            Nes::new(palette.clone()).with_audio(stream_config.sample_rate.0 as usize);
+
+        let p = paused.clone();
+        thread::spawn(move || {
+            start_audio::<f32>(&device, &stream_config, audio_consumer, p)
+                .expect("Could not start audio")
+        });
+
+        nes
+    } else {
+        Nes::new(palette.clone())
+    };
+
+    // Start
+    nes.load_cartridge(cartridge);
+    nes.reset();
+
+    Ok((nes, paused))
+}
+
+fn draw_with_debug_info(renderer: &mut Renderer, nes: &Nes, fps_counter: &FpsCounter) {
     renderer.draw(&nes.screen().scale(2), 0, 180);
 
     renderer.draw_text(&format!("FPS: {:.1}", fps_counter.get_fps()), 0, 160);
