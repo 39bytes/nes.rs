@@ -1,12 +1,13 @@
 use self::instructions::{AddressMode, Instruction, InstructionType};
-use super::apu::Apu;
-use super::bits::IntoBit;
-use super::cartridge::Cartridge;
-use super::input::{ControllerInput, StandardController};
-use super::ppu::Ppu;
+use super::{
+    apu::Apu,
+    bits::IntoBit,
+    cartridge::Cartridge,
+    input::{ControllerInput, StandardController},
+    ppu::Ppu,
+};
 use bitflags::bitflags;
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 
 pub mod instructions;
 

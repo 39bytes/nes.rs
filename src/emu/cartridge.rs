@@ -1,10 +1,11 @@
 use anyhow::{anyhow, Result};
 use bitflags::bitflags;
-use std::fmt::Display;
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::SeekFrom;
-use std::path::Path;
+use std::{
+    fmt::Display,
+    fs::File,
+    io::{prelude::*, SeekFrom},
+    path::Path,
+};
 
 use super::mappers::*;
 

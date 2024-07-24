@@ -1,15 +1,15 @@
 use cpal::StreamConfig;
 use ringbuf::traits::*;
-use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
-use std::thread;
-use std::time::Instant;
-use ui::draw_cpu_info;
-use ui::draw_palettes;
-use ui::draw_pattern_tables;
-use ui::draw_ppu_info;
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+    time::Instant,
+};
+use ui::{draw_cpu_info, draw_palettes, draw_pattern_tables, draw_ppu_info};
 use utils::FpsCounter;
 
 use anyhow::{anyhow, Result};
@@ -22,21 +22,24 @@ use error_iter::ErrorIter as _;
 use log::error;
 use renderer::Renderer;
 use rusttype::Font;
-use winit::dpi::LogicalSize;
-use winit::event::{Event, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::keyboard::KeyCode;
-use winit::window::WindowBuilder;
+use winit::{
+    dpi::LogicalSize,
+    event::{Event, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    keyboard::KeyCode,
+    window::WindowBuilder,
+};
 use winit_input_helper::WinitInputHelper;
 
-use emu::cartridge::Cartridge;
-use emu::consts::FRAME_TIME;
-use emu::input::{ControllerButtons, ControllerInput};
-use emu::nes::Nes;
-use emu::palette::Palette;
+use emu::{
+    cartridge::Cartridge,
+    consts::FRAME_TIME,
+    input::{ControllerButtons, ControllerInput},
+    nes::Nes,
+    palette::Palette,
+};
 
-use clap::arg;
-use clap::Parser;
+use clap::{arg, Parser};
 
 mod audio_output;
 mod emu;
@@ -57,7 +60,7 @@ struct Args {
 }
 
 pub fn main() -> Result<()> {
-    env_logger::builder().format_timestamp_micros().init();
+    env_logger::builder().format_timestamp_millis().init();
 
     let args = Args::parse();
 

@@ -1,6 +1,5 @@
 use anyhow::Result;
-use std::fs::File;
-use std::io::prelude::*;
+use std::{fs::File, io::prelude::*};
 
 use crate::renderer::{Color, Sprite};
 

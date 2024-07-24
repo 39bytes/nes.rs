@@ -2,15 +2,16 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::renderer::{Color, Pixel, Sprite};
 
-use self::flags::*;
 pub use self::pattern_table::PatternTable;
-use self::shift_register::{ShiftRegister16, ShiftRegister8};
-use self::sprite::{Sprite as PpuSprite, SpriteAttribute};
-use self::vram_addr::VRAMAddr;
+use self::{
+    flags::*,
+    shift_register::{ShiftRegister16, ShiftRegister8},
+    sprite::{Sprite as PpuSprite, SpriteAttribute},
+    vram_addr::VRAMAddr,
+};
 
-use super::bits::{extend_bit, flip_byte};
 use super::{
-    bits::IntoBit,
+    bits::{extend_bit, flip_byte, IntoBit},
     cartridge::{Cartridge, Mirroring},
     palette::Palette,
 };
