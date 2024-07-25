@@ -36,8 +36,8 @@ impl Palette {
         &self.colors
     }
 
-    pub fn get_color(&self, color: u8) -> Option<Color> {
-        self.colors.get(color as usize).copied()
+    pub fn get_color(&self, color: u8) -> Color {
+        self.colors[(color % 64) as usize]
     }
 }
 
