@@ -46,16 +46,25 @@ impl Apu {
 
     pub fn sample(&self) -> f32 {
         // See: https://www.nesdev.org/wiki/APU_Mixer
-        let p1 = self.pulse1.sample() as f32;
-        let p2 = self.pulse2.sample() as f32;
-        let pulse_out = 95.88 / ((8128.0 / (p1 + p2)) + 100.0);
+        let p1 = self.pulse1.sample();
+        let p2 = self.pulse2.sample();
+        let pulse_out = if p1 == 0 && p2 == 0 {
+            0.0
+        } else {
+            95.88 / ((8128.0 / (p1 as f32 + p2 as f32)) + 100.0)
+        };
 
-        let triangle = self.triangle.sample() as f32;
-        let noise = self.noise.sample() as f32;
-        let dmc = 0 as f32;
+        let triangle = self.triangle.sample();
+        let noise = self.noise.sample();
+        let dmc = 0;
 
-        let tnd = 1.0 / ((triangle / 8227.0) + (noise / 12241.0) + (dmc / 22638.0));
-        let tnd_out = 159.79 / (tnd + 100.0);
+        let tnd_out = if triangle == 0 && noise == 0 && dmc == 0 {
+            0.0
+        } else {
+            let tnd = 1.0
+                / ((triangle as f32 / 8227.0) + (noise as f32 / 12241.0) + (dmc as f32 / 22638.0));
+            159.79 / (tnd + 100.0)
+        };
 
         pulse_out + tnd_out
     }
