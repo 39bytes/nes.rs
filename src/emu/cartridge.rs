@@ -119,7 +119,10 @@ impl Cartridge {
             1 => Box::new(Mapper1::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             2 => Box::new(Mapper2::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             3 => Box::new(Mapper3::new(header.prg_rom_chunks, header.chr_rom_chunks)),
-            9 => Box::new(Mapper9::new(header.prg_rom_chunks, header.chr_rom_chunks)),
+            9 => Box::new(Mapper9::new(
+                header.prg_rom_chunks * 2,
+                header.chr_rom_chunks * 2,
+            )),
             _ => Err(anyhow!(
                 "This game uses mapper {}, which isn't implemented",
                 header.mapper_num

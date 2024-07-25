@@ -2,18 +2,18 @@ use anyhow::{anyhow, Result};
 
 use super::{MapRead, MapWrite, Mapper};
 
-const RAM_SIZE: usize = 8 * 1024;
+const PRG_RAM_SIZE: usize = 8 * 1024;
 
 pub struct Mapper0 {
     prg_banks: u8,
-    ram: [u8; RAM_SIZE],
+    ram: [u8; PRG_RAM_SIZE],
 }
 
 impl Mapper0 {
     pub fn new(num_banks: u8) -> Self {
         Self {
             prg_banks: num_banks,
-            ram: [0; RAM_SIZE],
+            ram: [0; PRG_RAM_SIZE],
         }
     }
 }

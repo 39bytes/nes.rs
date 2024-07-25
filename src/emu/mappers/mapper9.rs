@@ -29,10 +29,10 @@ pub struct Mapper9 {
 }
 
 impl Mapper9 {
-    pub fn new(prg_16kb_chunks: u8, chr_8kb_chunks: u8) -> Self {
+    pub fn new(prg_banks: u8, chr_banks: u8) -> Self {
         Self {
-            prg_banks: prg_16kb_chunks * 2,
-            chr_banks: chr_8kb_chunks * 2,
+            prg_banks,
+            chr_banks,
             prg_bank_select: 0,
 
             latch0: Latch::FD,

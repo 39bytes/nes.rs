@@ -7,7 +7,7 @@ pub struct Mapper3 {
     bank_select: u8,
 }
 
-const BANK_SIZE: usize = 8 * 1024;
+const CHR_BANK_SIZE: usize = 8 * 1024;
 
 impl Mapper3 {
     pub fn new(prg_banks: u8, chr_banks: u8) -> Self {
@@ -51,7 +51,7 @@ impl Mapper for Mapper3 {
         }
 
         let bank = self.bank_select as usize;
-        let addr = bank * BANK_SIZE + addr as usize;
+        let addr = bank * CHR_BANK_SIZE + addr as usize;
         Ok(MapRead::Address(addr))
     }
 

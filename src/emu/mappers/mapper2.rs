@@ -7,7 +7,7 @@ pub struct Mapper2 {
     bank_select: u8,
 }
 
-const BANK_SIZE: usize = 16 * 1024;
+const PRG_BANK_SIZE: usize = 16 * 1024;
 
 impl Mapper2 {
     pub fn new(prg_banks: u8, chr_banks: u8) -> Self {
@@ -24,12 +24,12 @@ impl Mapper for Mapper2 {
         match addr {
             0x8000..=0xBFFF => {
                 let bank = self.bank_select as usize;
-                let addr = bank * BANK_SIZE + (addr & 0x3FFF) as usize;
+                let addr = bank * PRG_BANK_SIZE + (addr & 0x3FFF) as usize;
                 Ok(MapRead::Address(addr))
             }
             0xC000..=0xFFFF => {
                 let bank = (self.prg_banks - 1) as usize;
-                let addr = bank * BANK_SIZE + (addr & 0x3FFF) as usize;
+                let addr = bank * PRG_BANK_SIZE + (addr & 0x3FFF) as usize;
                 Ok(MapRead::Address(addr))
             }
             _ => Err(anyhow!("Address {:#06X} out of range", addr)),
