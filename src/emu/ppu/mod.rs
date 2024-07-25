@@ -812,7 +812,7 @@ impl Ppu {
 
     pub fn read(&self, addr: u16) -> u8 {
         let cartridge = self.cartridge.as_ref().expect("Cartridge not attached");
-        if let Ok(data) = cartridge.borrow().ppu_read(addr) {
+        if let Ok(data) = cartridge.borrow_mut().ppu_read(addr) {
             return data;
         }
 
@@ -847,9 +847,7 @@ impl Ppu {
         let offset = (palette << 2) + pixel;
         let color_index = self.read(0x3F00 + offset as u16);
 
-        self.palette
-            .get_color(color_index)
-            .unwrap_or_else(|| panic!("Invalid palette color {}", color_index))
+        self.palette.get_color(color_index)
     }
 
     pub fn get_pattern_table(&self, table: PatternTable) -> Sprite {

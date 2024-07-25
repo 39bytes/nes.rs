@@ -119,6 +119,7 @@ impl Cartridge {
             1 => Box::new(Mapper1::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             2 => Box::new(Mapper2::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             3 => Box::new(Mapper3::new(header.prg_rom_chunks, header.chr_rom_chunks)),
+            9 => Box::new(Mapper9::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             _ => Err(anyhow!(
                 "This game uses mapper {}, which isn't implemented",
                 header.mapper_num
@@ -182,7 +183,7 @@ impl Cartridge {
         Ok(())
     }
 
-    pub fn ppu_read(&self, addr: u16) -> Result<u8> {
+    pub fn ppu_read(&mut self, addr: u16) -> Result<u8> {
         match self.mapper.map_chr_read(addr)? {
             MapRead::Address(addr) => Ok(self.chr_memory[addr]),
             _ => todo!(),

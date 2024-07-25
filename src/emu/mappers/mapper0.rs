@@ -46,7 +46,7 @@ impl Mapper for Mapper0 {
         }
     }
 
-    fn map_chr_read(&self, addr: u16) -> Result<MapRead> {
+    fn map_chr_read(&mut self, addr: u16) -> Result<MapRead> {
         if addr > 0x1FFF {
             return Err(anyhow!("Address out of range"));
         }
