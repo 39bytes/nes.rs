@@ -19,7 +19,7 @@ impl AudioOutput {
     pub fn new(sample_rate: usize) -> (Self, AudioBufferConsumer) {
         let sample_rate = sample_rate as f64;
 
-        let latency_frames = (100.0 / 1000.0) * sample_rate;
+        let latency_frames = (128.0 / 1000.0) * sample_rate;
         let latency_samples = latency_frames as usize;
 
         let rb = HeapRb::<f32>::new(latency_samples);

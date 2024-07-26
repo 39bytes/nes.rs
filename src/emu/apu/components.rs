@@ -146,9 +146,7 @@ impl Envelope {
         if self.divider.clock() {
             if self.decay_level > 0 {
                 self.decay_level -= 1;
-                return;
-            }
-            if self.loop_ {
+            } else if self.loop_ {
                 self.decay_level = 15;
             }
         }
@@ -169,11 +167,10 @@ impl Envelope {
 }
 
 // Clocked on half frames
-// FIXME: I don't think this works properly
 #[derive(Default, Debug)]
 pub struct Sweep {
-    pub enabled: bool,
-    pub shift_count: u8,
+    enabled: bool,
+    shift_count: u8,
     divider: Divider<u8>,
     reload: bool,
     negate: bool,
@@ -189,9 +186,9 @@ impl Sweep {
     }
 
     pub fn write(&mut self, data: u8) {
-        self.enabled = data & 0b1000_0000 != 0;
-        self.divider.reload = data & 0b0111_0000 >> 4;
-        self.negate = data & 0b0000_1000 != 0;
+        self.enabled = (data & 0b1000_0000) != 0;
+        self.divider.reload = (data & 0b0111_0000) >> 4;
+        self.negate = (data & 0b0000_1000) != 0;
         self.shift_count = data & 0b0000_0111;
 
         self.reload = true;

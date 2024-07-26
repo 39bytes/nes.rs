@@ -59,8 +59,8 @@ impl PulseChannel {
     }
 
     pub fn write_reg4(&mut self, data: u8) {
-        let timer_high = (data & 0x07) as u16;
-        let length_counter_load = (data & 0xF8) >> 3;
+        let timer_high = (data & 0b0000_0111) as u16;
+        let length_counter_load = (data & 0b1111_1000) >> 3;
 
         self.timer.reload = (self.timer.reload & 0x00FF) | (timer_high << 8);
         self.timer.force_reload();
