@@ -190,16 +190,6 @@ pub fn main() -> Result<()> {
 }
 
 fn setup_audio() -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
-    // Use jack on linux
-    #[cfg(target_os="linux")]
-    let host = cpal::host_from_id(cpal::available_hosts()
-        .into_iter()
-        .find(|id| *id == cpal::HostId::Jack)
-        .expect(
-            "make sure --features jack is specified. only works on OSes where jack is available",
-        )).expect("jack host unavailable");
-    // Fall back to default on other OSes
-    #[cfg(not(target_os = "linux"))]
     let host = cpal::default_host();
 
     let device = host
