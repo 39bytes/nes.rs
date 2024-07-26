@@ -262,12 +262,7 @@ impl Cpu {
                 Some(apu) => apu.borrow_mut().write(addr, data),
                 None => panic!("APU not attached"),
             },
-            0x4014 => {
-                self.dma_transfer = true;
-                self.dma_halting = true;
-                self.dma_page = data;
-                self.dma_index = 0x00;
-            }
+            0x4014 => self.begin_oam_dma(data),
             0x4016 => {
                 let data = data & 0x01;
 
@@ -379,7 +374,7 @@ impl Cpu {
     /// Run one clock cycle.
     pub fn clock(&mut self) {
         if self.dma_transfer {
-            self.dma_clock();
+            self.oam_dma_clock();
             self.total_cycles += 1;
             return;
         }
@@ -505,7 +500,14 @@ impl Cpu {
         self.total_cycles += 1;
     }
 
-    fn dma_clock(&mut self) {
+    fn begin_oam_dma(&mut self, page: u8) {
+        self.dma_transfer = true;
+        self.dma_halting = true;
+        self.dma_page = page;
+        self.dma_index = 0x00;
+    }
+
+    fn oam_dma_clock(&mut self) {
         if self.dma_halting {
             // If we're on an even cycle, wait again the next cycle so that
             // we start the DMA transfer on an even cycle
@@ -533,6 +535,14 @@ impl Cpu {
                 self.dma_index += 1;
             }
         }
+    }
+
+    fn begin_dmc_dma(&mut self, addr: u16) {
+        todo!()
+    }
+
+    fn dmc_dma_clock(&mut self) {
+        todo!()
     }
 
     // Addressing modes

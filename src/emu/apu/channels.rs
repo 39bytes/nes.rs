@@ -216,18 +216,132 @@ impl NoiseChannel {
     }
 }
 
+const DMC_RATE_LOOKUP: [u16; 16] = [
+    428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54,
+];
+
 // TODO: Implement this channel
-#[derive(Default)]
-pub(crate) struct DCPMChannel {
-    enabled: bool,
+//
+//
+pub(crate) enum DMCDMARequest {
+    Load(u16),
+    Reload(u16),
 }
 
-impl DCPMChannel {
+// NOTE:
+// If the DMC bit is clear, the DMC bytes remaining will be set to 0 and the DMC will silence when it empties.
+// If the DMC bit is set, the DMC sample will be restarted only if its bytes remaining is 0. If there are bits remaining in the 1-byte sample buffer, these will finish playing before the next sample is fetched.
+// Writing to this register clears the DMC interrupt flag.
+#[derive(Default)]
+pub(crate) struct DMCChannel {
+    enabled: bool,
+    pub irq_enabled: bool,
+    interrupt: bool,
+    loop_: bool,
+
+    sample_addr: u16,
+    sample_length: u16,
+
+    current_addr: u16,
+    bytes_remaining: u16,
+    sample_buffer: Option<u8>,
+
+    timer: Divider<u16>,
+    shifter: u8,
+    bits_remaining: u8,
+    output_level: u8,
+    silence: bool,
+}
+
+impl DMCChannel {
     pub fn new() -> Self {
-        DCPMChannel::default()
+        DMCChannel::default()
     }
 
-    pub fn set_enabled(&mut self, enabled: bool) {
+    pub fn clock(&mut self) -> Option<DMCDMARequest> {
+        if self.timer.clock() {
+            if !self.silence {
+                match self.shifter & 0x01 {
+                    0 if self.output_level >= 2 => self.output_level -= 2,
+                    1 if self.output_level <= 125 => self.output_level += 2,
+                    _ => {}
+                }
+            }
+            self.shifter >>= 1;
+            self.bits_remaining -= 1;
+
+            // New output cycle
+            if self.bits_remaining == 0 {
+                self.bits_remaining = 8;
+                match self.sample_buffer {
+                    Some(data) => {
+                        self.silence = false;
+
+                        // Empty the sample buffer into the shift register
+                        self.shifter = data;
+                        self.sample_buffer = None;
+
+                        if self.bytes_remaining != 0 {
+                            return Some(DMCDMARequest::Reload(self.current_addr));
+                        }
+                    }
+                    None => {
+                        self.silence = true;
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn sample(&self) -> u8 {
+        self.output_level
+    }
+
+    pub fn bytes_remaining(&mut self) -> u16 {
+        self.bytes_remaining
+    }
+
+    pub fn set_enabled(&mut self, enabled: bool) -> Option<DMCDMARequest> {
         self.enabled = enabled;
+        self.interrupt = false;
+
+        if !enabled {
+            self.bytes_remaining = 0;
+        } else if self.bytes_remaining == 0 {
+            self.restart();
+        }
+
+        if self.bytes_remaining != 0 {
+            return Some(DMCDMARequest::Load(self.current_addr));
+        };
+
+        None
+    }
+
+    pub fn set_loop(&mut self, b: bool) {
+        self.loop_ = b;
+    }
+
+    pub fn set_rate(&mut self, index: u8) {
+        self.timer.reload = DMC_RATE_LOOKUP[index as usize];
+    }
+
+    pub fn set_output_level(&mut self, level: u8) {
+        self.output_level = level;
+    }
+
+    pub fn set_sample_address(&mut self, addr_offset: u8) {
+        self.sample_addr = 0xC000 + addr_offset as u16 * 64;
+    }
+
+    pub fn set_sample_length(&mut self, length: u8) {
+        self.sample_length = length as u16 * 16 + 1;
+    }
+
+    pub fn restart(&mut self) {
+        self.current_addr = self.sample_addr;
+        self.bytes_remaining = self.sample_length;
     }
 }
