@@ -105,14 +105,7 @@ impl Cartridge {
             Mirroring::Horizontal
         };
 
-        let file_type = 1;
-
-        let (prg_rom, chr_rom) = match file_type {
-            0 => todo!(),
-            1 => Cartridge::from_type1(f, &header)?,
-            2 => todo!(),
-            _ => panic!("Invalid file type"),
-        };
+        let (prg_rom, chr_rom) = Cartridge::from_ines1(f, &header)?;
 
         let mapper: Box<dyn Mapper> = match header.mapper_num {
             0 => Box::new(Mapper0::new(header.prg_rom_chunks)),
@@ -141,7 +134,7 @@ impl Cartridge {
         self.mapper.mirroring().unwrap_or(self.mirroring)
     }
 
-    fn from_type1(mut f: File, header: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
+    fn from_ines1(mut f: File, header: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
         let prg_rom_size = (header.prg_rom_chunks as usize) * 16 * 1024;
         log::info!("Reading {} bytes of program ROM", prg_rom_size);
 
