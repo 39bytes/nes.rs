@@ -70,18 +70,22 @@ impl Apu {
             }
         };
 
-        pulse_out + tnd_out
+        (pulse_out + tnd_out) * 0.025
     }
 
     pub fn clock(&mut self, dma_sample: Option<u8>) -> Option<DMCClockResult> {
         self.cycle += 1;
+
+        if let Some(sample) = dma_sample {
+            self.dmc.write_sample_buffer(sample);
+        }
 
         let mut res = None;
 
         if self.cycle % 2 == 0 {
             self.pulse1.clock();
             self.pulse2.clock();
-            res = Some(self.dmc.clock(dma_sample));
+            res = Some(self.dmc.clock());
         }
         self.triangle.clock();
         self.noise.clock();

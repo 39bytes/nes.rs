@@ -217,7 +217,7 @@ impl NoiseChannel {
 }
 
 const DMC_RATE_LOOKUP: [u16; 16] = [
-    428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54,
+    214, 190, 170, 160, 143, 127, 113, 107, 95, 80, 71, 64, 53, 42, 36, 27,
 ];
 
 // TODO: Implement this channel
@@ -239,7 +239,7 @@ pub struct DMCClockResult {
 // If the DMC bit is clear, the DMC bytes remaining will be set to 0 and the DMC will silence when it empties.
 // If the DMC bit is set, the DMC sample will be restarted only if its bytes remaining is 0. If there are bits remaining in the 1-byte sample buffer, these will finish playing before the next sample is fetched.
 // Writing to this register clears the DMC interrupt flag.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct DMCChannel {
     enabled: bool,
     pub irq_enabled: bool,
@@ -268,27 +268,7 @@ impl DMCChannel {
         }
     }
 
-    pub fn clock(&mut self, dma_sample: Option<u8>) -> DMCClockResult {
-        // New sample came in from DMA
-        // https://www.nesdev.org/wiki/APU_DMC#Memory_reader
-        if let Some(sample) = dma_sample {
-            self.sample_buffer = Some(sample);
-            if self.sample_addr == 0xFFFF {
-                self.sample_addr = 0x8000;
-            } else {
-                self.sample_addr += 1;
-            }
-
-            self.bytes_remaining -= 1;
-            if self.bytes_remaining == 0 {
-                if self.loop_ {
-                    self.restart();
-                } else if self.irq_enabled {
-                    self.interrupt = true;
-                }
-            }
-        }
-
+    pub fn clock(&mut self) -> DMCClockResult {
         // Advance in the output cycle
         // https://www.nesdev.org/wiki/APU_DMC#Output_unit
         if self.timer.clock() {
@@ -314,7 +294,6 @@ impl DMCChannel {
                         self.sample_buffer = None;
 
                         if self.bytes_remaining != 0 {
-                            log::info!("Requesting DMC DMA (Reload)");
                             return DMCClockResult {
                                 dma_req: Some(DMCDMARequest::Reload(self.current_addr)),
                                 interrupt: self.interrupt,
@@ -353,10 +332,7 @@ impl DMCChannel {
         }
 
         match self.sample_buffer {
-            None if self.bytes_remaining != 0 => {
-                log::info!("Requesting DMC DMA (Load)");
-                Some(DMCDMARequest::Load(self.current_addr))
-            }
+            None if self.bytes_remaining != 0 => Some(DMCDMARequest::Load(self.current_addr)),
             _ => None,
         }
     }
@@ -379,6 +355,26 @@ impl DMCChannel {
 
     pub fn set_sample_length(&mut self, length: u8) {
         self.sample_length = length as u16 * 16 + 1;
+    }
+
+    // New sample came in from DMA
+    // https://www.nesdev.org/wiki/APU_DMC#Memory_reader
+    pub fn write_sample_buffer(&mut self, sample: u8) {
+        self.sample_buffer = Some(sample);
+        if self.sample_addr == 0xFFFF {
+            self.sample_addr = 0x8000;
+        } else {
+            self.sample_addr += 1;
+        }
+
+        self.bytes_remaining -= 1;
+        if self.bytes_remaining == 0 {
+            if self.loop_ {
+                self.restart();
+            } else if self.irq_enabled {
+                self.interrupt = true;
+            }
+        }
     }
 
     pub fn restart(&mut self) {

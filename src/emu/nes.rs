@@ -111,6 +111,7 @@ impl Nes {
                     self.cpu.borrow_mut().begin_dmc_dma(req);
                 }
                 if res.interrupt {
+                    log::info!("IRQ triggered");
                     self.cpu.borrow_mut().irq();
                 }
             }

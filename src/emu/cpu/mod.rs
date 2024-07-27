@@ -36,12 +36,6 @@ bitflags! {
 const STACK_BASE_ADDR: u16 = 0x0100;
 const CPU_RAM_SIZE: usize = 2 * 1024;
 
-#[derive(Copy, Clone)]
-enum DMAState {
-    Oam,
-    Dmc(DMCDMARequest),
-}
-
 pub struct Cpu {
     /* Registers */
     a: u8,               // Accumulator
@@ -56,13 +50,8 @@ pub struct Cpu {
 
     total_cycles: u64,
 
-    // Indicates whether or not the CPU is in the middle of performing
-    // DMA, be it to the PPU OAM or APU DMC channel
-    dma_state: Option<DMAState>,
-
-    // I wish I could extract the OAM and DMC states into data inside of DMAState,
-    // but can't figure out how to satisfy the borrow checker since DMA needs to call Cpu.read().
-
+    // Whether or not we are currently performing OAM DMA
+    oam_dma: bool,
     // Whether or not we are waiting to start the DMA
     // Always waits on the first cycle that DMA is triggered,
     // then optionally for another alignment cycle
@@ -73,6 +62,8 @@ pub struct Cpu {
     oam_dma_index: u8,
     oam_dma_data: u8,
 
+    // Whether or not we are currently performing DMC DMA
+    dmc_dma: Option<DMCDMARequest>,
     dmc_dma_stall_cycles: u8,
     dmc_dma_halt_cycles: u8,
 
@@ -114,13 +105,13 @@ impl Cpu {
             cycles: 0,
             total_cycles: 0,
 
-            dma_state: None,
-
+            oam_dma: false,
             oam_dma_halting: false,
             oam_dma_page: 0x00,
             oam_dma_index: 0x00,
             oam_dma_data: 0x00,
 
+            dmc_dma: None,
             dmc_dma_stall_cycles: 0,
             dmc_dma_halt_cycles: 0,
 
@@ -401,22 +392,20 @@ impl Cpu {
 
     /// Run one clock cycle.
     pub fn clock(&mut self) -> Option<DMCDMAClockResult> {
-        match self.dma_state {
-            Some(DMAState::Oam) => {
-                self.oam_dma_clock();
+        if let Some(req) = self.dmc_dma {
+            if self.dmc_dma_stall_cycles == 0 {
+                let res = self.dmc_dma_clock(req);
                 self.total_cycles += 1;
-                return None;
+                return res;
+            } else {
+                self.dmc_dma_stall_cycles -= 1;
             }
-            Some(DMAState::Dmc(req)) => {
-                if self.dmc_dma_stall_cycles == 0 {
-                    let res = self.dmc_dma_clock(req);
-                    self.total_cycles += 1;
-                    return res;
-                } else {
-                    self.dmc_dma_stall_cycles -= 1;
-                }
-            }
-            _ => {}
+        }
+
+        if self.oam_dma {
+            self.oam_dma_clock();
+            self.total_cycles += 1;
+            return None;
         }
 
         if self.cycles == 0 {
@@ -543,7 +532,7 @@ impl Cpu {
     }
 
     fn begin_oam_dma(&mut self, page: u8) {
-        self.dma_state = Some(DMAState::Oam);
+        self.oam_dma = true;
         self.oam_dma_halting = true;
         self.oam_dma_page = page;
         self.oam_dma_index = 0x00;
@@ -573,7 +562,7 @@ impl Cpu {
             }
 
             if self.oam_dma_index == 0xFF {
-                self.dma_state = None;
+                self.oam_dma = false;
             } else {
                 self.oam_dma_index += 1;
             }
@@ -581,7 +570,7 @@ impl Cpu {
     }
 
     pub fn begin_dmc_dma(&mut self, req: DMCDMARequest) {
-        self.dma_state = Some(DMAState::Dmc(req));
+        self.dmc_dma = Some(req);
         // At least need to take into account the halt cycle + dummy cycle
         // There could still be the alignment cycle required though
         self.dmc_dma_halt_cycles = 2;
@@ -604,8 +593,9 @@ impl Cpu {
             DMCDMARequest::Reload(addr) => addr,
         };
 
-        self.dma_state = None;
-        Some(DMCDMAClockResult(self.read(sample_addr)))
+        self.dmc_dma = None;
+        let sample = self.read(sample_addr);
+        Some(DMCDMAClockResult(sample))
     }
 
     // Addressing modes
