@@ -170,7 +170,7 @@ pub fn draw_nametable(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
     for i in 0..30 {
         for j in 0..32 {
             let group_offset = (i / 4) * 8 + j / 4;
-            let mut palette_byte = ppu.read(ATTRIBUTE_MEMORY_OFFSET + group_offset);
+            let mut palette_byte = ppu.read_debug(ATTRIBUTE_MEMORY_OFFSET + group_offset);
             if i % 4 >= 2 {
                 palette_byte >>= 4;
             }

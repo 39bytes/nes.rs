@@ -109,7 +109,7 @@ impl Mapper for Mapper9 {
                     Latch::FE => self.chr_fe_bank_select0,
                 } as usize;
 
-                bank * CHR_ROM_BANK_SIZE + (addr & 0x0FFF) as usize
+                bank * CHR_ROM_BANK_SIZE + addr as usize
             }
             0x1000..=0x1FFF => {
                 let bank = match self.latch1 {
@@ -117,7 +117,7 @@ impl Mapper for Mapper9 {
                     Latch::FE => self.chr_fe_bank_select1,
                 } as usize;
 
-                bank * CHR_ROM_BANK_SIZE + (addr & 0x0FFF) as usize
+                bank * CHR_ROM_BANK_SIZE + (addr - 0x1000) as usize
             }
             _ => return Err(anyhow!("Address out of range")),
         };
@@ -129,6 +129,30 @@ impl Mapper for Mapper9 {
             0x1FE8..=0x1FEF => self.latch1 = Latch::FE,
             _ => {}
         }
+
+        Ok(MapRead::Address(mapped_addr))
+    }
+
+    fn map_chr_read_debug(&mut self, addr: u16) -> Result<MapRead> {
+        let mapped_addr = match addr {
+            0x0000..=0x0FFF => {
+                let bank = match self.latch0 {
+                    Latch::FD => self.chr_fd_bank_select0,
+                    Latch::FE => self.chr_fe_bank_select0,
+                } as usize;
+
+                bank * CHR_ROM_BANK_SIZE + addr as usize
+            }
+            0x1000..=0x1FFF => {
+                let bank = match self.latch1 {
+                    Latch::FD => self.chr_fd_bank_select1,
+                    Latch::FE => self.chr_fe_bank_select1,
+                } as usize;
+
+                bank * CHR_ROM_BANK_SIZE + (addr - 0x1000) as usize
+            }
+            _ => return Err(anyhow!("Address out of range")),
+        };
 
         Ok(MapRead::Address(mapped_addr))
     }

@@ -192,4 +192,11 @@ impl Cartridge {
             _ => todo!(),
         }
     }
+
+    pub fn ppu_read_debug(&mut self, addr: u16) -> Result<u8> {
+        match self.mapper.map_chr_read_debug(addr)? {
+            MapRead::Address(addr) => Ok(self.chr_memory[addr]),
+            _ => todo!(),
+        }
+    }
 }

@@ -810,7 +810,7 @@ impl Ppu {
         }
     }
 
-    pub fn read(&self, addr: u16) -> u8 {
+    fn read(&self, addr: u16) -> u8 {
         let cartridge = self.cartridge.as_ref().expect("Cartridge not attached");
         if let Ok(data) = cartridge.borrow_mut().ppu_read(addr) {
             return data;
@@ -834,7 +834,34 @@ impl Ppu {
 
                 self.palette_ram[i as usize]
             }
-            // _ => todo!("Reading from PPU address {:04X} not implemented yet", addr),
+            _ => 0,
+        }
+    }
+
+    pub fn read_debug(&self, addr: u16) -> u8 {
+        let cartridge = self.cartridge.as_ref().expect("Cartridge not attached");
+        if let Ok(data) = cartridge.borrow_mut().ppu_read_debug(addr) {
+            return data;
+        }
+
+        match addr {
+            0x2000..=0x3EFF => {
+                let mirroring = cartridge.borrow().mirroring();
+
+                let (nt, index) = map_addr_to_nametable(mirroring, addr);
+                self.nametables[nt][index]
+            }
+            0x3F00..=0x3FFF => {
+                // Palette ram is from 0x3F00 to 0x3F1F, but mirrored from 0x3F20-0x3FFF
+                let i = addr & 0x1F;
+                let i = match i {
+                    // Mirrored on these addresses
+                    0x10 | 0x14 | 0x18 | 0x1C => i - 0x10,
+                    x => x,
+                };
+
+                self.palette_ram[i as usize]
+            }
             _ => 0,
         }
     }
@@ -863,8 +890,8 @@ impl Ppu {
                 let tile_offset = i * 256 + j * 16;
                 for tile_row in 0..8 {
                     let row_addr = table_offset + tile_offset + tile_row;
-                    let tile_lsb = self.read(row_addr);
-                    let tile_msb = self.read(row_addr + 8);
+                    let tile_lsb = self.read_debug(row_addr);
+                    let tile_msb = self.read_debug(row_addr + 8);
 
                     for tile_col in 0..8 {
                         let lsb = (tile_lsb >> tile_col) & 0x01;

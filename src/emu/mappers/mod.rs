@@ -33,4 +33,7 @@ pub trait Mapper {
     fn mirroring(&self) -> Option<Mirroring> {
         None
     }
+    fn map_chr_read_debug(&mut self, addr: u16) -> Result<MapRead> {
+        self.map_chr_read(addr)
+    }
 }
