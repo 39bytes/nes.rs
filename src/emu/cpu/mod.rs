@@ -1,6 +1,6 @@
 use self::instructions::{AddressMode, Instruction, InstructionType};
 use super::{
-    apu::Apu,
+    apu::{Apu, DMCDMARequest},
     bits::IntoBit,
     cartridge::Cartridge,
     input::{ControllerInput, StandardController},
@@ -36,6 +36,12 @@ bitflags! {
 const STACK_BASE_ADDR: u16 = 0x0100;
 const CPU_RAM_SIZE: usize = 2 * 1024;
 
+#[derive(Copy, Clone)]
+enum DMAState {
+    Oam,
+    Dmc(DMCDMARequest),
+}
+
 pub struct Cpu {
     /* Registers */
     a: u8,               // Accumulator
@@ -51,17 +57,24 @@ pub struct Cpu {
     total_cycles: u64,
 
     // Indicates whether or not the CPU is in the middle of performing
-    // a DMA transfer to the PPU
-    dma_transfer: bool,
+    // DMA, be it to the PPU OAM or APU DMC channel
+    dma_state: Option<DMAState>,
+
+    // I wish I could extract the OAM and DMC states into data inside of DMAState,
+    // but can't figure out how to satisfy the borrow checker since DMA needs to call Cpu.read().
+
     // Whether or not we are waiting to start the DMA
     // Always waits on the first cycle that DMA is triggered,
     // then optionally for another alignment cycle
     // See: https://www.nesdev.org/wiki/DMA
-    dma_halting: bool,
+    oam_dma_halting: bool,
     // For reading/writing during DMA
-    dma_page: u8,
-    dma_index: u8,
-    dma_data: u8,
+    oam_dma_page: u8,
+    oam_dma_index: u8,
+    oam_dma_data: u8,
+
+    dmc_dma_stall_cycles: u8,
+    dmc_dma_halt_cycles: u8,
 
     // Memory
     ram: [u8; CPU_RAM_SIZE],
@@ -86,6 +99,8 @@ struct AddressModeResult {
     additional_cycles: bool,
 }
 
+pub struct DMCDMAClockResult(pub u8);
+
 impl Cpu {
     pub fn new() -> Self {
         Cpu {
@@ -99,11 +114,15 @@ impl Cpu {
             cycles: 0,
             total_cycles: 0,
 
-            dma_transfer: false,
-            dma_halting: false,
-            dma_page: 0x00,
-            dma_index: 0x00,
-            dma_data: 0x00,
+            dma_state: None,
+
+            oam_dma_halting: false,
+            oam_dma_page: 0x00,
+            oam_dma_index: 0x00,
+            oam_dma_data: 0x00,
+
+            dmc_dma_stall_cycles: 0,
+            dmc_dma_halt_cycles: 0,
 
             ram: [0; CPU_RAM_SIZE],
 
@@ -191,6 +210,10 @@ impl Cpu {
                 Some(ppu) => ppu.borrow_mut().cpu_read(addr),
                 None => panic!("PPU not attached"),
             },
+            0x4015 => match &self.apu {
+                Some(apu) => apu.borrow_mut().read(addr),
+                None => panic!("APU not attached"),
+            },
             0x4016..=0x4017 => {
                 let i = (addr % 2) as usize;
                 // While the controller strobe is high,
@@ -258,10 +281,15 @@ impl Cpu {
                 Some(ppu) => ppu.borrow_mut().cpu_write(addr, data),
                 None => panic!("PPU not attached"),
             },
-            0x4000..=0x4013 | 0x4015 | 0x4017 => match &self.apu {
-                Some(apu) => apu.borrow_mut().write(addr, data),
-                None => panic!("APU not attached"),
-            },
+            0x4000..=0x4013 | 0x4015 | 0x4017 => {
+                let req = match &self.apu {
+                    Some(apu) => apu.borrow_mut().write(addr, data),
+                    None => panic!("APU not attached"),
+                };
+                if let Some(req) = req {
+                    self.begin_dmc_dma(req);
+                }
+            }
             0x4014 => self.begin_oam_dma(data),
             0x4016 => {
                 let data = data & 0x01;
@@ -372,11 +400,23 @@ impl Cpu {
     }
 
     /// Run one clock cycle.
-    pub fn clock(&mut self) {
-        if self.dma_transfer {
-            self.oam_dma_clock();
-            self.total_cycles += 1;
-            return;
+    pub fn clock(&mut self) -> Option<DMCDMAClockResult> {
+        match self.dma_state {
+            Some(DMAState::Oam) => {
+                self.oam_dma_clock();
+                self.total_cycles += 1;
+                return None;
+            }
+            Some(DMAState::Dmc(req)) => {
+                if self.dmc_dma_stall_cycles == 0 {
+                    let res = self.dmc_dma_clock(req);
+                    self.total_cycles += 1;
+                    return res;
+                } else {
+                    self.dmc_dma_stall_cycles -= 1;
+                }
+            }
+            _ => {}
         }
 
         if self.cycles == 0 {
@@ -498,51 +538,73 @@ impl Cpu {
         self.cycles -= 1;
 
         self.total_cycles += 1;
+
+        None
     }
 
     fn begin_oam_dma(&mut self, page: u8) {
-        self.dma_transfer = true;
-        self.dma_halting = true;
-        self.dma_page = page;
-        self.dma_index = 0x00;
+        self.dma_state = Some(DMAState::Oam);
+        self.oam_dma_halting = true;
+        self.oam_dma_page = page;
+        self.oam_dma_index = 0x00;
     }
 
     fn oam_dma_clock(&mut self) {
-        if self.dma_halting {
+        if self.oam_dma_halting {
             // If we're on an even cycle, wait again the next cycle so that
             // we start the DMA transfer on an even cycle
-            self.dma_halting = self.total_cycles % 2 == 0;
+            self.oam_dma_halting = self.total_cycles % 2 == 0;
             return;
         }
 
-        // Even cycles: Get from CPU Page (don't have to do anything in code
-        // Odd cycles: Put (write) to PPU OAM
+        // I'm arbitrarily choosing that even cycles = get cycles and odd cycles = put cycles
+        // Get cycles: Read from CPU Page
+        // Put cycles: Write to PPU OAM
         if self.total_cycles % 2 == 0 {
-            let page_base_addr = (self.dma_page as u16) << 8;
-            let addr = page_base_addr + (self.dma_index as u16);
-            self.dma_data = self.read(addr);
+            let page_base_addr = (self.oam_dma_page as u16) << 8;
+            let addr = page_base_addr + (self.oam_dma_index as u16);
+            self.oam_dma_data = self.read(addr);
         } else {
             match &self.ppu {
                 Some(ppu) => ppu
                     .borrow_mut()
-                    .dma_oam_write(self.dma_index, self.dma_data),
+                    .dma_oam_write(self.oam_dma_index, self.oam_dma_data),
                 None => panic!("Attempted to perform DMA without PPU attached to CPU"),
             }
 
-            if self.dma_index == 0xFF {
-                self.dma_transfer = false;
+            if self.oam_dma_index == 0xFF {
+                self.dma_state = None;
             } else {
-                self.dma_index += 1;
+                self.oam_dma_index += 1;
             }
         }
     }
 
-    fn begin_dmc_dma(&mut self, addr: u16) {
-        todo!()
+    pub fn begin_dmc_dma(&mut self, req: DMCDMARequest) {
+        self.dma_state = Some(DMAState::Dmc(req));
+        // At least need to take into account the halt cycle + dummy cycle
+        // There could still be the alignment cycle required though
+        self.dmc_dma_halt_cycles = 2;
+        self.dmc_dma_stall_cycles = 2;
     }
 
-    fn dmc_dma_clock(&mut self) {
-        todo!()
+    fn dmc_dma_clock(&mut self, req: DMCDMARequest) -> Option<DMCDMAClockResult> {
+        if self.dmc_dma_halt_cycles > 0 {
+            self.dmc_dma_halt_cycles -= 1;
+            return None;
+        }
+
+        let sample_addr = match req {
+            // Load DMC DMAs do the actual reading on get cycles.
+            // We wait for the next cycle if we're on a put cycle after the halt/dummy cycles.
+            DMCDMARequest::Load(_) if self.total_cycles % 2 == 1 => return None,
+            DMCDMARequest::Load(addr) => addr,
+            // Reload DMC DMAs do the actual reading on put cycles.
+            DMCDMARequest::Reload(_) if self.total_cycles % 2 == 0 => return None,
+            DMCDMARequest::Reload(addr) => addr,
+        };
+
+        Some(DMCDMAClockResult(self.read(sample_addr)))
     }
 
     // Addressing modes
@@ -1459,7 +1521,7 @@ impl Cpu {
     // Interrupts
 
     /// Interrupt request.
-    fn irq(&mut self) {
+    pub fn irq(&mut self) {
         if self.get_flag(StatusFlags::I) {
             return;
         }

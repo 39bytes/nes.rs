@@ -223,9 +223,15 @@ const DMC_RATE_LOOKUP: [u16; 16] = [
 // TODO: Implement this channel
 //
 //
-pub(crate) enum DMCDMARequest {
+#[derive(Copy, Clone)]
+pub enum DMCDMARequest {
     Load(u16),
     Reload(u16),
+}
+
+pub struct DMCClockResult {
+    pub dma_req: Option<DMCDMARequest>,
+    pub interrupt: bool,
 }
 
 // NOTE:
@@ -258,7 +264,29 @@ impl DMCChannel {
         DMCChannel::default()
     }
 
-    pub fn clock(&mut self) -> Option<DMCDMARequest> {
+    pub fn clock(&mut self, dma_sample: Option<u8>) -> DMCClockResult {
+        // New sample came in from DMA
+        // https://www.nesdev.org/wiki/APU_DMC#Memory_reader
+        if let Some(sample) = dma_sample {
+            self.sample_buffer = Some(sample);
+            if self.sample_addr == 0xFFFF {
+                self.sample_addr = 0x8000;
+            } else {
+                self.sample_addr += 1;
+            }
+
+            self.bytes_remaining -= 1;
+            if self.bytes_remaining == 0 {
+                if self.loop_ {
+                    self.restart();
+                } else if self.irq_enabled {
+                    self.interrupt = true;
+                }
+            }
+        }
+
+        // Advance in the output cycle
+        // https://www.nesdev.org/wiki/APU_DMC#Output_unit
         if self.timer.clock() {
             if !self.silence {
                 match self.shifter & 0x01 {
@@ -282,7 +310,10 @@ impl DMCChannel {
                         self.sample_buffer = None;
 
                         if self.bytes_remaining != 0 {
-                            return Some(DMCDMARequest::Reload(self.current_addr));
+                            return DMCClockResult {
+                                dma_req: Some(DMCDMARequest::Reload(self.current_addr)),
+                                interrupt: self.interrupt,
+                            };
                         }
                     }
                     None => {
@@ -292,7 +323,10 @@ impl DMCChannel {
             }
         }
 
-        None
+        return DMCClockResult {
+            dma_req: None,
+            interrupt: self.interrupt,
+        };
     }
 
     pub fn sample(&self) -> u8 {
@@ -313,11 +347,10 @@ impl DMCChannel {
             self.restart();
         }
 
-        if self.bytes_remaining != 0 {
-            return Some(DMCDMARequest::Load(self.current_addr));
-        };
-
-        None
+        match self.sample_buffer {
+            None if self.bytes_remaining != 0 => Some(DMCDMARequest::Load(self.current_addr)),
+            _ => None,
+        }
     }
 
     pub fn set_loop(&mut self, b: bool) {

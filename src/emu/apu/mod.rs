@@ -1,9 +1,11 @@
 use channels::{
-    DMCChannel, DMCDMARequest, NoiseChannel, PulseChannel, PulseChannelNumber, TriangleChannel,
+    DMCChannel, DMCClockResult, NoiseChannel, PulseChannel, PulseChannelNumber, TriangleChannel,
 };
 
 mod channels;
 mod components;
+
+pub use channels::DMCDMARequest;
 
 enum SequenceMode {
     FourStep,
@@ -71,15 +73,15 @@ impl Apu {
         pulse_out + tnd_out
     }
 
-    pub fn clock(&mut self) -> Option<DMCDMARequest> {
+    pub fn clock(&mut self, dma_sample: Option<u8>) -> Option<DMCClockResult> {
         self.cycle += 1;
 
-        let mut dma_request = None;
+        let mut res = None;
 
         if self.cycle % 2 == 0 {
             self.pulse1.clock();
             self.pulse2.clock();
-            dma_request = self.dmc.clock();
+            res = Some(self.dmc.clock(dma_sample));
         }
         self.triangle.clock();
         self.noise.clock();
@@ -91,7 +93,7 @@ impl Apu {
                 self.clock_quarter_frame();
                 self.clock_half_frame();
             }
-            return dma_request;
+            return res;
         }
 
         // See: https://www.nesdev.org/wiki/APU_Frame_Counter
@@ -137,7 +139,7 @@ impl Apu {
             self.clock_half_frame();
         }
 
-        dma_request
+        res
     }
 
     fn clock_quarter_frame(&mut self) {
