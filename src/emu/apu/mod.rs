@@ -1,9 +1,11 @@
-use channels::{DCPMChannel, NoiseChannel, PulseChannel, TriangleChannel};
-
-use self::channels::PulseChannelNumber;
+use channels::{
+    DMCChannel, DMCClockResult, NoiseChannel, PulseChannel, PulseChannelNumber, TriangleChannel,
+};
 
 mod channels;
 mod components;
+
+pub use channels::DMCDMARequest;
 
 enum SequenceMode {
     FourStep,
@@ -15,7 +17,7 @@ pub struct Apu {
     pulse2: PulseChannel,
     triangle: TriangleChannel,
     noise: NoiseChannel,
-    dcpm: DCPMChannel,
+    dmc: DMCChannel,
 
     // Frame sequencer
     cycle: u64,
@@ -34,7 +36,7 @@ impl Apu {
             pulse2: PulseChannel::new(PulseChannelNumber::Two),
             triangle: TriangleChannel::new(),
             noise: NoiseChannel::new(),
-            dcpm: DCPMChannel::new(),
+            dmc: DMCChannel::new(),
 
             cycle: 0,
             mode: SequenceMode::FourStep,
@@ -48,33 +50,42 @@ impl Apu {
         // See: https://www.nesdev.org/wiki/APU_Mixer
         let p1 = self.pulse1.sample();
         let p2 = self.pulse2.sample();
-        let pulse_out = if p1 == 0 && p2 == 0 {
-            0.0
-        } else {
-            95.88 / ((8128.0 / (p1 as f32 + p2 as f32)) + 100.0)
+        let pulse_out = match (p1, p2) {
+            (0, 0) => 0.0,
+            _ => 95.88 / ((8128.0 / (p1 as f32 + p2 as f32)) + 100.0),
         };
 
         let triangle = self.triangle.sample();
         let noise = self.noise.sample();
-        let dmc = 0;
+        let dmc = self.dmc.sample();
 
-        let tnd_out = if triangle == 0 && noise == 0 && dmc == 0 {
-            0.0
-        } else {
-            let tnd = 1.0
-                / ((triangle as f32 / 8227.0) + (noise as f32 / 12241.0) + (dmc as f32 / 22638.0));
-            159.79 / (tnd + 100.0)
+        let tnd_out = match (triangle, noise, dmc) {
+            (0, 0, 0) => 0.0,
+            _ => {
+                let tnd = 1.0
+                    / ((triangle as f32 / 8227.0)
+                        + (noise as f32 / 12241.0)
+                        + (dmc as f32 / 22638.0));
+                159.79 / (tnd + 100.0)
+            }
         };
 
         pulse_out + tnd_out
     }
 
-    pub fn clock(&mut self) {
+    pub fn clock(&mut self, dma_sample: Option<u8>) -> Option<DMCClockResult> {
         self.cycle += 1;
+
+        if let Some(sample) = dma_sample {
+            self.dmc.write_sample_buffer(sample);
+        }
+
+        let mut res = None;
 
         if self.cycle % 2 == 0 {
             self.pulse1.clock();
             self.pulse2.clock();
+            res = Some(self.dmc.clock());
         }
         self.triangle.clock();
         self.noise.clock();
@@ -86,7 +97,7 @@ impl Apu {
                 self.clock_quarter_frame();
                 self.clock_half_frame();
             }
-            return;
+            return res;
         }
 
         // See: https://www.nesdev.org/wiki/APU_Frame_Counter
@@ -131,6 +142,8 @@ impl Apu {
         if half {
             self.clock_half_frame();
         }
+
+        res
     }
 
     fn clock_quarter_frame(&mut self) {
@@ -154,7 +167,7 @@ impl Apu {
         }
     }
 
-    pub fn write(&mut self, addr: u16, data: u8) {
+    pub fn write(&mut self, addr: u16, data: u8) -> Option<DMCDMARequest> {
         match addr {
             0x4000 => self.pulse1.write_reg1(data),
             0x4001 => self.pulse1.sweep.write(data),
@@ -176,16 +189,28 @@ impl Apu {
             0x400D => {}
             0x400E => self.noise.write_reg2(data),
             0x400F => self.noise.write_reg3(data),
-            0x4010 => {}
-            0x4011 => {}
-            0x4012 => {}
-            0x4013 => {}
+            0x4010 => {
+                self.dmc.irq_enabled = (data & 0b1000_0000) != 0;
+                self.dmc.set_loop((data & 0b0100_0000) != 0);
+                self.dmc.set_rate(data & 0b0000_1111);
+            }
+            0x4011 => {
+                self.dmc.set_output_level(data & 0x7F);
+            }
+            0x4012 => {
+                self.dmc.set_sample_address(data);
+            }
+            0x4013 => {
+                self.dmc.set_sample_length(data);
+            }
             0x4015 => {
                 self.pulse1.set_enabled((data & 0x01) != 0);
                 self.pulse2.set_enabled((data & 0x02) != 0);
                 self.triangle.set_enabled((data & 0x04) != 0);
                 self.noise.set_enabled((data & 0x08) != 0);
-                self.dcpm.set_enabled((data & 0x10) != 0);
+
+                // Could potentially request DMA after enabling
+                return self.dmc.set_enabled((data & 0x10) != 0);
             }
             0x4017 => {
                 self.mode = if data & 0x80 == 0 {
@@ -205,6 +230,27 @@ impl Apu {
                 }
             }
             _ => panic!("Invalid APU address {}", addr),
+        }
+
+        None
+    }
+
+    pub fn read(&mut self, addr: u16) -> u8 {
+        match addr {
+            0x4015 => {
+                let data = self.pulse1.length_counter.silenced() as u8
+                    | (self.pulse2.length_counter.silenced() as u8) << 1
+                    | (self.triangle.length_counter.silenced() as u8) << 2
+                    | (self.noise.length_counter.silenced() as u8) << 3
+                    | ((self.dmc.bytes_remaining() > 0) as u8) << 4
+                    | (self.frame_interrupt as u8) << 6
+                    | (self.dmc.irq_enabled as u8) << 7;
+
+                self.frame_interrupt = false;
+
+                data
+            }
+            _ => todo!(),
         }
     }
 }

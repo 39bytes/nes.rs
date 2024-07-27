@@ -216,18 +216,162 @@ impl NoiseChannel {
     }
 }
 
-// TODO: Implement this channel
-#[derive(Default)]
-pub(crate) struct DCPMChannel {
-    enabled: bool,
+const DMC_RATE_LOOKUP: [u16; 16] = [
+    214, 190, 170, 160, 143, 127, 113, 107, 95, 80, 71, 64, 53, 42, 36, 27,
+];
+
+#[derive(Debug, Copy, Clone)]
+pub enum DMCDMARequest {
+    Load(u16),
+    Reload(u16),
 }
 
-impl DCPMChannel {
+#[derive(Debug)]
+pub struct DMCClockResult {
+    pub dma_req: Option<DMCDMARequest>,
+    pub interrupt: bool,
+}
+
+#[derive(Default, Debug)]
+pub(crate) struct DMCChannel {
+    enabled: bool,
+    pub irq_enabled: bool,
+    interrupt: bool,
+    loop_: bool,
+
+    sample_addr: u16,
+    sample_length: u16,
+
+    current_addr: u16,
+    bytes_remaining: u16,
+    sample_buffer: Option<u8>,
+
+    timer: Divider<u16>,
+    shifter: u8,
+    bits_remaining: u8,
+    output_level: u8,
+    silence: bool,
+}
+
+impl DMCChannel {
     pub fn new() -> Self {
-        DCPMChannel::default()
+        Self {
+            bits_remaining: 8,
+            ..DMCChannel::default()
+        }
     }
 
-    pub fn set_enabled(&mut self, enabled: bool) {
+    pub fn clock(&mut self) -> DMCClockResult {
+        // Advance in the output cycle
+        // https://www.nesdev.org/wiki/APU_DMC#Output_unit
+        if self.timer.clock() {
+            if !self.silence {
+                match self.shifter & 0x01 {
+                    0 if self.output_level >= 2 => self.output_level -= 2,
+                    1 if self.output_level <= 125 => self.output_level += 2,
+                    _ => {}
+                }
+            }
+            self.shifter >>= 1;
+            self.bits_remaining -= 1;
+
+            // New output cycle
+            if self.bits_remaining == 0 {
+                self.bits_remaining = 8;
+                match self.sample_buffer {
+                    Some(data) => {
+                        self.silence = false;
+
+                        // Empty the sample buffer into the shift register
+                        self.shifter = data;
+                        self.sample_buffer = None;
+
+                        if self.bytes_remaining != 0 {
+                            return DMCClockResult {
+                                dma_req: Some(DMCDMARequest::Reload(self.current_addr)),
+                                interrupt: self.interrupt,
+                            };
+                        }
+                    }
+                    None => {
+                        self.silence = true;
+                    }
+                }
+            }
+        }
+
+        DMCClockResult {
+            dma_req: None,
+            interrupt: self.interrupt,
+        }
+    }
+
+    pub fn sample(&self) -> u8 {
+        self.output_level
+    }
+
+    pub fn bytes_remaining(&mut self) -> u16 {
+        self.bytes_remaining
+    }
+
+    pub fn set_enabled(&mut self, enabled: bool) -> Option<DMCDMARequest> {
         self.enabled = enabled;
+        self.interrupt = false;
+
+        if !enabled {
+            self.bytes_remaining = 0;
+        } else if self.bytes_remaining == 0 {
+            self.restart();
+        }
+
+        match self.sample_buffer {
+            None if self.bytes_remaining != 0 => Some(DMCDMARequest::Load(self.current_addr)),
+            _ => None,
+        }
+    }
+
+    pub fn set_loop(&mut self, b: bool) {
+        self.loop_ = b;
+    }
+
+    pub fn set_rate(&mut self, index: u8) {
+        self.timer.reload = DMC_RATE_LOOKUP[index as usize];
+    }
+
+    pub fn set_output_level(&mut self, level: u8) {
+        self.output_level = level;
+    }
+
+    pub fn set_sample_address(&mut self, addr_offset: u8) {
+        self.sample_addr = 0xC000 + addr_offset as u16 * 64;
+    }
+
+    pub fn set_sample_length(&mut self, length: u8) {
+        self.sample_length = length as u16 * 16 + 1;
+    }
+
+    // New sample came in from DMA
+    // https://www.nesdev.org/wiki/APU_DMC#Memory_reader
+    pub fn write_sample_buffer(&mut self, sample: u8) {
+        self.sample_buffer = Some(sample);
+        if self.current_addr == 0xFFFF {
+            self.current_addr = 0x8000;
+        } else {
+            self.current_addr += 1;
+        }
+
+        self.bytes_remaining -= 1;
+        if self.bytes_remaining == 0 {
+            if self.loop_ {
+                self.restart();
+            } else if self.irq_enabled {
+                self.interrupt = true;
+            }
+        }
+    }
+
+    pub fn restart(&mut self) {
+        self.current_addr = self.sample_addr;
+        self.bytes_remaining = self.sample_length;
     }
 }
