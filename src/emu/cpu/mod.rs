@@ -604,6 +604,7 @@ impl Cpu {
             DMCDMARequest::Reload(addr) => addr,
         };
 
+        self.dma_state = None;
         Some(DMCDMAClockResult(self.read(sample_addr)))
     }
 
