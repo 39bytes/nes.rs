@@ -26,7 +26,7 @@ impl AudioOutput {
 
         let (mut prod, cons) = rb.split();
 
-        let buf = vec![0.0; latency_samples / 2];
+        let buf = vec![0.0; latency_samples];
 
         // Fill with some silence to start
         prod.push_slice(&buf);
@@ -50,13 +50,7 @@ impl AudioOutput {
             self.buffer_sample_index += 1;
 
             if self.buffer_sample_index == self.buffer.len() {
-                let pushed = self.producer.push_slice(&self.buffer);
-                if pushed != self.buffer.len() {
-                    log::warn!(
-                        "Audio buffer is full, dropped {} samples",
-                        self.buffer.len() - pushed
-                    );
-                }
+                self.producer.push_slice(&self.buffer);
                 self.buffer_sample_index = 0;
             }
 
