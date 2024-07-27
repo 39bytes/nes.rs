@@ -1,7 +1,6 @@
 use crate::emu::cartridge::Mirroring;
 
 use super::{MapRead, MapWrite, Mapper};
-use anyhow::{anyhow, Result};
 
 const PRG_ROM_BANK_SIZE: usize = 8 * 1024;
 const CHR_ROM_BANK_SIZE: usize = 4 * 1024;
@@ -49,45 +48,45 @@ impl Mapper9 {
 }
 
 impl Mapper for Mapper9 {
-    fn map_prg_read(&self, addr: u16) -> Result<MapRead> {
+    fn map_prg_read(&self, addr: u16) -> Option<MapRead> {
         match addr {
             0x8000..=0x9FFF => {
                 let bank = self.prg_bank_select as usize;
                 let addr = bank * PRG_ROM_BANK_SIZE + (addr & 0x1FFF) as usize;
-                Ok(MapRead::Address(addr))
+                Some(MapRead::Address(addr))
             }
             0xA000..=0xFFFF => {
                 let bank_offset = (addr - 0xA000) / (PRG_ROM_BANK_SIZE as u16);
 
                 let bank = (self.prg_banks - 3 + bank_offset as u8) as usize;
                 let addr = bank * PRG_ROM_BANK_SIZE + (addr & 0x1FFF) as usize;
-                Ok(MapRead::Address(addr))
+                Some(MapRead::Address(addr))
             }
-            _ => Err(anyhow!("Address out of range")),
+            _ => None,
         }
     }
 
-    fn map_prg_write(&mut self, addr: u16, data: u8) -> Result<MapWrite> {
+    fn map_prg_write(&mut self, addr: u16, data: u8) -> Option<MapWrite> {
         match addr {
             0xA000..=0xAFFF => {
                 self.prg_bank_select = data & 0x0F;
-                Ok(MapWrite::WroteRegister)
+                Some(MapWrite::WroteRegister)
             }
             0xB000..=0xBFFF => {
                 self.chr_fd_bank_select0 = data & 0x1F;
-                Ok(MapWrite::WroteRegister)
+                Some(MapWrite::WroteRegister)
             }
             0xC000..=0xCFFF => {
                 self.chr_fe_bank_select0 = data & 0x1F;
-                Ok(MapWrite::WroteRegister)
+                Some(MapWrite::WroteRegister)
             }
             0xD000..=0xDFFF => {
                 self.chr_fd_bank_select1 = data & 0x1F;
-                Ok(MapWrite::WroteRegister)
+                Some(MapWrite::WroteRegister)
             }
             0xE000..=0xEFFF => {
                 self.chr_fe_bank_select1 = data & 0x1F;
-                Ok(MapWrite::WroteRegister)
+                Some(MapWrite::WroteRegister)
             }
             0xF000..=0xFFFF => {
                 if data & 0x01 == 0 {
@@ -95,13 +94,13 @@ impl Mapper for Mapper9 {
                 } else {
                     self.mirroring = Mirroring::Horizontal;
                 }
-                Ok(MapWrite::WroteRegister)
+                Some(MapWrite::WroteRegister)
             }
-            _ => Err(anyhow!("Address out of range")),
+            _ => None,
         }
     }
 
-    fn map_chr_read(&mut self, addr: u16) -> Result<MapRead> {
+    fn map_chr_read(&mut self, addr: u16) -> Option<MapRead> {
         let mapped_addr = match addr {
             0x0000..=0x0FFF => {
                 let bank = match self.latch0 {
@@ -119,7 +118,7 @@ impl Mapper for Mapper9 {
 
                 bank * CHR_ROM_BANK_SIZE + (addr - 0x1000) as usize
             }
-            _ => return Err(anyhow!("Address out of range")),
+            _ => return None,
         };
 
         match addr {
@@ -130,10 +129,10 @@ impl Mapper for Mapper9 {
             _ => {}
         }
 
-        Ok(MapRead::Address(mapped_addr))
+        Some(MapRead::Address(mapped_addr))
     }
 
-    fn map_chr_read_debug(&mut self, addr: u16) -> Result<MapRead> {
+    fn map_chr_read_debug(&mut self, addr: u16) -> Option<MapRead> {
         let mapped_addr = match addr {
             0x0000..=0x0FFF => {
                 let bank = match self.latch0 {
@@ -151,21 +150,21 @@ impl Mapper for Mapper9 {
 
                 bank * CHR_ROM_BANK_SIZE + (addr - 0x1000) as usize
             }
-            _ => return Err(anyhow!("Address out of range")),
+            _ => return None,
         };
 
-        Ok(MapRead::Address(mapped_addr))
+        Some(MapRead::Address(mapped_addr))
     }
 
-    fn map_chr_write(&self, addr: u16) -> Result<MapWrite> {
+    fn map_chr_write(&self, addr: u16) -> Option<MapWrite> {
         if addr > 0x1FFF {
-            return Err(anyhow!("Address out of range"));
+            return None;
         }
         if self.chr_banks > 0 {
-            return Err(anyhow!("Can't write to ROM"));
+            return None;
         }
 
-        Ok(MapWrite::Address(addr as usize))
+        Some(MapWrite::Address(addr as usize))
     }
 
     fn mirroring(&self) -> Option<Mirroring> {

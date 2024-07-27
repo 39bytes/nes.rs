@@ -215,7 +215,7 @@ impl Cpu {
                 self.controllers[i].read_button()
             }
             0x4020..=0xFFFF => match &self.cartridge {
-                Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap_or(0),
+                Some(cartridge) => cartridge.borrow_mut().cpu_read(addr),
                 None => panic!("Cartridge not attached"),
             },
             _ => 0,
@@ -240,7 +240,7 @@ impl Cpu {
                 self.controllers[i].peek_button()
             }
             0x4020..=0xFFFF => match &self.cartridge {
-                Some(cartridge) => cartridge.borrow_mut().cpu_read(addr).unwrap_or(0),
+                Some(cartridge) => cartridge.borrow_mut().cpu_read(addr),
                 None => panic!("Cartridge not attached"),
             },
             _ => 0,
@@ -294,7 +294,7 @@ impl Cpu {
                 }
             }
             0x4020..=0xFFFF => match &self.cartridge {
-                Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data).unwrap_or(()),
+                Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data),
                 None => panic!("Cartridge not attached"),
             },
             _ => {}

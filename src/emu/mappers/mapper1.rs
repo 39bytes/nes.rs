@@ -1,7 +1,6 @@
 use crate::emu::cartridge::Mirroring;
 
 use super::{MapRead, MapWrite, Mapper};
-use anyhow::{anyhow, Result};
 use modular_bitfield::prelude::*;
 
 const PRG_RAM_SIZE: usize = 32 * 1024;
@@ -61,9 +60,9 @@ impl Mapper1 {
 }
 
 impl Mapper for Mapper1 {
-    fn map_prg_read(&self, addr: u16) -> Result<MapRead> {
+    fn map_prg_read(&self, addr: u16) -> Option<MapRead> {
         match addr {
-            0x6000..=0x7FFF => Ok(MapRead::RAMData(self.prg_ram[(addr - 0x6000) as usize])),
+            0x6000..=0x7FFF => Some(MapRead::RAMData(self.prg_ram[(addr - 0x6000) as usize])),
             0x8000..=0xFFFF => {
                 let bank_mode = self.control.prg_rom_bank_mode();
                 let addr = match bank_mode {
@@ -92,23 +91,23 @@ impl Mapper for Mapper1 {
                     }
                     _ => unreachable!(),
                 };
-                Ok(MapRead::Address(addr))
+                Some(MapRead::Address(addr))
             }
-            _ => Err(anyhow!("Address {:#06X} out of range", addr)),
+            _ => None,
         }
     }
 
-    fn map_prg_write(&mut self, addr: u16, data: u8) -> Result<MapWrite> {
+    fn map_prg_write(&mut self, addr: u16, data: u8) -> Option<MapWrite> {
         match addr {
             0x6000..=0x7FFF => {
                 self.prg_ram[(addr - 0x6000) as usize] = data;
-                Ok(MapWrite::RAMWritten)
+                Some(MapWrite::RAMWritten)
             }
             // TODO: Emulate ignoring consecutive writes
             0x8000..=0xFFFF => {
                 if data & 0x80 != 0 {
                     self.reset();
-                    return Ok(MapWrite::WroteRegister);
+                    return Some(MapWrite::WroteRegister);
                 }
 
                 self.load >>= 1;
@@ -134,15 +133,15 @@ impl Mapper for Mapper1 {
                     self.load = 0x00;
                     self.load_write_count = 0;
                 }
-                Ok(MapWrite::WroteRegister)
+                Some(MapWrite::WroteRegister)
             }
-            _ => Err(anyhow!("Address {:#06X} out of range", addr)),
+            _ => None,
         }
     }
 
-    fn map_chr_read(&mut self, addr: u16) -> Result<MapRead> {
+    fn map_chr_read(&mut self, addr: u16) -> Option<MapRead> {
         if addr > 0x1FFF {
-            return Err(anyhow!("Address {:#06X} out of range", addr));
+            return None;
         }
 
         let addr = match self.control.chr_bank_mode() {
@@ -164,18 +163,18 @@ impl Mapper for Mapper1 {
             _ => unreachable!(),
         };
 
-        Ok(MapRead::Address(addr))
+        Some(MapRead::Address(addr))
     }
 
-    fn map_chr_write(&self, addr: u16) -> Result<MapWrite> {
+    fn map_chr_write(&self, addr: u16) -> Option<MapWrite> {
         if addr > 0x1FFF {
-            return Err(anyhow!("Address {:#06X} out of range", addr));
+            return None;
         }
         if self.chr_bank_count > 0 {
-            return Err(anyhow!("Can't write to ROM"));
+            return None;
         }
 
-        Ok(MapWrite::Address(addr as usize))
+        Some(MapWrite::Address(addr as usize))
     }
 
     fn mirroring(&self) -> Option<Mirroring> {

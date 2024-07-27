@@ -783,12 +783,9 @@ impl Ppu {
 
     pub fn write(&mut self, addr: u16, data: u8) {
         let cartridge = self.cartridge.as_ref().expect("Cartridge not attached");
-        if let Ok(()) = cartridge.borrow_mut().ppu_write(addr, data) {
-            return;
-        }
 
         match addr {
-            0x0000..=0x1FFF => {}
+            0x0000..=0x1FFF => cartridge.borrow_mut().ppu_write(addr, data),
             0x2000..=0x3EFF => {
                 let mirroring = cartridge.borrow().mirroring();
 
@@ -812,11 +809,9 @@ impl Ppu {
 
     fn read(&self, addr: u16) -> u8 {
         let cartridge = self.cartridge.as_ref().expect("Cartridge not attached");
-        if let Ok(data) = cartridge.borrow_mut().ppu_read(addr) {
-            return data;
-        }
 
         match addr {
+            0x0000..=0x1FFF => cartridge.borrow_mut().ppu_read(addr),
             0x2000..=0x3EFF => {
                 let mirroring = cartridge.borrow().mirroring();
 
@@ -840,11 +835,9 @@ impl Ppu {
 
     pub fn read_debug(&self, addr: u16) -> u8 {
         let cartridge = self.cartridge.as_ref().expect("Cartridge not attached");
-        if let Ok(data) = cartridge.borrow_mut().ppu_read_debug(addr) {
-            return data;
-        }
 
         match addr {
+            0x0000..=0x1FFF => cartridge.borrow_mut().ppu_read_debug(addr),
             0x2000..=0x3EFF => {
                 let mirroring = cartridge.borrow().mirroring();
 

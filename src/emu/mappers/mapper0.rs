@@ -1,5 +1,3 @@
-use anyhow::{anyhow, Result};
-
 use super::{MapRead, MapWrite, Mapper};
 
 const PRG_RAM_SIZE: usize = 8 * 1024;
@@ -19,9 +17,9 @@ impl Mapper0 {
 }
 
 impl Mapper for Mapper0 {
-    fn map_prg_read(&self, addr: u16) -> Result<MapRead> {
+    fn map_prg_read(&self, addr: u16) -> Option<MapRead> {
         match addr {
-            0x6000..=0x7FFF => Ok(MapRead::RAMData(self.ram[(addr - 0x6000) as usize])),
+            0x6000..=0x7FFF => Some(MapRead::RAMData(self.ram[(addr - 0x6000) as usize])),
             0x8000..=0xFFFF => {
                 let addr = if self.prg_banks == 1 {
                     addr & 0x3FFF
@@ -29,32 +27,31 @@ impl Mapper for Mapper0 {
                     addr & 0x7FFF
                 };
 
-                Ok(MapRead::Address(addr as usize))
+                Some(MapRead::Address(addr as usize))
             }
-            _ => Err(anyhow!("Address out of range")),
+            _ => None,
         }
     }
 
-    fn map_prg_write(&mut self, addr: u16, data: u8) -> Result<MapWrite> {
+    fn map_prg_write(&mut self, addr: u16, data: u8) -> Option<MapWrite> {
         match addr {
             0x6000..=0x7FFF => {
                 self.ram[(addr - 0x6000) as usize] = data;
-                Ok(MapWrite::RAMWritten)
+                Some(MapWrite::RAMWritten)
             }
-            0x8000..=0xFFFF => Err(anyhow!("PRG ROM not writable")),
-            _ => Err(anyhow!("Address out of range")),
+            _ => None,
         }
     }
 
-    fn map_chr_read(&mut self, addr: u16) -> Result<MapRead> {
+    fn map_chr_read(&mut self, addr: u16) -> Option<MapRead> {
         if addr > 0x1FFF {
-            return Err(anyhow!("Address out of range"));
+            return None;
         }
 
-        Ok(MapRead::Address(addr as usize))
+        Some(MapRead::Address(addr as usize))
     }
 
-    fn map_chr_write(&self, _addr: u16) -> Result<MapWrite> {
-        Err(anyhow!("Can't write to ROM"))
+    fn map_chr_write(&self, _addr: u16) -> Option<MapWrite> {
+        None
     }
 }

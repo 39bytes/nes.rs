@@ -165,38 +165,39 @@ impl Cartridge {
         Ok((prg_mem, chr_mem))
     }
 
-    pub fn cpu_write(&mut self, addr: u16, data: u8) -> Result<()> {
-        if let MapWrite::Address(addr) = self.mapper.map_prg_write(addr, data)? {
+    pub fn cpu_write(&mut self, addr: u16, data: u8) {
+        if let Some(MapWrite::Address(addr)) = self.mapper.map_prg_write(addr, data) {
             self.prg_memory[addr] = data;
         }
-        Ok(())
     }
 
-    pub fn cpu_read(&self, addr: u16) -> Result<u8> {
-        match self.mapper.map_prg_read(addr)? {
-            MapRead::Address(addr) => Ok(self.prg_memory[addr]),
-            MapRead::RAMData(data) => Ok(data),
+    pub fn cpu_read(&self, addr: u16) -> u8 {
+        match self.mapper.map_prg_read(addr) {
+            Some(MapRead::Address(addr)) => self.prg_memory[addr],
+            Some(MapRead::RAMData(data)) => data,
+            None => 0,
         }
     }
 
-    pub fn ppu_write(&mut self, addr: u16, data: u8) -> Result<()> {
-        if let MapWrite::Address(addr) = self.mapper.map_chr_write(addr)? {
+    pub fn ppu_write(&mut self, addr: u16, data: u8) {
+        if let Some(MapWrite::Address(addr)) = self.mapper.map_chr_write(addr) {
             self.chr_memory[addr] = data;
         }
-        Ok(())
     }
 
-    pub fn ppu_read(&mut self, addr: u16) -> Result<u8> {
-        match self.mapper.map_chr_read(addr)? {
-            MapRead::Address(addr) => Ok(self.chr_memory[addr]),
-            _ => todo!(),
+    pub fn ppu_read(&mut self, addr: u16) -> u8 {
+        match self.mapper.map_chr_read(addr) {
+            Some(MapRead::Address(addr)) => self.chr_memory[addr],
+            Some(MapRead::RAMData(data)) => data,
+            None => 0,
         }
     }
 
-    pub fn ppu_read_debug(&mut self, addr: u16) -> Result<u8> {
-        match self.mapper.map_chr_read_debug(addr)? {
-            MapRead::Address(addr) => Ok(self.chr_memory[addr]),
-            _ => todo!(),
+    pub fn ppu_read_debug(&mut self, addr: u16) -> u8 {
+        match self.mapper.map_chr_read_debug(addr) {
+            Some(MapRead::Address(addr)) => self.chr_memory[addr],
+            Some(MapRead::RAMData(data)) => data,
+            None => 0,
         }
     }
 }

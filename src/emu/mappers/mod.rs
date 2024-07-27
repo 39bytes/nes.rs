@@ -1,5 +1,3 @@
-use anyhow::Result;
-
 mod mapper0;
 mod mapper1;
 mod mapper2;
@@ -26,14 +24,14 @@ pub enum MapWrite {
 }
 
 pub trait Mapper {
-    fn map_prg_read(&self, addr: u16) -> Result<MapRead>;
-    fn map_prg_write(&mut self, addr: u16, data: u8) -> Result<MapWrite>;
-    fn map_chr_read(&mut self, addr: u16) -> Result<MapRead>;
-    fn map_chr_write(&self, addr: u16) -> Result<MapWrite>;
+    fn map_prg_read(&self, addr: u16) -> Option<MapRead>;
+    fn map_prg_write(&mut self, addr: u16, data: u8) -> Option<MapWrite>;
+    fn map_chr_read(&mut self, addr: u16) -> Option<MapRead>;
+    fn map_chr_write(&self, addr: u16) -> Option<MapWrite>;
     fn mirroring(&self) -> Option<Mirroring> {
         None
     }
-    fn map_chr_read_debug(&mut self, addr: u16) -> Result<MapRead> {
+    fn map_chr_read_debug(&mut self, addr: u16) -> Option<MapRead> {
         self.map_chr_read(addr)
     }
 }

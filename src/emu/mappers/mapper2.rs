@@ -1,5 +1,4 @@
 use super::{MapRead, MapWrite, Mapper};
-use anyhow::{anyhow, Result};
 
 pub struct Mapper2 {
     prg_banks: u8,
@@ -20,47 +19,47 @@ impl Mapper2 {
 }
 
 impl Mapper for Mapper2 {
-    fn map_prg_read(&self, addr: u16) -> Result<MapRead> {
+    fn map_prg_read(&self, addr: u16) -> Option<MapRead> {
         match addr {
             0x8000..=0xBFFF => {
                 let bank = self.bank_select as usize;
                 let addr = bank * PRG_BANK_SIZE + (addr & 0x3FFF) as usize;
-                Ok(MapRead::Address(addr))
+                Some(MapRead::Address(addr))
             }
             0xC000..=0xFFFF => {
                 let bank = (self.prg_banks - 1) as usize;
                 let addr = bank * PRG_BANK_SIZE + (addr & 0x3FFF) as usize;
-                Ok(MapRead::Address(addr))
+                Some(MapRead::Address(addr))
             }
-            _ => Err(anyhow!("Address {:#06X} out of range", addr)),
+            _ => None,
         }
     }
-    fn map_prg_write(&mut self, addr: u16, data: u8) -> Result<MapWrite> {
+    fn map_prg_write(&mut self, addr: u16, data: u8) -> Option<MapWrite> {
         match addr {
             0x8000..=0xFFFF => {
                 self.bank_select = data & 0x0F;
-                Ok(MapWrite::WroteRegister)
+                Some(MapWrite::WroteRegister)
             }
-            _ => Err(anyhow!("Address {:#06X} out of range", addr)),
+            _ => None,
         }
     }
 
-    fn map_chr_read(&mut self, addr: u16) -> Result<MapRead> {
+    fn map_chr_read(&mut self, addr: u16) -> Option<MapRead> {
         if addr > 0x1FFF {
-            return Err(anyhow!("Address {:#06X} out of range", addr));
+            return None;
         }
 
-        Ok(MapRead::Address(addr as usize))
+        Some(MapRead::Address(addr as usize))
     }
 
-    fn map_chr_write(&self, addr: u16) -> Result<MapWrite> {
+    fn map_chr_write(&self, addr: u16) -> Option<MapWrite> {
         if addr > 0x1FFF {
-            return Err(anyhow!("Address {:#06X} out of range", addr));
+            return None;
         }
         if self.chr_banks > 0 {
-            return Err(anyhow!("Can't write to ROM"));
+            return None;
         }
 
-        Ok(MapWrite::Address(addr as usize))
+        Some(MapWrite::Address(addr as usize))
     }
 }
