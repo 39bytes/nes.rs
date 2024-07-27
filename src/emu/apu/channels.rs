@@ -220,9 +220,6 @@ const DMC_RATE_LOOKUP: [u16; 16] = [
     214, 190, 170, 160, 143, 127, 113, 107, 95, 80, 71, 64, 53, 42, 36, 27,
 ];
 
-// TODO: Implement this channel
-//
-//
 #[derive(Debug, Copy, Clone)]
 pub enum DMCDMARequest {
     Load(u16),
@@ -235,10 +232,6 @@ pub struct DMCClockResult {
     pub interrupt: bool,
 }
 
-// NOTE:
-// If the DMC bit is clear, the DMC bytes remaining will be set to 0 and the DMC will silence when it empties.
-// If the DMC bit is set, the DMC sample will be restarted only if its bytes remaining is 0. If there are bits remaining in the 1-byte sample buffer, these will finish playing before the next sample is fetched.
-// Writing to this register clears the DMC interrupt flag.
 #[derive(Default, Debug)]
 pub(crate) struct DMCChannel {
     enabled: bool,
@@ -361,10 +354,10 @@ impl DMCChannel {
     // https://www.nesdev.org/wiki/APU_DMC#Memory_reader
     pub fn write_sample_buffer(&mut self, sample: u8) {
         self.sample_buffer = Some(sample);
-        if self.sample_addr == 0xFFFF {
-            self.sample_addr = 0x8000;
+        if self.current_addr == 0xFFFF {
+            self.current_addr = 0x8000;
         } else {
-            self.sample_addr += 1;
+            self.current_addr += 1;
         }
 
         self.bytes_remaining -= 1;

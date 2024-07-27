@@ -70,7 +70,7 @@ impl Apu {
             }
         };
 
-        (pulse_out + tnd_out) * 0.025
+        pulse_out + tnd_out
     }
 
     pub fn clock(&mut self, dma_sample: Option<u8>) -> Option<DMCClockResult> {
