@@ -46,11 +46,17 @@ To find out which mapper a game uses, search it on [NesCartDB](https://nescartdb
 ## TODO
 ### Emulation
 - [ ] Accurate audio emulation
-    - [ ] Implement DCPM channel for APU
-    - [ ] Investigate issues with envelope/sweep unit
+    - [x] Implement DMC channel for APU
+    - [x] Investigate issues with envelope/sweep unit
     - [ ] Fix issues with buffer underrun/overrun and reduce audio latency
 - [ ] Investigate performance issues
-- [ ] Implement mappers 4, 5, 7, 9, 10 and 66
+- [ ] Implement more mappers 
+    - [ ] Mapper 4 (MMC3)
+    - [ ] Mapper 5 (MMC5)
+    - [ ] Mapper 7 (AxROM)
+    - [x] Mapper 9 (MMC2)
+    - [ ] Mapper 10 (MMC4)
+    - [ ] Mapper 66 (GxROM)
 - [ ] Run test ROMs for PPU emulation
 - [ ] Open bus behavior emulation
 
