@@ -11,4 +11,4 @@ debug ROM_PATH:
     RUST_LOG=info cargo run {{ROM_PATH}}
 
 profile:
-    cargo flamegraph --dev -- assets/test_roms/mario.nes
+    CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph -- assets/test_roms/mario.nes
