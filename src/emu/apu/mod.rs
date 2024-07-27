@@ -7,6 +7,32 @@ mod components;
 
 pub use channels::DMCDMARequest;
 
+// Precompute lookup tables for sampling
+// See https://www.nesdev.org/wiki/APU_Mixer#Lookup_Table
+const PULSE_TABLE: [f32; 31] = const {
+    let mut pulse_table = [0.0; 31];
+
+    let mut n = 1;
+    while n < 31 {
+        pulse_table[n] = 95.52 / (8128.0 / (n as f32) + 100.0);
+        n += 1;
+    }
+
+    pulse_table
+};
+
+const TND_TABLE: [f32; 203] = const {
+    let mut tnd_table = [0.0; 203];
+
+    let mut n = 1;
+    while n < 203 {
+        tnd_table[n] = 163.67 / (24329.0 / (n as f32) + 100.0);
+        n += 1;
+    }
+
+    tnd_table
+};
+
 enum SequenceMode {
     FourStep,
     FiveStep,
@@ -50,25 +76,28 @@ impl Apu {
         // See: https://www.nesdev.org/wiki/APU_Mixer
         let p1 = self.pulse1.sample();
         let p2 = self.pulse2.sample();
-        let pulse_out = match (p1, p2) {
-            (0, 0) => 0.0,
-            _ => 95.88 / ((8128.0 / (p1 as f32 + p2 as f32)) + 100.0),
-        };
+        let pulse_out = PULSE_TABLE[(p1 + p2) as usize];
+        // let pulse_out = match (p1, p2) {
+        //     (0, 0) => 0.0,
+        //     _ => 95.88 / ((8128.0 / (p1 as f32 + p2 as f32)) + 100.0),
+        // };
 
         let triangle = self.triangle.sample();
         let noise = self.noise.sample();
         let dmc = self.dmc.sample();
 
-        let tnd_out = match (triangle, noise, dmc) {
-            (0, 0, 0) => 0.0,
-            _ => {
-                let tnd = 1.0
-                    / ((triangle as f32 / 8227.0)
-                        + (noise as f32 / 12241.0)
-                        + (dmc as f32 / 22638.0));
-                159.79 / (tnd + 100.0)
-            }
-        };
+        let tnd_out = TND_TABLE[(3 * triangle + 2 * noise + dmc) as usize];
+
+        // let tnd_out = match (triangle, noise, dmc) {
+        //     (0, 0, 0) => 0.0,
+        //     _ => {
+        //         let tnd = 1.0
+        //             / ((triangle as f32 / 8227.0)
+        //                 + (noise as f32 / 12241.0)
+        //                 + (dmc as f32 / 22638.0));
+        //         159.79 / (tnd + 100.0)
+        //     }
+        // };
 
         pulse_out + tnd_out
     }
