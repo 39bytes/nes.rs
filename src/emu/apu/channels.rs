@@ -223,12 +223,13 @@ const DMC_RATE_LOOKUP: [u16; 16] = [
 // TODO: Implement this channel
 //
 //
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum DMCDMARequest {
     Load(u16),
     Reload(u16),
 }
 
+#[derive(Debug)]
 pub struct DMCClockResult {
     pub dma_req: Option<DMCDMARequest>,
     pub interrupt: bool,
@@ -261,7 +262,10 @@ pub(crate) struct DMCChannel {
 
 impl DMCChannel {
     pub fn new() -> Self {
-        DMCChannel::default()
+        Self {
+            bits_remaining: 8,
+            ..DMCChannel::default()
+        }
     }
 
     pub fn clock(&mut self, dma_sample: Option<u8>) -> DMCClockResult {
@@ -310,6 +314,7 @@ impl DMCChannel {
                         self.sample_buffer = None;
 
                         if self.bytes_remaining != 0 {
+                            log::info!("Requesting DMC DMA (Reload)");
                             return DMCClockResult {
                                 dma_req: Some(DMCDMARequest::Reload(self.current_addr)),
                                 interrupt: self.interrupt,
@@ -323,10 +328,10 @@ impl DMCChannel {
             }
         }
 
-        return DMCClockResult {
+        DMCClockResult {
             dma_req: None,
             interrupt: self.interrupt,
-        };
+        }
     }
 
     pub fn sample(&self) -> u8 {
@@ -348,7 +353,10 @@ impl DMCChannel {
         }
 
         match self.sample_buffer {
-            None if self.bytes_remaining != 0 => Some(DMCDMARequest::Load(self.current_addr)),
+            None if self.bytes_remaining != 0 => {
+                log::info!("Requesting DMC DMA (Load)");
+                Some(DMCDMARequest::Load(self.current_addr))
+            }
             _ => None,
         }
     }
