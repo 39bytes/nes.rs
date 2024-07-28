@@ -74,7 +74,13 @@ pub fn draw_cpu_info(renderer: &mut Renderer, nes: &Nes, x: usize, y: usize) {
             x,
             y + 200 + i * 20,
         );
-        addr += instruction.address_mode.arg_size() + 1;
+
+        let stride = instruction.address_mode.arg_size() + 1;
+        // Prevent overflow when near end of address space
+        if 0xFFFF - addr < stride {
+            break;
+        }
+        addr += stride;
     }
 }
 

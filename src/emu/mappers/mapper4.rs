@@ -2,7 +2,7 @@ use super::{MapRead, MapWrite, Mapper};
 use crate::emu::cartridge::Mirroring;
 
 const PRG_BANK_SIZE: usize = 8 * 1024;
-const CHR_BANK_SIZE: usize = 1 * 1024;
+const CHR_BANK_SIZE: usize = 1024;
 
 enum PRGROMBankMode {
     BottomSwappable,
@@ -35,8 +35,10 @@ impl CHRROMBankMode {
 }
 
 pub struct Mapper4 {
-    prg_banks: u8,
-    chr_banks: u8,
+    prg_banks: usize,
+    chr_banks: usize,
+
+    prg_ram: [u8; 8 * 1024],
 
     update_bank: u8,
     prg_rom_bank_mode: PRGROMBankMode,
@@ -61,10 +63,18 @@ pub struct Mapper4 {
 }
 
 impl Mapper4 {
-    pub fn new(prg_banks: u8, chr_banks: u8) -> Self {
+    pub fn new(prg_banks: usize, chr_banks: usize) -> Self {
+        log::info!(
+            "Mapper 4 - initialized with {} PRG banks and {} CHR banks",
+            prg_banks,
+            chr_banks
+        );
+
         Self {
             prg_banks,
             chr_banks,
+
+            prg_ram: [0; 8 * 1024],
 
             update_bank: 0,
             prg_rom_bank_mode: PRGROMBankMode::BottomSwappable,
@@ -94,27 +104,37 @@ impl Mapper for Mapper4 {
     fn map_prg_read(&self, addr: u16) -> Option<MapRead> {
         let bank = match self.prg_rom_bank_mode {
             PRGROMBankMode::BottomSwappable => match addr {
+                0x6000..=0x7FFF => {
+                    return Some(MapRead::RAMData(self.prg_ram[(addr & 0x1FFF) as usize]))
+                }
                 0x8000..=0x9FFF => self.prg_bank_r6,
                 0xA000..=0xBFFF => self.prg_bank_r7,
-                0xC000..=0xDFFF => self.prg_banks - 2,
-                0xE000..=0xFFFF => self.prg_banks - 1,
+                0xC000..=0xDFFF => (self.prg_banks - 2) as u8,
+                0xE000..=0xFFFF => (self.prg_banks - 1) as u8,
                 _ => return None,
             },
             PRGROMBankMode::TopSwappable => match addr {
-                0x8000..=0x9FFF => self.prg_banks - 2,
+                0x6000..=0x7FFF => {
+                    return Some(MapRead::RAMData(self.prg_ram[(addr & 0x1FFF) as usize]))
+                }
+                0x8000..=0x9FFF => (self.prg_banks - 2) as u8,
                 0xA000..=0xBFFF => self.prg_bank_r7,
                 0xC000..=0xDFFF => self.prg_bank_r6,
-                0xE000..=0xFFFF => self.prg_banks - 1,
+                0xE000..=0xFFFF => (self.prg_banks - 1) as u8,
                 _ => return None,
             },
         } as usize;
 
-        let mapped = bank * PRG_BANK_SIZE + (addr as usize & 0x1FFF);
+        let mapped = bank * PRG_BANK_SIZE + (addr as usize % PRG_BANK_SIZE);
         Some(MapRead::Address(mapped))
     }
 
     fn map_prg_write(&mut self, addr: u16, data: u8) -> Option<MapWrite> {
         match addr {
+            0x6000..=0x7FFF => {
+                self.prg_ram[(addr & 0x1FFF) as usize] = data;
+                Some(MapWrite::RAMWritten)
+            }
             // Bank select
             0x8000..=0x9FFE if addr % 2 == 0 => {
                 self.update_bank = data & 0b0000_0111;
@@ -127,8 +147,8 @@ impl Mapper for Mapper4 {
             // Bank data
             0x8001..=0x9FFF if addr % 2 == 1 => {
                 match self.update_bank {
-                    0 => self.chr_bank_r0 = (data & 0b1111_1110) >> 1,
-                    1 => self.chr_bank_r1 = (data & 0b1111_1110) >> 1,
+                    0 => self.chr_bank_r0 = data & 0b1111_1110,
+                    1 => self.chr_bank_r1 = data & 0b1111_1110,
                     2 => self.chr_bank_r2 = data,
                     3 => self.chr_bank_r3 = data,
                     4 => self.chr_bank_r4 = data,

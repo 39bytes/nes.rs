@@ -116,8 +116,8 @@ impl Cartridge {
             2 => Box::new(Mapper2::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             3 => Box::new(Mapper3::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             4 => Box::new(Mapper4::new(
-                header.prg_rom_chunks * 2,
-                header.chr_rom_chunks * 8,
+                (header.prg_rom_chunks as usize) * 2,
+                (header.chr_rom_chunks as usize) * 8,
             )),
             9 => Box::new(Mapper9::new(
                 header.prg_rom_chunks * 2,
