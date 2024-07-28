@@ -75,7 +75,6 @@ impl PulseChannel {
     }
 
     pub fn set_duty_cycle(&mut self, duty_cycle: u8) {
-        assert!(duty_cycle < 4);
         self.sequence = match duty_cycle {
             0 => 0b0000_0001,
             1 => 0b0000_0011,

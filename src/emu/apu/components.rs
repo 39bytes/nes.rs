@@ -26,7 +26,7 @@ impl LengthCounter {
     }
 
     pub fn set_counter(&mut self, val: u8) {
-        assert!(val < 32);
+        debug_assert!(val < 32);
         if !self.enabled {
             return;
         }
