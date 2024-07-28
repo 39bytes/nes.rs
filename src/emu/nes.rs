@@ -102,6 +102,8 @@ impl Nes {
             }
         }
 
+        let mut irq = clock_res.irq;
+
         if self.clock_count % 3 == 0 {
             let dmc_sample = self.cpu.borrow_mut().clock();
             let dma_req = self.apu.borrow_mut().clock(dmc_sample.map(|s| s.0));
@@ -110,10 +112,8 @@ impl Nes {
                 if let Some(req) = res.dma_req {
                     self.cpu.borrow_mut().begin_dmc_dma(req);
                 }
-                if res.interrupt {
-                    log::info!("IRQ triggered");
-                    self.cpu.borrow_mut().irq();
-                }
+
+                irq = irq || res.interrupt;
             }
         }
 
@@ -123,6 +123,8 @@ impl Nes {
 
         if clock_res.nmi {
             self.cpu.borrow_mut().nmi();
+        } else if irq {
+            self.cpu.borrow_mut().irq();
         }
     }
 

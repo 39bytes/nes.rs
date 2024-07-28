@@ -39,6 +39,7 @@ struct SpritePixel {
 pub struct PpuClockResult {
     pub pixel: Option<Pixel>,
     pub nmi: bool,
+    pub irq: bool,
 }
 
 const PALETTE_RAM_SIZE: usize = 32;
@@ -186,6 +187,8 @@ impl Ppu {
     /// See: https://www.nesdev.org/wiki/PPU_rendering
     /// for details on how this works.
     pub fn clock(&mut self) -> PpuClockResult {
+        let mut irq = false;
+
         // Rendering during the visible region
         if self.scanline >= -1 && self.scanline < 240 {
             // Rendering a new frame so reset some flags
@@ -259,6 +262,16 @@ impl Ppu {
                 self.scanline_sprites = self.next_scanline_sprite_evaluation();
             }
 
+            if self.cycle == 260 {
+                // Notify mapper of scanline end (mapper 3 IRQ clock)
+                irq = self
+                    .cartridge
+                    .as_ref()
+                    .expect("Cartridge not attached")
+                    .borrow_mut()
+                    .on_scanline_hblank();
+            }
+
             // Sprite rendering
             if self.cycle == 340 {
                 for (i, sprite) in self.scanline_sprites.iter().enumerate() {
@@ -300,7 +313,7 @@ impl Ppu {
             }
         }
 
-        PpuClockResult { pixel, nmi }
+        PpuClockResult { pixel, nmi, irq }
     }
 
     fn fetch_nametable_tile_id(&self) -> u8 {
@@ -669,7 +682,7 @@ impl Ppu {
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) {
-        assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
+        debug_assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
 
         let register = addr % 8;
         match register {
@@ -721,7 +734,7 @@ impl Ppu {
     }
 
     pub fn cpu_read(&mut self, addr: u16) -> u8 {
-        assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
+        debug_assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
 
         let register = addr % 8;
         match register {
@@ -765,7 +778,7 @@ impl Ppu {
 
     /// CPU Read but doesn't affect state
     pub fn cpu_read_debug(&self, addr: u16) -> u8 {
-        assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
+        debug_assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
 
         let register = addr % 8;
         match register {
@@ -906,7 +919,7 @@ impl Ppu {
 /// Returns nametable (0 or 1) as well as the index within the nametable
 /// See: https://www.nesdev.org/wiki/Mirroring
 fn map_addr_to_nametable(mirroring: Mirroring, addr: u16) -> (usize, usize) {
-    assert!(
+    debug_assert!(
         (0x2000..=0x3FFF).contains(&addr),
         "Invalid nametable address"
     );

@@ -34,6 +34,9 @@ bitflags! {
     }
 }
 
+const PRG_ROM_CHUNK_SIZE: usize = 16 * 1024;
+const CHR_ROM_CHUNK_SIZE: usize = 8 * 1024;
+
 /// The iNES format file header
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -112,6 +115,10 @@ impl Cartridge {
             1 => Box::new(Mapper1::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             2 => Box::new(Mapper2::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             3 => Box::new(Mapper3::new(header.prg_rom_chunks, header.chr_rom_chunks)),
+            4 => Box::new(Mapper4::new(
+                header.prg_rom_chunks * 2,
+                header.chr_rom_chunks * 8,
+            )),
             9 => Box::new(Mapper9::new(
                 header.prg_rom_chunks * 2,
                 header.chr_rom_chunks * 2,
@@ -135,7 +142,7 @@ impl Cartridge {
     }
 
     fn from_ines1(mut f: File, header: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
-        let prg_rom_size = (header.prg_rom_chunks as usize) * 16 * 1024;
+        let prg_rom_size = (header.prg_rom_chunks as usize) * PRG_ROM_CHUNK_SIZE;
         log::info!("Reading {} bytes of program ROM", prg_rom_size);
 
         let mut prg_mem = vec![0u8; prg_rom_size];
@@ -146,9 +153,9 @@ impl Cartridge {
         if header.chr_rom_chunks == 0 {
             log::info!("No character ROM, allocating 8 KB of character RAM");
 
-            chr_mem = vec![0u8; 8 * 1024];
+            chr_mem = vec![0u8; CHR_ROM_CHUNK_SIZE];
         } else {
-            let chr_rom_size = (header.chr_rom_chunks as usize) * 8 * 1024;
+            let chr_rom_size = (header.chr_rom_chunks as usize) * CHR_ROM_CHUNK_SIZE;
             log::info!("Reading {} bytes of character ROM", chr_rom_size);
 
             chr_mem = vec![0u8; chr_rom_size];
@@ -192,5 +199,9 @@ impl Cartridge {
             Some(MapRead::RAMData(data)) => data,
             None => 0,
         }
+    }
+
+    pub fn on_scanline_hblank(&mut self) -> bool {
+        self.mapper.on_scanline_hblank()
     }
 }
