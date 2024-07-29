@@ -796,7 +796,6 @@ impl Ppu {
             }
             0x3F00..=0x3FFF => {
                 // Palette ram is from 0x3F00 to 0x3F1F, but mirrored from 0x3F20-0x3FFF
-                log::info!("Wrote {:02X} to {:04X}", data, addr);
                 let i = addr & 0x1F;
                 let i = match i {
                     0x10 | 0x14 | 0x18 | 0x1C => i - 0x10,
@@ -873,7 +872,7 @@ impl Ppu {
         self.palette.get_color(color_index)
     }
 
-    pub fn get_pattern_table(&self, table: PatternTable) -> Sprite {
+    pub fn get_pattern_table(&self, table: PatternTable, mode_8x16: bool) -> Sprite {
         let table_offset = match table {
             PatternTable::Left => 0x0000,
             PatternTable::Right => 0x1000,
@@ -884,6 +883,18 @@ impl Ppu {
         for i in 0..16 {
             for j in 0..16 {
                 let tile_offset = i * 256 + j * 16;
+                let (tile_y, tile_x) = if mode_8x16 {
+                    match (i % 2, j % 2) {
+                        (0, 0) => (i, j / 2),
+                        (0, 1) => (i + 1, j / 2),
+                        (1, 0) => (i - 1, j / 2 + 8),
+                        (1, 1) => (i, j / 2 + 8),
+                        _ => unreachable!(),
+                    }
+                } else {
+                    (i, j)
+                };
+
                 for tile_row in 0..8 {
                     let row_addr = table_offset + tile_offset + tile_row;
                     let tile_lsb = self.read_debug(row_addr);
@@ -894,7 +905,9 @@ impl Ppu {
                         let msb = (tile_msb >> tile_col) & 0x01;
 
                         let pixel = (msb << 1) | lsb;
-                        let pixel_index = (i * 8 + tile_row) * 128 + (j * 8 + 7 - tile_col);
+
+                        let pixel_index =
+                            (tile_y * 8 + tile_row) * 128 + (tile_x * 8 + 7 - tile_col);
                         // TODO: Don't hardcode palette
                         buf[pixel_index as usize] = self.get_palette_color(0, pixel);
                     }

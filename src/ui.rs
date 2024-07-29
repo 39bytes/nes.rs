@@ -135,8 +135,8 @@ pub fn draw_ppu_info(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
 }
 
 pub fn draw_pattern_tables(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
-    let left_pattern_table = ppu.get_pattern_table(PatternTable::Left);
-    let right_pattern_table = ppu.get_pattern_table(PatternTable::Right);
+    let left_pattern_table = ppu.get_pattern_table(PatternTable::Left, false);
+    let right_pattern_table = ppu.get_pattern_table(PatternTable::Right, true);
 
     renderer.draw_text("Pattern Tables", x, y);
     renderer.draw(&left_pattern_table.scale(2), x, y + 24);
