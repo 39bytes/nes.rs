@@ -21,6 +21,18 @@ pub struct Sprite {
     pub oam_index: usize,
 }
 
+impl Sprite {
+    pub fn from_bytes(bytes: &[u8], oam_index: usize) -> Self {
+        Sprite {
+            y: bytes[0],
+            tile_id: bytes[1],
+            attribute: SpriteAttribute::from_bits_truncate(bytes[2]),
+            x: bytes[3],
+            oam_index,
+        }
+    }
+}
+
 impl Default for Sprite {
     fn default() -> Self {
         Sprite {

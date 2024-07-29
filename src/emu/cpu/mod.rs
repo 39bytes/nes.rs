@@ -409,7 +409,6 @@ impl Cpu {
         }
 
         if self.cycles == 0 {
-            // println!("{}", self.get_log_line());
             self.opcode = self.read(self.pc);
 
             let instruction = Instruction::lookup(self.opcode);

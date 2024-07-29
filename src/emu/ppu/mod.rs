@@ -3,6 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use crate::renderer::{Color, Pixel, Sprite};
 
 pub use self::pattern_table::PatternTable;
+
 use self::{
     flags::*,
     shift_register::{ShiftRegister16, ShiftRegister8},
@@ -19,7 +20,7 @@ use super::{
 mod flags;
 mod pattern_table;
 mod shift_register;
-mod sprite;
+pub mod sprite;
 mod vram_addr;
 
 #[derive(Debug, Default)]
@@ -190,7 +191,7 @@ impl Ppu {
         let mut irq = false;
 
         // Rendering during the visible region
-        if self.scanline >= -1 && self.scanline < 240 {
+        if self.scanline < 240 {
             // Rendering a new frame so reset some flags
             if self.scanline == -1 && self.cycle == 1 {
                 self.status.set(PpuStatus::VerticalBlank, false);
@@ -262,16 +263,6 @@ impl Ppu {
                 self.scanline_sprites = self.next_scanline_sprite_evaluation();
             }
 
-            if self.cycle == 260 {
-                // Notify mapper of scanline end (mapper 3 IRQ clock)
-                irq = self
-                    .cartridge
-                    .as_ref()
-                    .expect("Cartridge not attached")
-                    .borrow_mut()
-                    .on_scanline_hblank();
-            }
-
             // Sprite rendering
             if self.cycle == 340 {
                 for (i, sprite) in self.scanline_sprites.iter().enumerate() {
@@ -303,6 +294,10 @@ impl Ppu {
         };
 
         self.cycle += 1;
+        if self.rendering_enabled() && self.cycle == 260 && self.scanline < 240 {
+            // Notify mapper of scanline end (mapper 3 IRQ clock)
+            irq = self.notify_scanline_hblank();
+        }
         if self.cycle > 340 {
             self.cycle = 0;
             self.scanline += 1;
@@ -556,14 +551,7 @@ impl Ppu {
                 break;
             }
 
-            let sprite = PpuSprite {
-                y: sprite[0],
-                tile_id: sprite[1],
-                attribute: SpriteAttribute::from_bits_truncate(sprite[2]),
-                x: sprite[3],
-                oam_index: i,
-            };
-
+            let sprite = PpuSprite::from_bytes(sprite, i);
             if in_range(sprite.y) {
                 next_scanline_sprites.push(sprite);
             }
@@ -685,6 +673,7 @@ impl Ppu {
         debug_assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
 
         let register = addr % 8;
+
         match register {
             0 => {
                 self.ctrl = PpuCtrl::from_bits_truncate(data);
@@ -807,6 +796,7 @@ impl Ppu {
             }
             0x3F00..=0x3FFF => {
                 // Palette ram is from 0x3F00 to 0x3F1F, but mirrored from 0x3F20-0x3FFF
+                log::info!("Wrote {:02X} to {:04X}", data, addr);
                 let i = addr & 0x1F;
                 let i = match i {
                     0x10 | 0x14 | 0x18 | 0x1C => i - 0x10,
@@ -913,6 +903,14 @@ impl Ppu {
         }
 
         Sprite::new(Vec::from(buf), 128, 128).expect("Failed to create sprite from pattern table")
+    }
+
+    pub fn notify_scanline_hblank(&self) -> bool {
+        self.cartridge
+            .as_ref()
+            .expect("Cartridge not attached")
+            .borrow_mut()
+            .on_scanline_hblank()
     }
 }
 

@@ -124,7 +124,6 @@ impl Nes {
         if clock_res.nmi {
             self.cpu.borrow_mut().nmi();
         } else if irq {
-            log::info!("Triggered IRQ");
             self.cpu.borrow_mut().irq();
         }
     }
@@ -271,5 +270,30 @@ mod test {
     #[test]
     fn instr_test_v5_16_special() {
         rom_test("assets/test_roms/instr_test-v5/16-special.nes");
+    }
+
+    #[test]
+    fn mmc3_test_1_clocking() {
+        rom_test("assets/test_roms/mmc3_test/1-clocking.nes");
+    }
+
+    #[test]
+    fn mmc3_test_2_details() {
+        rom_test("assets/test_roms/mmc3_test/2-details.nes");
+    }
+
+    #[test]
+    fn mmc3_test_3_a12_clocking() {
+        rom_test("assets/test_roms/mmc3_test/3-A12_clocking.nes");
+    }
+
+    #[test]
+    fn mmc3_test_4_a12_clocking() {
+        rom_test("assets/test_roms/mmc3_test/4-scanline_timing.nes");
+    }
+
+    #[test]
+    fn mmc3_test_5_mmc3() {
+        rom_test("assets/test_roms/mmc3_test/5-MMC3.nes");
     }
 }

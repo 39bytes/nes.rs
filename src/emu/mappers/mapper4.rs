@@ -125,7 +125,7 @@ impl Mapper for Mapper4 {
             },
         } as usize;
 
-        let mapped = bank * PRG_BANK_SIZE + (addr as usize % PRG_BANK_SIZE);
+        let mapped = bank * PRG_BANK_SIZE + (addr as usize & 0x1FFF);
         Some(MapRead::Address(mapped))
     }
 
@@ -136,7 +136,7 @@ impl Mapper for Mapper4 {
                 Some(MapWrite::RAMWritten)
             }
             // Bank select
-            0x8000..=0x9FFE if addr % 2 == 0 => {
+            0x8000..=0x9FFF if addr % 2 == 0 => {
                 self.update_bank = data & 0b0000_0111;
                 // TODO: Emulate MMC6 PRG RAM controls
                 self.prg_rom_bank_mode = PRGROMBankMode::from_bit(data & 0b0100_0000);
@@ -145,7 +145,7 @@ impl Mapper for Mapper4 {
                 Some(MapWrite::WroteRegister)
             }
             // Bank data
-            0x8001..=0x9FFF if addr % 2 == 1 => {
+            0x8000..=0x9FFF if addr % 2 == 1 => {
                 match self.update_bank {
                     0 => self.chr_bank_r0 = data & 0b1111_1110,
                     1 => self.chr_bank_r1 = data & 0b1111_1110,
@@ -159,7 +159,7 @@ impl Mapper for Mapper4 {
                 }
                 Some(MapWrite::WroteRegister)
             }
-            0xA000..=0xBFFE if addr % 2 == 0 => {
+            0xA000..=0xBFFF if addr % 2 == 0 => {
                 self.mirroring = if data % 2 == 0 {
                     Mirroring::Vertical
                 } else {
@@ -168,28 +168,32 @@ impl Mapper for Mapper4 {
 
                 Some(MapWrite::WroteRegister)
             }
-            0xA001..=0xBFFF if addr % 2 == 1 => {
+            0xA000..=0xBFFF if addr % 2 == 1 => {
                 // NOTE: Should this be implemented? Causes incompatability with MMC6
                 None
             }
-            0xC000..=0xDFFE if addr % 2 == 0 => {
+            0xC000..=0xDFFF if addr % 2 == 0 => {
+                log::info!("Wrote {} as IRQ reload", data);
                 self.irq_counter_reload = data;
 
                 Some(MapWrite::WroteRegister)
             }
-            0xC001..=0xDFFF if addr % 2 == 1 => {
+            0xC000..=0xDFFF if addr % 2 == 1 => {
+                log::info!("Requested IRQ reload");
                 self.irq_counter = 0;
                 self.irq_reload_requested = true;
 
                 Some(MapWrite::WroteRegister)
             }
-            0xE000..=0xFFFE if addr % 2 == 0 => {
+            0xE000..=0xFFFF if addr % 2 == 0 => {
+                // log::info!("Disabled IRQ");
                 self.irq_disabled = true;
                 // TODO: Acknowledge pending interrupts
 
                 Some(MapWrite::WroteRegister)
             }
-            0xE001..=0xFFFF if addr % 2 == 1 => {
+            0xE000..=0xFFFF if addr % 2 == 1 => {
+                log::info!("Enabled IRQ");
                 self.irq_disabled = false;
 
                 Some(MapWrite::WroteRegister)
@@ -243,6 +247,7 @@ impl Mapper for Mapper4 {
     fn on_scanline_hblank(&mut self) -> bool {
         if self.irq_counter == 0 || self.irq_reload_requested {
             self.irq_counter = self.irq_counter_reload;
+            self.irq_reload_requested = false;
         } else {
             self.irq_counter -= 1;
         }
