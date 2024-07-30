@@ -124,6 +124,7 @@ impl Nes {
         if clock_res.nmi {
             self.cpu.borrow_mut().nmi();
         } else if irq {
+            log::info!("IRQ from NES");
             self.cpu.borrow_mut().irq();
         }
     }

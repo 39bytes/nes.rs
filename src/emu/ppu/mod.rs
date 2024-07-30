@@ -699,7 +699,7 @@ impl Ppu {
             3 => self.oam_addr = data,
             4 => {
                 self.oam[self.oam_addr as usize] = data;
-                self.oam_addr += 1;
+                self.oam_addr = self.oam_addr.wrapping_add(1);
             }
             5 => {
                 if !self.write_latch {

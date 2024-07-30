@@ -271,7 +271,7 @@ fn setup_emulator(args: &Args) -> Result<(Nes, Arc<AtomicBool>)> {
     let palette = Palette::load("assets/palettes/2C02G.pal")?;
     let cartridge = Cartridge::new(args.rom_path.as_path())?;
 
-    let paused = Arc::new(AtomicBool::new(true));
+    let paused = Arc::new(AtomicBool::new(false));
 
     let mut nes = if !args.disable_audio {
         let (device, config) = setup_audio()?;
@@ -306,8 +306,8 @@ fn draw_with_debug_info(renderer: &mut Renderer, nes: &Nes, fps_counter: &FpsCou
     draw_ppu_info(renderer, &nes.ppu(), 0, 0);
     draw_palettes(renderer, &nes.ppu(), 240, 0);
     draw_pattern_tables(renderer, &nes.ppu(), palette, 576, 0);
-    // draw_cpu_info(renderer, nes, 576, 180);
-    draw_oam_sprites(renderer, &nes.ppu(), 600, 320)
+    draw_cpu_info(renderer, nes, 576, 180);
+    // draw_oam_sprites(renderer, &nes.ppu(), 600, 320)
 }
 
 fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {

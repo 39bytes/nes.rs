@@ -377,8 +377,8 @@ impl Cpu {
         self.push_u16(self.pc);
 
         self.set_flag(StatusFlags::B, false);
-        self.set_flag(StatusFlags::I, true);
         self.push(self.status.bits());
+        self.set_flag(StatusFlags::I, true);
 
         // Get the interrupt address to jump to
         self.pc = self.read_u16(interrupt_addr);

@@ -173,13 +173,13 @@ impl Mapper for Mapper4 {
                 None
             }
             0xC000..=0xDFFF if addr % 2 == 0 => {
-                log::info!("Wrote {} as IRQ reload", data);
+                // log::info!("Wrote {} as IRQ reload", data);
                 self.irq_counter_reload = data;
 
                 Some(MapWrite::WroteRegister)
             }
             0xC000..=0xDFFF if addr % 2 == 1 => {
-                log::info!("Requested IRQ reload");
+                // log::info!("Requested IRQ reload");
                 self.irq_counter = 0;
                 self.irq_reload_requested = true;
 
@@ -250,9 +250,11 @@ impl Mapper for Mapper4 {
             self.irq_reload_requested = false;
         } else {
             self.irq_counter -= 1;
+            // log::info!("Decremented: {}", self.irq_counter);
         }
 
         if !self.irq_disabled && self.irq_counter == 0 {
+            // log::info!("Fired IRQ");
             return true;
         }
 
