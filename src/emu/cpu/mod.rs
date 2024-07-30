@@ -61,6 +61,7 @@ pub struct Cpu {
     oam_dma_page: u8,
     oam_dma_index: u8,
     oam_dma_data: u8,
+    oam_dma_count: u8,
 
     // Whether or not we are currently performing DMC DMA
     dmc_dma: Option<DMCDMARequest>,
@@ -110,6 +111,7 @@ impl Cpu {
             oam_dma_page: 0x00,
             oam_dma_index: 0x00,
             oam_dma_data: 0x00,
+            oam_dma_count: 0x00,
 
             dmc_dma: None,
             dmc_dma_stall_cycles: 0,
@@ -268,20 +270,32 @@ impl Cpu {
                 let mapped_addr = addr as usize % CPU_RAM_SIZE;
                 self.ram[mapped_addr] = data;
             }
-            0x2000..=0x3FFF => match &self.ppu {
-                Some(ppu) => ppu.borrow_mut().cpu_write(addr, data),
-                None => panic!("PPU not attached"),
-            },
+            0x2000..=0x3FFF => self
+                .ppu
+                .as_mut()
+                .expect("PPU not attached")
+                .borrow_mut()
+                .cpu_write(addr, data),
             0x4000..=0x4013 | 0x4015 | 0x4017 => {
-                let req = match &self.apu {
-                    Some(apu) => apu.borrow_mut().write(addr, data),
-                    None => panic!("APU not attached"),
-                };
+                let req = self
+                    .apu
+                    .as_mut()
+                    .expect("APU not attached")
+                    .borrow_mut()
+                    .write(addr, data);
                 if let Some(req) = req {
                     self.begin_dmc_dma(req);
                 }
             }
-            0x4014 => self.begin_oam_dma(data),
+            0x4014 => {
+                let oam_addr = self
+                    .ppu
+                    .as_mut()
+                    .expect("PPU not attached")
+                    .borrow()
+                    .oam_addr();
+                self.begin_oam_dma(data, oam_addr);
+            }
             0x4016 => {
                 let data = data & 0x01;
 
@@ -531,11 +545,12 @@ impl Cpu {
         None
     }
 
-    fn begin_oam_dma(&mut self, page: u8) {
+    fn begin_oam_dma(&mut self, page: u8, index: u8) {
         self.oam_dma = true;
         self.oam_dma_halting = true;
         self.oam_dma_page = page;
-        self.oam_dma_index = 0x00;
+        self.oam_dma_index = index;
+        self.oam_dma_count = 0;
     }
 
     fn oam_dma_clock(&mut self) {
@@ -551,7 +566,7 @@ impl Cpu {
         // Put cycles: Write to PPU OAM
         if self.total_cycles % 2 == 0 {
             let page_base_addr = (self.oam_dma_page as u16) << 8;
-            let addr = page_base_addr + (self.oam_dma_index as u16);
+            let addr = page_base_addr + (self.oam_dma_count as u16);
             self.oam_dma_data = self.read(addr);
         } else {
             match &self.ppu {
@@ -561,10 +576,11 @@ impl Cpu {
                 None => panic!("Attempted to perform DMA without PPU attached to CPU"),
             }
 
-            if self.oam_dma_index == 0xFF {
+            if self.oam_dma_count == 0xFF {
                 self.oam_dma = false;
             } else {
-                self.oam_dma_index += 1;
+                self.oam_dma_index = self.oam_dma_index.wrapping_add(1);
+                self.oam_dma_count += 1;
             }
         }
     }
