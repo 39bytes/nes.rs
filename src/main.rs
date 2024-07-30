@@ -96,6 +96,7 @@ pub fn main() -> Result<()> {
 
     let mut renderer = Renderer::new(font, &window, width as usize, height as usize)?;
     let mut fps_counter = FpsCounter::new();
+    let mut pattern_table_palette = 0;
 
     event_loop.run(move |event, target| {
         match event {
@@ -114,7 +115,7 @@ pub fn main() -> Result<()> {
                 // TODO: Implement not drawing overscan
                 // https://www.nesdev.org/wiki/Overscan
                 if args.draw_debug_info {
-                    draw_with_debug_info(&mut renderer, &nes, &fps_counter)
+                    draw_with_debug_info(&mut renderer, &nes, &fps_counter, pattern_table_palette);
                 } else {
                     renderer.draw(nes.screen(), 0, 0);
                 }
@@ -133,10 +134,15 @@ pub fn main() -> Result<()> {
             if input.key_pressed(KeyCode::Space) {
                 paused.store(!paused.load(Ordering::Relaxed), Ordering::Relaxed);
                 now = Instant::now();
-            } else if input.key_pressed(KeyCode::KeyN) && paused.load(Ordering::Relaxed) {
+            }
+            if input.key_pressed(KeyCode::KeyN) && paused.load(Ordering::Relaxed) {
                 nes.next_instruction();
-            } else if input.key_pressed(KeyCode::KeyM) && paused.load(Ordering::Relaxed) {
+            }
+            if input.key_pressed(KeyCode::KeyM) && paused.load(Ordering::Relaxed) {
                 nes.advance_frame();
+            }
+            if input.key_pressed(KeyCode::KeyP) {
+                pattern_table_palette = (pattern_table_palette + 1) % 8;
             }
 
             // Console input
@@ -292,14 +298,14 @@ fn setup_emulator(args: &Args) -> Result<(Nes, Arc<AtomicBool>)> {
     Ok((nes, paused))
 }
 
-fn draw_with_debug_info(renderer: &mut Renderer, nes: &Nes, fps_counter: &FpsCounter) {
+fn draw_with_debug_info(renderer: &mut Renderer, nes: &Nes, fps_counter: &FpsCounter, palette: u8) {
     renderer.draw(&nes.screen().scale(2), 0, 180);
 
     renderer.draw_text(&format!("FPS: {:.1}", fps_counter.get_fps()), 0, 160);
 
     draw_ppu_info(renderer, &nes.ppu(), 0, 0);
     draw_palettes(renderer, &nes.ppu(), 240, 0);
-    draw_pattern_tables(renderer, &nes.ppu(), 576, 0);
+    draw_pattern_tables(renderer, &nes.ppu(), palette, 576, 0);
     // draw_cpu_info(renderer, nes, 576, 180);
     draw_oam_sprites(renderer, &nes.ppu(), 600, 320)
 }

@@ -412,19 +412,28 @@ impl Ppu {
         let dy = self.scanline - (sprite.y as i16);
 
         let tile_id = sprite.tile_id & 0xFE;
-        // Top half or bottom half
-        let tile_id = if dy < 8 { tile_id } else { tile_id + 1 };
-        let row = if sprite.attribute.contains(SpriteAttribute::FlipVertically) {
-            7 - dy
+
+        // 4 cases:
+        let (tile_id, row) = if !sprite.attribute.contains(SpriteAttribute::FlipVertically) {
+            // Top half - not flipped
+            if dy < 8 {
+                (tile_id, dy)
+            // Bottom half - not flipped
+            } else {
+                (tile_id + 1, dy % 8)
+            }
         } else {
-            dy
+            // Top half - flipped
+            if dy < 8 {
+                (tile_id + 1, 7 - dy)
+            // Bottom half - flipped
+            } else {
+                (tile_id, 7 - (dy % 8))
+            }
         };
 
         let lsb = self.fetch_tile_byte(pattern_table, tile_id, row as u8, false);
         let msb = self.fetch_tile_byte(pattern_table, tile_id, row as u8, true);
-        // if tile_id == 0xA0 || tile_id == 0xA1 {
-        //     log::info!("ID: {:02X}, MSB: {:08b}, LSB: {:08b}", tile_id, msb, lsb);
-        // }
 
         if sprite.attribute.contains(SpriteAttribute::FlipHorizontally) {
             (flip_byte(lsb), flip_byte(msb))
@@ -878,7 +887,9 @@ impl Ppu {
         self.palette.get_color(color_index)
     }
 
-    pub fn get_pattern_table(&self, table: PatternTable, mode_8x16: bool) -> Sprite {
+    pub fn get_pattern_table(&self, table: PatternTable, palette: u8, mode_8x16: bool) -> Sprite {
+        // NOTE: Does the 8x16 bug only happen when sprites are stored in the right
+        // pattern table ???
         let table_offset = match table {
             PatternTable::Left => 0x0000,
             PatternTable::Right => 0x1000,
@@ -915,7 +926,7 @@ impl Ppu {
                         let pixel_index =
                             (tile_y * 8 + tile_row) * 128 + (tile_x * 8 + 7 - tile_col);
                         // TODO: Don't hardcode palette
-                        buf[pixel_index as usize] = self.get_palette_color(0, pixel);
+                        buf[pixel_index as usize] = self.get_palette_color(palette, pixel);
                     }
                 }
             }
