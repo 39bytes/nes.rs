@@ -422,6 +422,9 @@ impl Ppu {
 
         let lsb = self.fetch_tile_byte(pattern_table, tile_id, row as u8, false);
         let msb = self.fetch_tile_byte(pattern_table, tile_id, row as u8, true);
+        // if tile_id == 0xA0 || tile_id == 0xA1 {
+        //     log::info!("ID: {:02X}, MSB: {:08b}, LSB: {:08b}", tile_id, msb, lsb);
+        // }
 
         if sprite.attribute.contains(SpriteAttribute::FlipHorizontally) {
             (flip_byte(lsb), flip_byte(msb))
@@ -685,7 +688,10 @@ impl Ppu {
             1 => self.mask = PpuMask::from_bits_truncate(data),
             2 => {}
             3 => self.oam_addr = data,
-            4 => self.oam[self.oam_addr as usize] = data,
+            4 => {
+                self.oam[self.oam_addr as usize] = data;
+                self.oam_addr += 1;
+            }
             5 => {
                 if !self.write_latch {
                     self.fine_x = data & 0x07;
