@@ -23,6 +23,7 @@ pub enum MapWrite {
     Address(usize),
     RAMWritten,
     WroteRegister,
+    AcknowledgeIRQ,
 }
 
 pub trait Mapper {

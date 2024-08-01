@@ -41,6 +41,7 @@ pub struct PpuClockResult {
     pub pixel: Option<Pixel>,
     pub nmi: bool,
     pub irq: bool,
+    pub frame_complete: bool,
 }
 
 const PALETTE_RAM_SIZE: usize = 32;
@@ -212,6 +213,15 @@ impl Ppu {
             // Background data fetching
             // Do the 8 cycle data fetching routine for rendering tile data.
             if is_visible_region || is_preparing_next_scanline {
+                if self.scanline >= 174 && self.scanline <= 177 {
+                    println!(
+                        "VRAM addr on menu scanline {} cycle {}: {:?} (hex: {:06X}) ",
+                        self.scanline,
+                        self.cycle,
+                        self.vram_addr,
+                        u16::from(self.vram_addr)
+                    );
+                }
                 if self.cycle >= 2 {
                     self.shift_shifters();
                 }
@@ -298,6 +308,7 @@ impl Ppu {
             // Notify mapper of scanline end (mapper 3 IRQ clock)
             irq = self.notify_scanline_hblank();
         }
+
         if self.cycle > 340 {
             self.cycle = 0;
             self.scanline += 1;
@@ -308,7 +319,12 @@ impl Ppu {
             }
         }
 
-        PpuClockResult { pixel, nmi, irq }
+        PpuClockResult {
+            pixel,
+            nmi,
+            irq,
+            frame_complete: self.cycle == 0 && self.scanline == -1,
+        }
     }
 
     fn fetch_nametable_tile_id(&self) -> u8 {
@@ -681,7 +697,7 @@ impl Ppu {
         SpritePixel::default()
     }
 
-    pub fn cpu_write(&mut self, addr: u16, data: u8) {
+    pub fn cpu_write(&mut self, addr: u16, data: u8) -> bool {
         debug_assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
 
         let register = addr % 8;
@@ -713,17 +729,27 @@ impl Ppu {
             }
             6 => {
                 let data = data as u16;
+                let mut irq = false;
                 // Write latch is false on first write, true on second
                 // We write the high byte first.
                 if !self.write_latch {
-                    let addr = (u16::from(self.temp_vram_addr) & 0x00FF) | ((data & 0x3F) << 8);
+                    let old = u16::from(self.temp_vram_addr);
+                    let addr = (old & 0x00FF) | ((data & 0x3F) << 8);
+
+                    // A12 toggle, should trigger an MMC3 update
+                    if (old & 0x1000) == 0 && (addr & 0x1000) != 0 {
+                        irq = self.notify_scanline_hblank();
+                    }
                     self.temp_vram_addr = VRAMAddr::from(addr);
                 } else {
                     let addr = (u16::from(self.temp_vram_addr) & 0xFF00) | data;
                     self.temp_vram_addr = VRAMAddr::from(addr);
                     self.vram_addr = self.temp_vram_addr;
+                    println!("Wrote PPUADDR: {:04X} ({:?})", addr, self.vram_addr);
                 }
                 self.write_latch = !self.write_latch;
+
+                return irq;
             }
             7 => {
                 self.write(self.vram_addr.into(), data);
@@ -735,6 +761,7 @@ impl Ppu {
             }
             _ => unreachable!(),
         }
+        false
     }
 
     pub fn cpu_read(&mut self, addr: u16) -> u8 {

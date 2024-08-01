@@ -9,7 +9,7 @@ use std::{
     thread,
     time::Instant,
 };
-use ui::{draw_cpu_info, draw_oam_sprites, draw_palettes, draw_pattern_tables, draw_ppu_info};
+use ui::{draw_cpu_info, draw_palettes, draw_pattern_tables, draw_ppu_info};
 use utils::FpsCounter;
 
 use anyhow::{anyhow, Result};
@@ -71,7 +71,7 @@ pub fn main() -> Result<()> {
     let mut input = WinitInputHelper::new();
 
     let (width, height) = if args.draw_debug_info {
-        (1200, 720)
+        (900, 720)
     } else {
         (256, 240)
     };
@@ -87,6 +87,7 @@ pub fn main() -> Result<()> {
     };
 
     let (mut nes, paused) = setup_emulator(&args)?;
+    nes.set_breakpoint(0x0029);
 
     let mut acc = 0.0;
     let mut now = Instant::now();
@@ -132,7 +133,12 @@ pub fn main() -> Result<()> {
         if input.update(&event) {
             // Emulator meta events
             if input.key_pressed(KeyCode::Space) {
-                paused.store(!paused.load(Ordering::Relaxed), Ordering::Relaxed);
+                let cur = paused.load(Ordering::Relaxed);
+                if cur {
+                    nes.unpause();
+                }
+                paused.store(!cur, Ordering::Relaxed);
+
                 now = Instant::now();
             }
             if input.key_pressed(KeyCode::KeyN) && paused.load(Ordering::Relaxed) {
@@ -186,7 +192,10 @@ pub fn main() -> Result<()> {
                 now = Instant::now();
                 while acc >= FRAME_TIME {
                     fps_counter.tick();
-                    nes.advance_frame();
+                    let should_pause = nes.advance_frame();
+                    if should_pause {
+                        paused.store(true, Ordering::Relaxed);
+                    }
                     acc -= FRAME_TIME;
                 }
             }
@@ -271,7 +280,7 @@ fn setup_emulator(args: &Args) -> Result<(Nes, Arc<AtomicBool>)> {
     let palette = Palette::load("assets/palettes/2C02G.pal")?;
     let cartridge = Cartridge::new(args.rom_path.as_path())?;
 
-    let paused = Arc::new(AtomicBool::new(false));
+    let paused = Arc::new(AtomicBool::new(true));
 
     let mut nes = if !args.disable_audio {
         let (device, config) = setup_audio()?;

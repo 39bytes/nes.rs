@@ -4,6 +4,7 @@ use super::{
     bits::IntoBit,
     cartridge::Cartridge,
     input::{ControllerInput, StandardController},
+    mappers::MapWrite,
     ppu::Ppu,
 };
 use bitflags::bitflags;
@@ -49,6 +50,7 @@ pub struct Cpu {
     cycles: u8,
 
     total_cycles: u64,
+    frame_cycle: u64,
 
     // Whether or not we are currently performing OAM DMA
     oam_dma: bool,
@@ -71,6 +73,10 @@ pub struct Cpu {
     // Memory
     ram: [u8; CPU_RAM_SIZE],
 
+    // Interrupts
+    nmi_pending: bool,
+    irq_pending: bool,
+
     // Other components
     apu: Option<Rc<RefCell<Apu>>>,
     ppu: Option<Rc<RefCell<Ppu>>>,
@@ -79,6 +85,9 @@ pub struct Cpu {
     // Input
     controller_strobe: bool,
     controllers: [StandardController; 2],
+
+    // Debugging
+    breakpoint: Option<u16>,
 }
 
 struct AddressModeResult {
@@ -91,7 +100,10 @@ struct AddressModeResult {
     additional_cycles: bool,
 }
 
-pub struct DMCDMAClockResult(pub u8);
+pub struct CpuClockResult {
+    pub dmc_dma_sample: Option<u8>,
+    pub breakpoint_hit: bool,
+}
 
 impl Cpu {
     pub fn new() -> Self {
@@ -105,6 +117,7 @@ impl Cpu {
             opcode: 0x00,
             cycles: 0,
             total_cycles: 0,
+            frame_cycle: 0,
 
             oam_dma: false,
             oam_dma_halting: false,
@@ -119,12 +132,17 @@ impl Cpu {
 
             ram: [0; CPU_RAM_SIZE],
 
+            nmi_pending: false,
+            irq_pending: false,
+
             cartridge: None,
             ppu: None,
             apu: None,
 
             controller_strobe: false,
             controllers: [StandardController::default(); 2],
+
+            breakpoint: None,
         }
     }
 
@@ -144,7 +162,7 @@ impl Cpu {
     fn next_instruction(&mut self) {
         self.total_cycles += self.cycles as u64;
         self.cycles = 0;
-        self.clock();
+        self.clock(true);
     }
 
     pub fn a(&self) -> u8 {
@@ -270,12 +288,17 @@ impl Cpu {
                 let mapped_addr = addr as usize % CPU_RAM_SIZE;
                 self.ram[mapped_addr] = data;
             }
-            0x2000..=0x3FFF => self
-                .ppu
-                .as_mut()
-                .expect("PPU not attached")
-                .borrow_mut()
-                .cpu_write(addr, data),
+            0x2000..=0x3FFF => {
+                let irq_request = self
+                    .ppu
+                    .as_mut()
+                    .expect("PPU not attached")
+                    .borrow_mut()
+                    .cpu_write(addr, data);
+                if irq_request {
+                    self.request_irq();
+                }
+            }
             0x4000..=0x4013 | 0x4015 | 0x4017 => {
                 let req = self
                     .apu
@@ -308,7 +331,13 @@ impl Cpu {
                 }
             }
             0x4020..=0xFFFF => match &self.cartridge {
-                Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data),
+                Some(cartridge) => {
+                    let res = cartridge.borrow_mut().cpu_write(addr, data);
+                    if let Some(MapWrite::AcknowledgeIRQ) = res {
+                        self.irq();
+                        self.irq_pending = false;
+                    }
+                }
                 None => panic!("Cartridge not attached"),
             },
             _ => {}
@@ -382,6 +411,7 @@ impl Cpu {
 
         // Get the interrupt address to jump to
         self.pc = self.read_u16(interrupt_addr);
+        // println!("Interrupt: jumping to {}", self.pc);
 
         self.cycles = cycles;
     }
@@ -405,24 +435,60 @@ impl Cpu {
     }
 
     /// Run one clock cycle.
-    pub fn clock(&mut self) -> Option<DMCDMAClockResult> {
-        if let Some(req) = self.dmc_dma {
-            if self.dmc_dma_stall_cycles == 0 {
-                let res = self.dmc_dma_clock(req);
-                self.total_cycles += 1;
-                return res;
-            } else {
-                self.dmc_dma_stall_cycles -= 1;
+    pub fn clock(&mut self, paused: bool) -> CpuClockResult {
+        if self.dmc_dma.is_some() || self.oam_dma {
+            let mut dma_sample: Option<u8> = None;
+
+            if let Some(req) = self.dmc_dma {
+                if self.dmc_dma_stall_cycles == 0 {
+                    dma_sample = self.dmc_dma_clock(req);
+                } else {
+                    self.dmc_dma_stall_cycles -= 1;
+                }
+            }
+
+            if self.oam_dma {
+                self.oam_dma_clock();
+            }
+
+            self.total_cycles += 1;
+
+            return CpuClockResult {
+                dmc_dma_sample: dma_sample,
+                breakpoint_hit: false,
+            };
+        }
+
+        // An instruction just ended
+        if self.cycles == 0 {
+            // Check if any interrupts need to be processed
+            if self.nmi_pending {
+                // Handle NMI and "forget" about the pending IRQ
+                self.nmi();
+                self.irq_pending = false;
+            }
+            if self.irq_pending {
+                self.irq();
             }
         }
 
-        if self.oam_dma {
-            self.oam_dma_clock();
-            self.total_cycles += 1;
-            return None;
-        }
-
+        // Interrupts set the cycles to 7,
+        // so this goes on to process the next instruction if no interrupts were fired.
         if self.cycles == 0 {
+            if let Some(bp) = self.breakpoint {
+                if self.pc == bp && !paused {
+                    println!(
+                        "Hit breakpoint at: {} (frame cycle {})",
+                        self.pc, self.frame_cycle
+                    );
+                    return CpuClockResult {
+                        dmc_dma_sample: None,
+                        breakpoint_hit: true,
+                    };
+                }
+            }
+            println!("{}, Frame cycle: {}", self.get_log_line(), self.frame_cycle);
+
             self.opcode = self.read(self.pc);
 
             let instruction = Instruction::lookup(self.opcode);
@@ -541,11 +607,16 @@ impl Cpu {
         self.cycles -= 1;
 
         self.total_cycles += 1;
+        self.frame_cycle += 1;
 
-        None
+        CpuClockResult {
+            dmc_dma_sample: None,
+            breakpoint_hit: false,
+        }
     }
 
     fn begin_oam_dma(&mut self, page: u8, index: u8) {
+        println!("Began OAM DMA on cycle {}", self.frame_cycle);
         self.oam_dma = true;
         self.oam_dma_halting = true;
         self.oam_dma_page = page;
@@ -586,6 +657,7 @@ impl Cpu {
     }
 
     pub fn begin_dmc_dma(&mut self, req: DMCDMARequest) {
+        println!("Began DMC DMA on cycle {}", self.frame_cycle);
         self.dmc_dma = Some(req);
         // At least need to take into account the halt cycle + dummy cycle
         // There could still be the alignment cycle required though
@@ -593,7 +665,7 @@ impl Cpu {
         self.dmc_dma_stall_cycles = 2;
     }
 
-    fn dmc_dma_clock(&mut self, req: DMCDMARequest) -> Option<DMCDMAClockResult> {
+    fn dmc_dma_clock(&mut self, req: DMCDMARequest) -> Option<u8> {
         if self.dmc_dma_halt_cycles > 0 {
             self.dmc_dma_halt_cycles -= 1;
             return None;
@@ -611,7 +683,7 @@ impl Cpu {
 
         self.dmc_dma = None;
         let sample = self.read(sample_addr);
-        Some(DMCDMAClockResult(sample))
+        Some(sample)
     }
 
     // Addressing modes
@@ -1249,6 +1321,11 @@ impl Cpu {
     fn rti(&mut self) -> u8 {
         self.status = StatusFlags::from_bits(self.pop())
             .expect("Invalid flags read from memory when returning from interrupt.");
+
+        if !self.status.contains(StatusFlags::I) && self.irq_pending {
+            self.irq();
+        }
+
         self.status.remove(StatusFlags::B);
         self.status.insert(StatusFlags::U);
 
@@ -1528,17 +1605,31 @@ impl Cpu {
     // Interrupts
 
     /// Interrupt request.
-    pub fn irq(&mut self) {
+    /// Note for later: https://forums.nesdev.org/viewtopic.php?t=19321
+    /// NOTE: This is triggering 1-2 cycles too early in kirby (((sometimes))) which is causing
+    /// UI shake
+    fn irq(&mut self) {
         if self.get_flag(StatusFlags::I) {
             return;
         }
 
+        println!("Triggered IRQ on cycle {}", self.frame_cycle);
+        self.irq_pending = false;
         self.interrupt(0xFFFE, 7);
     }
 
     /// Non-maskable interrupt, can't be disabled
-    pub fn nmi(&mut self) {
+    fn nmi(&mut self) {
         self.interrupt(0xFFFA, 7);
+        self.nmi_pending = false;
+    }
+
+    pub fn request_irq(&mut self) {
+        self.irq_pending = true;
+    }
+
+    pub fn request_nmi(&mut self) {
+        self.nmi_pending = true;
     }
 
     // Debug functions
@@ -1658,6 +1749,14 @@ impl Cpu {
             self.stkp(),
             self.total_cycles() + self.cycles() as u64
         )
+    }
+
+    pub fn set_breakpoint(&mut self, addr: u16) {
+        self.breakpoint = Some(addr);
+    }
+
+    pub fn mark_frame_complete(&mut self) {
+        self.frame_cycle = 0;
     }
 }
 

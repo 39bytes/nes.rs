@@ -165,10 +165,12 @@ impl Cartridge {
         Ok((prg_mem, chr_mem))
     }
 
-    pub fn cpu_write(&mut self, addr: u16, data: u8) {
-        if let Some(MapWrite::Address(addr)) = self.mapper.map_prg_write(addr, data) {
+    pub fn cpu_write(&mut self, addr: u16, data: u8) -> Option<MapWrite> {
+        let res = self.mapper.map_prg_write(addr, data);
+        if let Some(MapWrite::Address(addr)) = res {
             self.prg_memory[addr] = data;
         }
+        res
     }
 
     pub fn cpu_read(&self, addr: u16) -> u8 {

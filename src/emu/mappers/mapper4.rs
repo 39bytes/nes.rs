@@ -58,18 +58,11 @@ pub struct Mapper4 {
 
     irq_counter_reload: u8,
     irq_counter: u8,
-    irq_reload_requested: bool,
     irq_disabled: bool,
 }
 
 impl Mapper4 {
     pub fn new(prg_banks: usize, chr_banks: usize) -> Self {
-        log::info!(
-            "Mapper 4 - initialized with {} PRG banks and {} CHR banks",
-            prg_banks,
-            chr_banks
-        );
-
         Self {
             prg_banks,
             chr_banks,
@@ -93,7 +86,6 @@ impl Mapper4 {
             mirroring: Mirroring::Vertical,
 
             irq_counter_reload: 0,
-            irq_reload_requested: false,
             irq_counter: 0,
             irq_disabled: false,
         }
@@ -173,27 +165,25 @@ impl Mapper for Mapper4 {
                 None
             }
             0xC000..=0xDFFF if addr % 2 == 0 => {
-                // log::info!("Wrote {} as IRQ reload", data);
+                println!("Wrote {} as IRQ reload", data);
                 self.irq_counter_reload = data;
 
                 Some(MapWrite::WroteRegister)
             }
             0xC000..=0xDFFF if addr % 2 == 1 => {
-                // log::info!("Requested IRQ reload");
+                println!("Requested IRQ reload");
                 self.irq_counter = 0;
-                self.irq_reload_requested = true;
 
                 Some(MapWrite::WroteRegister)
             }
             0xE000..=0xFFFF if addr % 2 == 0 => {
-                // log::info!("Disabled IRQ");
+                println!("Disabled IRQ");
                 self.irq_disabled = true;
-                // TODO: Acknowledge pending interrupts
 
-                Some(MapWrite::WroteRegister)
+                Some(MapWrite::AcknowledgeIRQ)
             }
             0xE000..=0xFFFF if addr % 2 == 1 => {
-                log::info!("Enabled IRQ");
+                println!("Enabled IRQ");
                 self.irq_disabled = false;
 
                 Some(MapWrite::WroteRegister)
@@ -245,16 +235,16 @@ impl Mapper for Mapper4 {
     }
 
     fn on_scanline_hblank(&mut self) -> bool {
-        if self.irq_counter == 0 || self.irq_reload_requested {
+        if self.irq_counter == 0 {
+            println!("Reloading IRQ counter with {}", self.irq_counter_reload);
             self.irq_counter = self.irq_counter_reload;
-            self.irq_reload_requested = false;
         } else {
             self.irq_counter -= 1;
-            // log::info!("Decremented: {}", self.irq_counter);
+            println!("Decremented: {}", self.irq_counter);
         }
 
         if !self.irq_disabled && self.irq_counter == 0 {
-            // log::info!("Fired IRQ");
+            println!("Fired IRQ");
             return true;
         }
 

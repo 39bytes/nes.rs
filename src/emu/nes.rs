@@ -22,6 +22,7 @@ pub struct Nes {
     audio_output: Option<AudioOutput>,
 
     clock_count: u64,
+    paused: bool,
 }
 
 impl Nes {
@@ -41,6 +42,7 @@ impl Nes {
             audio_output: None,
 
             clock_count: 0,
+            paused: false,
         }
     }
 
@@ -52,12 +54,10 @@ impl Nes {
         (self, consumer)
     }
 
-    #[allow(dead_code)]
     pub fn cpu(&self) -> Ref<Cpu> {
         self.cpu.borrow()
     }
 
-    #[allow(dead_code)]
     pub fn ppu(&self) -> Ref<Ppu> {
         self.ppu.borrow()
     }
@@ -85,13 +85,19 @@ impl Nes {
         self.cpu.borrow_mut().trigger_inputs(input);
     }
 
-    pub fn advance_frame(&mut self) {
-        for _ in 0..FRAME_CLOCKS {
-            self.clock();
+    pub fn advance_frame(&mut self) -> bool {
+        let mut frame_complete = false;
+        while !frame_complete {
+            frame_complete = self.clock(false);
         }
+
+        self.paused
     }
 
-    pub fn clock(&mut self) {
+    pub fn clock(&mut self, force: bool) -> bool {
+        if self.paused && !force {
+            return true;
+        }
         self.clock_count += 1;
 
         let clock_res = self.ppu.borrow_mut().clock();
@@ -105,8 +111,11 @@ impl Nes {
         let mut irq = clock_res.irq;
 
         if self.clock_count % 3 == 0 {
-            let dmc_sample = self.cpu.borrow_mut().clock();
-            let dma_req = self.apu.borrow_mut().clock(dmc_sample.map(|s| s.0));
+            let cpu_res = self.cpu.borrow_mut().clock(self.paused);
+            if cpu_res.breakpoint_hit {
+                self.paused = true;
+            };
+            let dma_req = self.apu.borrow_mut().clock(cpu_res.dmc_dma_sample);
 
             if let Some(res) = dma_req {
                 if let Some(req) = res.dma_req {
@@ -122,11 +131,20 @@ impl Nes {
         }
 
         if clock_res.nmi {
-            self.cpu.borrow_mut().nmi();
-        } else if irq {
-            log::info!("IRQ from NES");
-            self.cpu.borrow_mut().irq();
+            self.cpu.borrow_mut().request_nmi();
         }
+        if irq {
+            log::info!(
+                "Pending IRQ from NES on scanline {}",
+                self.ppu.borrow().scanline()
+            );
+            self.cpu.borrow_mut().request_irq();
+        }
+        if clock_res.frame_complete {
+            self.cpu.borrow_mut().mark_frame_complete();
+        }
+
+        clock_res.frame_complete
     }
 
     pub fn next_instruction(&mut self) {
@@ -134,8 +152,16 @@ impl Nes {
         let until_next_cpu_cycle = (3 - self.clock_count % 3) as u8;
         let to_next = until_next_cpu_cycle + cycles * 3;
         for _ in 0..to_next {
-            self.clock();
+            self.clock(true);
         }
+    }
+
+    pub fn set_breakpoint(&mut self, breakpoint: u16) {
+        self.cpu.borrow_mut().set_breakpoint(breakpoint);
+    }
+
+    pub fn unpause(&mut self) {
+        self.paused = false;
     }
 
     pub fn cpu_mem_page_str(&self, page: u8) -> String {
@@ -171,7 +197,7 @@ mod test {
         nes.reset();
 
         for _ in 0..50_000_000 {
-            nes.clock();
+            nes.clock(false);
         }
 
         // Read test status code
@@ -271,5 +297,30 @@ mod test {
     #[test]
     fn instr_test_v5_16_special() {
         rom_test("assets/test_roms/instr_test-v5/16-special.nes");
+    }
+
+    #[test]
+    fn cpu_interrupts_v2_1_cli_latency() {
+        rom_test("assets/test_roms/cpu_interrupts_v2/1-cli_latency.nes");
+    }
+
+    #[test]
+    fn cpu_interrupts_v2_2_nmi_and_brk() {
+        rom_test("assets/test_roms/cpu_interrupts_v2/2-nmi_and_brk.nes");
+    }
+
+    #[test]
+    fn cpu_interrupts_v2_3_nmi_and_irq() {
+        rom_test("assets/test_roms/cpu_interrupts_v2/3-nmi_and_irq.nes");
+    }
+
+    #[test]
+    fn cpu_interrupts_v2_4_irq_and_dma() {
+        rom_test("assets/test_roms/cpu_interrupts_v2/4-irq_and_dma.nes");
+    }
+
+    #[test]
+    fn cpu_interrupts_v2_5_branch_delays_irq() {
+        rom_test("assets/test_roms/cpu_interrupts_v2/5-branch_delays_irq.nes");
     }
 }

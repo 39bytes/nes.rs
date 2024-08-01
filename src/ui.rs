@@ -103,9 +103,9 @@ pub fn get_instruction_repr(cpu: &Cpu, addr: u16) -> String {
         AddressMode::Rel => {
             let offset = cpu.read_debug(arg_addr) as i8;
             let computed_addr = if offset < 0 {
-                addr - (offset.unsigned_abs() as u16)
+                addr.wrapping_sub(offset.unsigned_abs() as u16)
             } else {
-                addr + offset as u16
+                addr.wrapping_add(offset as u16)
             };
             format!("{} ${:02X}", name, computed_addr + 2)
         }
@@ -132,15 +132,17 @@ pub fn draw_ppu_info(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
     renderer.draw_text(&format!("OAMADDR: {:#06X}", ppu.oam_addr()), x, y + 80);
     renderer.draw_text(&format!("ADDR: {:#06X}", ppu.addr()), x, y + 100);
     renderer.draw_text(&format!("DATA: {:#06X}", ppu.data()), x, y + 120);
+    renderer.draw_text(&format!("Scanline: {}", ppu.scanline()), x, y + 140);
+    renderer.draw_text(&format!("Cycle: {}", ppu.cycle()), x + 160, y + 140);
 }
 
 pub fn draw_pattern_tables(renderer: &mut Renderer, ppu: &Ppu, palette: u8, x: usize, y: usize) {
-    let left_pattern_table = ppu.get_pattern_table(PatternTable::Left, palette, true);
+    let left_pattern_table = ppu.get_pattern_table(PatternTable::Left, palette, false);
     let right_pattern_table = ppu.get_pattern_table(PatternTable::Right, palette, true);
 
     renderer.draw_text("Pattern Tables", x, y);
-    renderer.draw(&left_pattern_table.scale(2), x, y + 24);
-    renderer.draw(&right_pattern_table.scale(2), x + 288, y + 24);
+    renderer.draw(&left_pattern_table, x, y + 24);
+    renderer.draw(&right_pattern_table, x + 144, y + 24);
 }
 
 fn palette_sprite(ppu: &Ppu, palette_index: u8) -> Sprite {
