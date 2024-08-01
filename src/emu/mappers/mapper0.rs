@@ -5,13 +5,15 @@ const PRG_RAM_SIZE: usize = 8 * 1024;
 pub struct Mapper0 {
     prg_banks: u8,
     ram: [u8; PRG_RAM_SIZE],
+    allow_chr_ram: bool,
 }
 
 impl Mapper0 {
-    pub fn new(num_banks: u8) -> Self {
+    pub fn new(num_banks: u8, allow_chr_ram: bool) -> Self {
         Self {
             prg_banks: num_banks,
             ram: [0; PRG_RAM_SIZE],
+            allow_chr_ram,
         }
     }
 }
@@ -51,7 +53,11 @@ impl Mapper for Mapper0 {
         Some(MapRead::Address(addr as usize))
     }
 
-    fn map_chr_write(&self, _addr: u16) -> Option<MapWrite> {
-        None
+    fn map_chr_write(&self, addr: u16) -> Option<MapWrite> {
+        if addr > 0x1FFF || !self.allow_chr_ram {
+            return None;
+        }
+
+        Some(MapWrite::Address(addr as usize))
     }
 }

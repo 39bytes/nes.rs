@@ -76,6 +76,12 @@ pub enum Mirroring {
     SingleScreenUpper,
 }
 
+struct CartridgeData {
+    pub prg_memory: Vec<u8>,
+    pub chr_memory: Vec<u8>,
+    pub allow_chr_ram: bool,
+}
+
 pub struct Cartridge {
     prg_memory: Vec<u8>,
     chr_memory: Vec<u8>,
@@ -108,10 +114,14 @@ impl Cartridge {
             Mirroring::Horizontal
         };
 
-        let (prg_rom, chr_rom) = Cartridge::from_ines1(f, &header)?;
+        let CartridgeData {
+            prg_memory,
+            chr_memory,
+            allow_chr_ram,
+        } = Cartridge::from_ines1(f, &header)?;
 
         let mapper: Box<dyn Mapper> = match header.mapper_num {
-            0 => Box::new(Mapper0::new(header.prg_rom_chunks)),
+            0 => Box::new(Mapper0::new(header.prg_rom_chunks, allow_chr_ram)),
             1 => Box::new(Mapper1::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             2 => Box::new(Mapper2::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             3 => Box::new(Mapper3::new(header.prg_rom_chunks, header.chr_rom_chunks)),
@@ -130,8 +140,8 @@ impl Cartridge {
         };
 
         Ok(Cartridge {
-            prg_memory: prg_rom,
-            chr_memory: chr_rom,
+            prg_memory,
+            chr_memory,
             mapper,
             mirroring,
         })
@@ -141,28 +151,32 @@ impl Cartridge {
         self.mapper.mirroring().unwrap_or(self.mirroring)
     }
 
-    fn from_ines1(mut f: File, header: &Header) -> Result<(Vec<u8>, Vec<u8>)> {
+    fn from_ines1(mut f: File, header: &Header) -> Result<CartridgeData> {
         let prg_rom_size = (header.prg_rom_chunks as usize) * PRG_ROM_CHUNK_SIZE;
         log::info!("Reading {} bytes of program ROM", prg_rom_size);
 
-        let mut prg_mem = vec![0u8; prg_rom_size];
-        f.read_exact(prg_mem.as_mut_slice())?;
+        let mut prg_memory = vec![0u8; prg_rom_size];
+        f.read_exact(prg_memory.as_mut_slice())?;
 
-        let mut chr_mem;
+        let mut chr_memory;
 
         if header.chr_rom_chunks == 0 {
             log::info!("No character ROM, allocating 8 KB of character RAM");
 
-            chr_mem = vec![0u8; CHR_ROM_CHUNK_SIZE];
+            chr_memory = vec![0u8; CHR_ROM_CHUNK_SIZE];
         } else {
             let chr_rom_size = (header.chr_rom_chunks as usize) * CHR_ROM_CHUNK_SIZE;
             log::info!("Reading {} bytes of character ROM", chr_rom_size);
 
-            chr_mem = vec![0u8; chr_rom_size];
-            f.read_exact(chr_mem.as_mut_slice())?;
+            chr_memory = vec![0u8; chr_rom_size];
+            f.read_exact(chr_memory.as_mut_slice())?;
         }
 
-        Ok((prg_mem, chr_mem))
+        Ok(CartridgeData {
+            prg_memory,
+            chr_memory,
+            allow_chr_ram: header.chr_rom_chunks == 0,
+        })
     }
 
     pub fn cpu_write(&mut self, addr: u16, data: u8) -> Option<MapWrite> {
