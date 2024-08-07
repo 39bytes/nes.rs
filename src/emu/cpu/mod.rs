@@ -477,17 +477,17 @@ impl Cpu {
         if self.cycles == 0 {
             if let Some(bp) = self.breakpoint {
                 if self.pc == bp && !paused {
-                    println!(
-                        "Hit breakpoint at: {} (frame cycle {})",
-                        self.pc, self.frame_cycle
-                    );
+                    // println!(
+                    //     "Hit breakpoint at: {} (frame cycle {})",
+                    //     self.pc, self.frame_cycle
+                    // );
                     return CpuClockResult {
                         dmc_dma_sample: None,
                         breakpoint_hit: true,
                     };
                 }
             }
-            println!("{}, Frame cycle: {}", self.get_log_line(), self.frame_cycle);
+            println!("{}", self.get_log_line());
 
             self.opcode = self.read(self.pc);
 
@@ -616,7 +616,7 @@ impl Cpu {
     }
 
     fn begin_oam_dma(&mut self, page: u8, index: u8) {
-        println!("Began OAM DMA on cycle {}", self.frame_cycle);
+        // println!("Began OAM DMA on cycle {}", self.frame_cycle);
         self.oam_dma = true;
         self.oam_dma_halting = true;
         self.oam_dma_page = page;
@@ -657,7 +657,7 @@ impl Cpu {
     }
 
     pub fn begin_dmc_dma(&mut self, req: DMCDMARequest) {
-        println!("Began DMC DMA on cycle {}", self.frame_cycle);
+        // println!("Began DMC DMA on cycle {}", self.frame_cycle);
         self.dmc_dma = Some(req);
         // At least need to take into account the halt cycle + dummy cycle
         // There could still be the alignment cycle required though
@@ -1613,7 +1613,7 @@ impl Cpu {
             return;
         }
 
-        println!("Triggered IRQ on cycle {}", self.frame_cycle);
+        // println!("Triggered IRQ on cycle {}", self.frame_cycle);
         self.irq_pending = false;
         self.interrupt(0xFFFE, 7);
     }

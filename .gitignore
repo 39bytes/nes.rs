@@ -15,3 +15,6 @@ assets/test_roms/*
 *.pdb
 
 .vscode
+
+*.log
+*.txt

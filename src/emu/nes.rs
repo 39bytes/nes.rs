@@ -115,15 +115,16 @@ impl Nes {
             if cpu_res.breakpoint_hit {
                 self.paused = true;
             };
-            let dma_req = self.apu.borrow_mut().clock(cpu_res.dmc_dma_sample);
+            let apu_res = self.apu.borrow_mut().clock(cpu_res.dmc_dma_sample);
 
-            if let Some(res) = dma_req {
+            if let Some(res) = apu_res.dmc_res {
                 if let Some(req) = res.dma_req {
                     self.cpu.borrow_mut().begin_dmc_dma(req);
                 }
 
                 irq = irq || res.interrupt;
             }
+            irq = irq || apu_res.frame_interrupt;
         }
 
         if let Some(audio_output) = &mut self.audio_output {

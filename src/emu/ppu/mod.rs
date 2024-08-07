@@ -213,15 +213,15 @@ impl Ppu {
             // Background data fetching
             // Do the 8 cycle data fetching routine for rendering tile data.
             if is_visible_region || is_preparing_next_scanline {
-                if self.scanline >= 174 && self.scanline <= 177 {
-                    println!(
-                        "VRAM addr on menu scanline {} cycle {}: {:?} (hex: {:06X}) ",
-                        self.scanline,
-                        self.cycle,
-                        self.vram_addr,
-                        u16::from(self.vram_addr)
-                    );
-                }
+                // if self.scanline >= 174 && self.scanline <= 177 {
+                //     println!(
+                //         "VRAM addr on menu scanline {} cycle {}: {:?} (hex: {:06X}) ",
+                //         self.scanline,
+                //         self.cycle,
+                //         self.vram_addr,
+                //         u16::from(self.vram_addr)
+                //     );
+                // }
                 if self.cycle >= 2 {
                     self.shift_shifters();
                 }
@@ -745,7 +745,7 @@ impl Ppu {
                     let addr = (u16::from(self.temp_vram_addr) & 0xFF00) | data;
                     self.temp_vram_addr = VRAMAddr::from(addr);
                     self.vram_addr = self.temp_vram_addr;
-                    println!("Wrote PPUADDR: {:04X} ({:?})", addr, self.vram_addr);
+                    // println!("Wrote PPUADDR: {:04X} ({:?})", addr, self.vram_addr);
                 }
                 self.write_latch = !self.write_latch;
 

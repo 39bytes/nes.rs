@@ -87,7 +87,7 @@ pub fn main() -> Result<()> {
     };
 
     let (mut nes, paused) = setup_emulator(&args)?;
-    nes.set_breakpoint(0x0029);
+    // nes.set_breakpoint(0x0029);
 
     let mut acc = 0.0;
     let mut now = Instant::now();
