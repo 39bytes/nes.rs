@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    audio_output::{AudioBufferConsumer, AudioOutput},
+    audio_output::AudioOutput,
     renderer::{Color, Sprite},
 };
 
@@ -44,12 +44,8 @@ impl Nes {
         }
     }
 
-    /// Returns the `Nes` struct, as well as the consumer for the audio buffer.
-    pub fn with_audio(mut self, audio_sample_rate: usize) -> (Self, AudioBufferConsumer) {
-        let (audio_output, consumer) = AudioOutput::new(audio_sample_rate);
-        self.audio_output = Some(audio_output);
-
-        (self, consumer)
+    pub fn with_audio(&mut self, output: AudioOutput) {
+        self.audio_output = Some(output);
     }
 
     #[allow(dead_code)]

@@ -146,20 +146,22 @@ fn palette_sprite(ppu: &Ppu, palette_index: u8) -> Sprite {
 pub fn draw_palettes(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
     renderer.draw_text("Background", x, y);
     for i in 0..4 {
-        renderer.draw(
-            &palette_sprite(ppu, i).scale(16),
+        renderer.draw_scaled(
+            &palette_sprite(ppu, i),
             x + 72 * (i as usize % 2),
             y + 24 * (i as usize / 2) + 24,
+            16,
         );
     }
 
     renderer.draw_text("Sprites", x + 160, y);
     for i in 4..8 {
         let i = i - 4;
-        renderer.draw(
-            &palette_sprite(ppu, i).scale(16),
+        renderer.draw_scaled(
+            &palette_sprite(ppu, i),
             x + 72 * (i as usize % 2) + 160,
             y + 24 * (i as usize / 2) + 24,
+            16,
         );
     }
 }
