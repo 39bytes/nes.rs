@@ -7,6 +7,8 @@ use sdl2::{
     video::{Window, WindowContext},
 };
 
+use crate::extension_traits::*;
+
 macro_rules! rect(
     ($x:expr, $y:expr, $w:expr, $h:expr) => (
         Rect::new($x as i32, $y as i32, $w as u32, $h as u32)
@@ -116,7 +118,7 @@ impl Renderer {
     const FONT_SIZE: u16 = 20;
 
     pub fn new(sdl_context: &sdl2::Sdl, width: u32, height: u32) -> Result<Self> {
-        let video_subsystem = sdl_context.video().map_err(anyhow::Error::msg)?;
+        let video_subsystem = sdl_context.video().into_anyhow()?;
 
         let font_data = include_bytes!("../assets/fonts/nes-arcade-font-2-1-monospaced.ttf");
         let font = Font::try_from_bytes(font_data as &[u8]).ok_or(anyhow!("Error loading font"))?;

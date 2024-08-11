@@ -22,25 +22,17 @@ use emu::{
     nes::Nes,
     palette::Palette,
 };
+use extension_traits::*;
 
 use clap::{arg, Parser};
 
 mod audio_output;
 mod emu;
+mod extension_traits;
 mod renderer;
 #[allow(dead_code)]
 mod ui;
 mod utils;
-
-trait Toggle {
-    fn toggle(&self);
-}
-
-impl Toggle for Arc<AtomicBool> {
-    fn toggle(&self) {
-        self.store(!self.load(Ordering::Relaxed), Ordering::Relaxed);
-    }
-}
 
 #[derive(Parser)]
 struct Args {
