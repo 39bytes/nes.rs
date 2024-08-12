@@ -4,6 +4,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    thread,
     time::{Duration, Instant},
 };
 use ui::{draw_cpu_info, draw_palettes, draw_pattern_tables, draw_ppu_info};
@@ -64,10 +65,14 @@ pub fn main() -> Result<()> {
     let mut renderer = Renderer::new(&sdl_context, width, height)?;
     let mut fps_counter = FpsCounter::new();
 
+    let frame_time_duration = Duration::from_secs_f64(FRAME_TIME);
+
     let mut acc = 0.0;
     let mut now = Instant::now();
 
+    nes.reset();
     'running: loop {
+        let frame_begin = Instant::now();
         renderer.clear();
 
         for event in event_pump.poll_iter() {
@@ -92,19 +97,38 @@ pub fn main() -> Result<()> {
         // The rest of the game loop goes here...
         acc += now.elapsed().as_secs_f64();
         now = Instant::now();
+        let mut frame_ticked = false;
         while acc >= FRAME_TIME {
             fps_counter.tick();
+            let before_emu_frame = Instant::now();
             nes.advance_frame();
+            log::debug!(
+                "Frame time: {}ms",
+                before_emu_frame.elapsed().as_secs_f64() * 1000.0
+            );
             acc -= FRAME_TIME;
+            frame_ticked = true;
+        }
 
+        if frame_ticked {
             // TODO: Implement not drawing overscan
             // https://www.nesdev.org/wiki/Overscan
+            let before_render = Instant::now();
             if args.draw_debug_info {
                 draw_with_debug_info(&mut renderer, &nes, &fps_counter)
             } else {
                 renderer.draw_scaled(nes.screen(), 0, 0, 2);
             }
             renderer.render();
+            log::debug!(
+                "Render time: {}ms",
+                before_render.elapsed().as_secs_f64() * 1000.0
+            );
+        }
+
+        let rem = frame_begin.elapsed();
+        if rem < frame_time_duration {
+            thread::sleep(frame_time_duration - rem);
         }
     }
 
@@ -155,7 +179,6 @@ fn setup_emulator(args: &Args, sdl_context: &sdl2::Sdl) -> Result<(Nes, Arc<Atom
 
     // Start
     nes.load_cartridge(cartridge);
-    nes.reset();
 
     Ok((nes, paused))
 }

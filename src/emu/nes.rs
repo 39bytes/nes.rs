@@ -75,6 +75,11 @@ impl Nes {
 
     pub fn reset(&mut self) {
         self.cpu.borrow_mut().reset();
+        if let Some(output) = self.audio_output.as_mut() {
+            output.pause();
+            output.clear();
+            output.play();
+        }
     }
 
     pub fn trigger_inputs(&mut self, input: ControllerInput) {
@@ -82,12 +87,11 @@ impl Nes {
     }
 
     pub fn advance_frame(&mut self) {
-        for _ in 0..FRAME_CLOCKS {
-            self.clock();
-        }
+        while !self.clock() {}
     }
 
-    pub fn clock(&mut self) {
+    /// Returns a boolean indicating if a frame has been completed.
+    pub fn clock(&mut self) -> bool {
         self.clock_count += 1;
 
         let clock_res = self.ppu.borrow_mut().clock();
@@ -120,6 +124,8 @@ impl Nes {
         if clock_res.nmi {
             self.cpu.borrow_mut().nmi();
         }
+
+        clock_res.frame_complete
     }
 
     pub fn next_instruction(&mut self) {

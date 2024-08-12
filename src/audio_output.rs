@@ -6,14 +6,15 @@ use super::emu::consts::CLOCK_SPEED;
 
 const TIME_PER_CLOCK: f64 = 1.0 / CLOCK_SPEED as f64;
 const SAMPLE_RATE: i32 = 44100;
-const DEFAULT_VOLUME: f32 = 0.1;
+const DEFAULT_VOLUME: f32 = 0.5;
+const BUFFER_SIZE: usize = 1024;
 
 pub struct AudioOutput {
     volume: f32,
 
     acc: f64,
     time_between_samples: f64,
-    buffer: [f32; 64],
+    buffer: [f32; BUFFER_SIZE],
     buffer_sample_index: usize,
     queue: AudioQueue<f32>,
 }
@@ -31,12 +32,12 @@ impl AudioOutput {
                 Some(default_device).as_deref(),
                 &AudioSpecDesired {
                     freq: Some(SAMPLE_RATE),
-                    samples: Some(512),
+                    samples: Some(BUFFER_SIZE as u16),
                     channels: Some(1),
                 },
             )
             .into_anyhow()?;
-        queue.resume();
+
         log::info!("Opened queue with spec: {:?}", queue.spec());
 
         Ok(AudioOutput {
@@ -45,9 +46,21 @@ impl AudioOutput {
             acc: 0.0,
             time_between_samples: 1.0 / (SAMPLE_RATE as f64),
             queue,
-            buffer: [0.0; 64],
+            buffer: [0.0; BUFFER_SIZE],
             buffer_sample_index: 0,
         })
+    }
+
+    pub fn play(&mut self) {
+        self.queue.resume();
+    }
+
+    pub fn pause(&mut self) {
+        self.queue.pause();
+    }
+
+    pub fn clear(&mut self) {
+        self.queue.clear();
     }
 
     pub fn try_push_sample(&mut self, sample: f32) {
