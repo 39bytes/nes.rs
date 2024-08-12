@@ -73,7 +73,6 @@ pub fn main() -> Result<()> {
     nes.reset();
     'running: loop {
         let frame_begin = Instant::now();
-        renderer.clear();
 
         for event in event_pump.poll_iter() {
             match event {
@@ -90,28 +89,33 @@ pub fn main() -> Result<()> {
         }
         handle_input(&mut event_pump, &mut nes);
 
+        let paused = paused.load(Ordering::Relaxed);
+
         // The rest of the game loop goes here...
         acc += now.elapsed().as_secs_f64();
         now = Instant::now();
         let mut frame_ticked = false;
         while acc >= FRAME_TIME {
             let before_emu_frame = Instant::now();
-            nes.advance_frame();
+            if !paused {
+                nes.advance_frame();
+                log::debug!(
+                    "Frame time: {}ms",
+                    before_emu_frame.elapsed().as_secs_f64() * 1000.0
+                );
+            }
             fps_counter.tick();
-            log::debug!(
-                "Frame time: {}ms",
-                before_emu_frame.elapsed().as_secs_f64() * 1000.0
-            );
             acc -= FRAME_TIME;
             frame_ticked = true;
         }
 
-        if frame_ticked {
+        if frame_ticked || paused {
             // TODO: Implement not drawing overscan
             // https://www.nesdev.org/wiki/Overscan
             let before_render = Instant::now();
+            renderer.clear();
             if args.draw_debug_info {
-                draw_with_debug_info(&mut renderer, &nes, &fps_counter)
+                draw_with_debug_info(&mut renderer, &nes, &fps_counter, paused)
             } else {
                 renderer.draw(nes.screen(), 0, 0);
             }
@@ -179,10 +183,18 @@ fn setup_emulator(args: &Args, sdl_context: &sdl2::Sdl) -> Result<(Nes, Arc<Atom
     Ok((nes, paused))
 }
 
-fn draw_with_debug_info(renderer: &mut Renderer, nes: &Nes, fps_counter: &FpsCounter) {
+fn draw_with_debug_info(
+    renderer: &mut Renderer,
+    nes: &Nes,
+    fps_counter: &FpsCounter,
+    paused: bool,
+) {
     renderer.draw(&nes.screen().scale(2), 0, 180);
 
     renderer.draw_text(&format!("FPS: {:.1}", fps_counter.get_fps()), 0, 160);
+    if paused {
+        renderer.draw_text("(Paused)", 120, 160);
+    }
 
     draw_ppu_info(renderer, &nes.ppu(), 0, 0);
     draw_palettes(renderer, &nes.ppu(), 240, 0);
