@@ -54,15 +54,15 @@ pub fn main() -> Result<()> {
     // SDL2 setup
     let sdl_context = sdl2::init().unwrap();
 
-    let (width, height) = if args.draw_debug_info {
-        (900, 720)
+    let (width, height, scale) = if args.draw_debug_info {
+        (900, 720, 1)
     } else {
-        (512, 480)
+        (256, 240, 2)
     };
     let mut event_pump = sdl_context.event_pump().unwrap();
 
     let (mut nes, paused) = setup_emulator(&args, &sdl_context)?;
-    let mut renderer = Renderer::new(&sdl_context, width, height)?;
+    let mut renderer = Renderer::new(&sdl_context, width, height, scale)?;
     let mut fps_counter = FpsCounter::new();
 
     let frame_time_duration = Duration::from_secs_f64(FRAME_TIME);
@@ -77,11 +77,7 @@ pub fn main() -> Result<()> {
 
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => break 'running,
+                Event::Quit { .. } => break 'running,
                 Event::KeyDown {
                     keycode: Some(key), ..
                 } => match key {
@@ -99,9 +95,9 @@ pub fn main() -> Result<()> {
         now = Instant::now();
         let mut frame_ticked = false;
         while acc >= FRAME_TIME {
-            fps_counter.tick();
             let before_emu_frame = Instant::now();
             nes.advance_frame();
+            fps_counter.tick();
             log::debug!(
                 "Frame time: {}ms",
                 before_emu_frame.elapsed().as_secs_f64() * 1000.0
@@ -117,7 +113,7 @@ pub fn main() -> Result<()> {
             if args.draw_debug_info {
                 draw_with_debug_info(&mut renderer, &nes, &fps_counter)
             } else {
-                renderer.draw_scaled(nes.screen(), 0, 0, 2);
+                renderer.draw(nes.screen(), 0, 0);
             }
             renderer.render();
             log::debug!(
@@ -184,7 +180,7 @@ fn setup_emulator(args: &Args, sdl_context: &sdl2::Sdl) -> Result<(Nes, Arc<Atom
 }
 
 fn draw_with_debug_info(renderer: &mut Renderer, nes: &Nes, fps_counter: &FpsCounter) {
-    renderer.draw_scaled(nes.screen(), 0, 180, 2);
+    renderer.draw(&nes.screen().scale(2), 0, 180);
 
     renderer.draw_text(&format!("FPS: {:.1}", fps_counter.get_fps()), 0, 160);
 

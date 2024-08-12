@@ -22,5 +22,5 @@ modular-bitfield = "0.11.2"
 num-integer = "0.1.46"
 num-traits = "0.2.19"
 rusttype = "0.9.3"
-sdl2 = { version = "0.37.0" }
+sdl2 = { version = "0.37.0", features = ["static-link", "bundled", "unsafe_textures"] }
 strum_macros = "0.26.1"
