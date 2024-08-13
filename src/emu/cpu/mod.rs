@@ -410,7 +410,6 @@ impl Cpu {
 
         // Get the interrupt address to jump to
         self.pc = self.read_u16(interrupt_addr);
-        // println!("Interrupt: jumping to {}", self.pc);
 
         self.cycles = cycles;
     }
@@ -476,17 +475,12 @@ impl Cpu {
         if self.cycles == 0 {
             if let Some(bp) = self.breakpoint {
                 if self.pc == bp && !paused {
-                    // println!(
-                    //     "Hit breakpoint at: {} (frame cycle {})",
-                    //     self.pc, self.frame_cycle
-                    // );
                     return CpuClockResult {
                         dmc_dma_sample: None,
                         breakpoint_hit: true,
                     };
                 }
             }
-            // println!("{}", self.get_log_line());
 
             self.opcode = self.read(self.pc);
 
@@ -615,7 +609,6 @@ impl Cpu {
     }
 
     fn begin_oam_dma(&mut self, page: u8, index: u8) {
-        // println!("Began OAM DMA on cycle {}", self.frame_cycle);
         self.oam_dma = true;
         self.oam_dma_halting = true;
         self.oam_dma_page = page;
@@ -656,7 +649,6 @@ impl Cpu {
     }
 
     pub fn begin_dmc_dma(&mut self, req: DMCDMARequest) {
-        // println!("Began DMC DMA on cycle {}", self.frame_cycle);
         self.dmc_dma = Some(req);
         // At least need to take into account the halt cycle + dummy cycle
         // There could still be the alignment cycle required though
@@ -1604,15 +1596,11 @@ impl Cpu {
     // Interrupts
 
     /// Interrupt request.
-    /// Note for later: https://forums.nesdev.org/viewtopic.php?t=19321
-    /// NOTE: This is triggering 1-2 cycles too early in kirby (((sometimes))) which is causing
-    /// UI shake
     fn irq(&mut self) {
         if self.get_flag(StatusFlags::I) {
             return;
         }
 
-        // println!("Triggered IRQ on cycle {}", self.frame_cycle);
         self.irq_pending = false;
         self.interrupt(0xFFFE, 7);
     }

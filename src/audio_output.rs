@@ -6,7 +6,7 @@ use super::emu::consts::CLOCK_SPEED;
 
 const TIME_PER_CLOCK: f64 = 1.0 / CLOCK_SPEED as f64;
 const SAMPLE_RATE: i32 = 44100;
-const DEFAULT_VOLUME: f32 = 0.1;
+const DEFAULT_VOLUME: f32 = 0.5;
 const BUFFER_SIZE: usize = 1024;
 
 pub struct AudioOutput {

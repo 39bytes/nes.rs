@@ -134,16 +134,7 @@ impl Nes {
         }
 
         if irq {
-            // log::info!(
-            //     "Pending IRQ from NES on scanline {}",
-            //     self.ppu.borrow().scanline()
-            // );
             self.cpu.borrow_mut().request_irq();
-        }
-
-        // NOTE: debug thing
-        if clock_res.frame_complete {
-            self.cpu.borrow_mut().mark_frame_complete();
         }
 
         clock_res.frame_complete

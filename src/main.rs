@@ -65,7 +65,6 @@ pub fn main() -> Result<()> {
     let mut renderer = Renderer::new(&sdl_context, width, height, scale)?;
     let mut fps_counter = FpsCounter::new();
 
-    // nes.set_breakpoint(0x0029);
     let frame_time_duration = Duration::from_secs_f64(FRAME_TIME);
 
     let mut acc = 0.0;

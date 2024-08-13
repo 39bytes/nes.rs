@@ -165,25 +165,21 @@ impl Mapper for Mapper4 {
                 None
             }
             0xC000..=0xDFFF if addr % 2 == 0 => {
-                // println!("Wrote {} as IRQ reload", data);
                 self.irq_counter_reload = data;
 
                 Some(MapWrite::WroteRegister)
             }
             0xC000..=0xDFFF if addr % 2 == 1 => {
-                // println!("Requested IRQ reload");
                 self.irq_counter = 0;
 
                 Some(MapWrite::WroteRegister)
             }
             0xE000..=0xFFFF if addr % 2 == 0 => {
-                // println!("Disabled IRQ");
                 self.irq_disabled = true;
 
                 Some(MapWrite::AcknowledgeIRQ)
             }
             0xE000..=0xFFFF if addr % 2 == 1 => {
-                // println!("Enabled IRQ");
                 self.irq_disabled = false;
 
                 Some(MapWrite::WroteRegister)
@@ -236,15 +232,12 @@ impl Mapper for Mapper4 {
 
     fn on_scanline_hblank(&mut self) -> bool {
         if self.irq_counter == 0 {
-            // println!("Reloading IRQ counter with {}", self.irq_counter_reload);
             self.irq_counter = self.irq_counter_reload;
         } else {
             self.irq_counter -= 1;
-            // println!("Decremented: {}", self.irq_counter);
         }
 
         if !self.irq_disabled && self.irq_counter == 0 {
-            // println!("Fired IRQ");
             return true;
         }
 
