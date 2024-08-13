@@ -1,60 +1,88 @@
+use crate::extension_traits::*;
+use anyhow::{bail, Result};
+use sdl2::audio::{AudioQueue, AudioSpecDesired};
+
 use super::emu::consts::CLOCK_SPEED;
-use ringbuf::{storage::Heap, traits::*, wrap::caching::Caching, HeapRb, SharedRb};
-use std::sync::Arc;
 
 const TIME_PER_CLOCK: f64 = 1.0 / CLOCK_SPEED as f64;
-
-pub type AudioBufferProducer = Caching<Arc<SharedRb<Heap<f32>>>, true, false>;
-pub type AudioBufferConsumer = Caching<Arc<SharedRb<Heap<f32>>>, false, true>;
+const SAMPLE_RATE: i32 = 44100;
+const DEFAULT_VOLUME: f32 = 0.1;
+const BUFFER_SIZE: usize = 1024;
 
 pub struct AudioOutput {
+    volume: f32,
+
     acc: f64,
     time_between_samples: f64,
-    producer: AudioBufferProducer,
-    buffer: Vec<f32>,
+    buffer: [f32; BUFFER_SIZE],
     buffer_sample_index: usize,
+    queue: AudioQueue<f32>,
 }
 
 impl AudioOutput {
-    pub fn new(sample_rate: usize) -> (Self, AudioBufferConsumer) {
-        let sample_rate = sample_rate as f64;
+    pub fn new(sdl_context: &sdl2::Sdl) -> Result<Self> {
+        let audio = sdl_context.audio().into_anyhow()?;
+        if audio.num_audio_playback_devices().is_none() {
+            bail!("No audio playback devices found");
+        }
+        let default_device = audio.audio_playback_device_name(0).into_anyhow()?;
 
-        let latency_frames = (128.0 / 1000.0) * sample_rate;
-        let latency_samples = latency_frames as usize;
+        let queue = audio
+            .open_queue(
+                Some(default_device).as_deref(),
+                &AudioSpecDesired {
+                    freq: Some(SAMPLE_RATE),
+                    samples: Some(BUFFER_SIZE as u16),
+                    channels: Some(1),
+                },
+            )
+            .into_anyhow()?;
 
-        let rb = HeapRb::<f32>::new(latency_samples);
+        let spec = queue.spec();
+        log::info!("Opened queue with spec: {:?}", spec);
 
-        let (mut prod, cons) = rb.split();
+        Ok(AudioOutput {
+            volume: DEFAULT_VOLUME,
 
-        let buf = vec![0.0; latency_samples];
+            acc: 0.0,
+            time_between_samples: 1.0 / (SAMPLE_RATE as f64),
+            queue,
+            buffer: [0.0; BUFFER_SIZE],
+            buffer_sample_index: BUFFER_SIZE / 2,
+        })
+    }
 
-        // Fill with some silence to start
-        prod.push_slice(&buf);
+    pub fn play(&mut self) {
+        self.queue.resume();
+    }
 
-        (
-            AudioOutput {
-                acc: 0.0,
-                time_between_samples: 1.0 / sample_rate,
-                producer: prod,
-                buffer: vec![0.0; 256],
-                buffer_sample_index: 0,
-            },
-            cons,
-        )
+    pub fn pause(&mut self) {
+        self.queue.pause();
+    }
+
+    pub fn clear(&mut self) {
+        self.queue.clear();
     }
 
     pub fn try_push_sample(&mut self, sample: f32) {
         self.acc += TIME_PER_CLOCK;
         while self.acc >= self.time_between_samples {
-            self.buffer[self.buffer_sample_index] = sample;
+            let adjusted = sample * self.volume;
+            self.buffer[self.buffer_sample_index] = adjusted;
             self.buffer_sample_index += 1;
 
             if self.buffer_sample_index == self.buffer.len() {
-                self.producer.push_slice(&self.buffer);
+                if let Err(e) = self.queue.queue_audio(&self.buffer) {
+                    log::warn!("Audio Queue: {}", e);
+                };
                 self.buffer_sample_index = 0;
             }
 
             self.acc -= self.time_between_samples;
         }
+    }
+
+    pub fn set_volume(&mut self, volume: f32) {
+        self.volume = volume;
     }
 }

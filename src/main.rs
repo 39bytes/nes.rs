@@ -1,5 +1,3 @@
-use cpal::StreamConfig;
-use ringbuf::traits::*;
 use std::{
     path::PathBuf,
     sync::{
@@ -7,29 +5,16 @@ use std::{
         Arc,
     },
     thread,
-    time::Instant,
+    time::{Duration, Instant},
 };
 use ui::{draw_cpu_info, draw_palettes, draw_pattern_tables, draw_ppu_info};
 use utils::FpsCounter;
 
-use anyhow::{anyhow, Result};
-use audio_output::AudioBufferConsumer;
-use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
-    FromSample, SizedSample,
-};
-use error_iter::ErrorIter as _;
-use log::error;
+use anyhow::Result;
+use audio_output::AudioOutput;
 use renderer::Renderer;
-use rusttype::Font;
-use winit::{
-    dpi::LogicalSize,
-    event::{Event, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    keyboard::KeyCode,
-    window::WindowBuilder,
-};
-use winit_input_helper::WinitInputHelper;
+use sdl2::keyboard::Keycode;
+use sdl2::{event::Event, keyboard::Scancode};
 
 use emu::{
     cartridge::Cartridge,
@@ -38,11 +23,13 @@ use emu::{
     nes::Nes,
     palette::Palette,
 };
+use extension_traits::*;
 
 use clap::{arg, Parser};
 
 mod audio_output;
 mod emu;
+mod extension_traits;
 mod renderer;
 #[allow(dead_code)]
 mod ui;
@@ -64,264 +51,164 @@ pub fn main() -> Result<()> {
 
     let args = Args::parse();
 
-    // Window setup
-    let event_loop = EventLoop::new().unwrap();
-    event_loop.set_control_flow(ControlFlow::Wait);
+    // SDL2 setup
+    let sdl_context = sdl2::init().unwrap();
 
-    let mut input = WinitInputHelper::new();
-
-    let (width, height) = if args.draw_debug_info {
-        (900, 720)
+    let (width, height, scale) = if args.draw_debug_info {
+        (900, 720, 1)
     } else {
-        (256, 240)
+        (256, 240, 2)
     };
+    let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let window = {
-        let size = LogicalSize::new(width, height);
-        WindowBuilder::new()
-            .with_title("nes.rs")
-            .with_inner_size(size)
-            .with_min_inner_size(size)
-            .build(&event_loop)
-            .unwrap()
-    };
+    let (mut nes, paused) = setup_emulator(&args, &sdl_context)?;
+    let mut renderer = Renderer::new(&sdl_context, width, height, scale)?;
+    let mut fps_counter = FpsCounter::new();
 
-    let (mut nes, paused) = setup_emulator(&args)?;
     // nes.set_breakpoint(0x0029);
+    let frame_time_duration = Duration::from_secs_f64(FRAME_TIME);
 
     let mut acc = 0.0;
     let mut now = Instant::now();
 
-    let font_data = include_bytes!("../assets/fonts/nes-arcade-font-2-1-monospaced.ttf");
-    let font = Font::try_from_bytes(font_data as &[u8]).ok_or(anyhow!("Error loading font"))?;
+    nes.reset();
+    'running: loop {
+        let frame_begin = Instant::now();
 
-    let mut renderer = Renderer::new(font, &window, width as usize, height as usize)?;
-    let mut fps_counter = FpsCounter::new();
-    let mut pattern_table_palette = 0;
-
-    event_loop.run(move |event, target| {
-        match event {
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                log::info!("Close button pressed, exiting");
-                target.exit();
-            }
-            Event::WindowEvent {
-                event: WindowEvent::RedrawRequested,
-                ..
-            } => {
-                renderer.clear();
-                // TODO: Implement not drawing overscan
-                // https://www.nesdev.org/wiki/Overscan
-                if args.draw_debug_info {
-                    draw_with_debug_info(&mut renderer, &nes, &fps_counter, pattern_table_palette);
-                } else {
-                    renderer.draw(nes.screen(), 0, 0);
-                }
-
-                if let Err(err) = renderer.render() {
-                    log_error("pixels.render", err);
-                    target.exit();
-                }
-            }
-
-            _ => (),
-        }
-        // Handle input events
-        if input.update(&event) {
-            // Emulator meta events
-            if input.key_pressed(KeyCode::Space) {
-                let cur = paused.load(Ordering::Relaxed);
-                if cur {
-                    nes.unpause();
-                }
-                paused.store(!cur, Ordering::Relaxed);
-
-                now = Instant::now();
-            }
-            if input.key_pressed(KeyCode::KeyN) && paused.load(Ordering::Relaxed) {
-                nes.next_instruction();
-            }
-            if input.key_pressed(KeyCode::KeyM) && paused.load(Ordering::Relaxed) {
-                nes.advance_frame();
-            }
-            if input.key_pressed(KeyCode::KeyP) {
-                pattern_table_palette = (pattern_table_palette + 1) % 8;
-            }
-
-            // Console input
-            let mut buttons = ControllerButtons::empty();
-            if input.key_held(KeyCode::KeyX) {
-                buttons.insert(ControllerButtons::A);
-            }
-            if input.key_held(KeyCode::KeyZ) {
-                buttons.insert(ControllerButtons::B);
-            }
-            if input.key_held(KeyCode::KeyA) {
-                buttons.insert(ControllerButtons::Select);
-            }
-            if input.key_held(KeyCode::KeyS) {
-                buttons.insert(ControllerButtons::Start);
-            }
-            if input.key_held(KeyCode::ArrowUp) {
-                buttons.insert(ControllerButtons::Up);
-            }
-            if input.key_held(KeyCode::ArrowDown) {
-                buttons.insert(ControllerButtons::Down);
-            }
-            if input.key_held(KeyCode::ArrowLeft) {
-                buttons.insert(ControllerButtons::Left);
-            }
-            if input.key_held(KeyCode::ArrowRight) {
-                buttons.insert(ControllerButtons::Right);
-            }
-            nes.trigger_inputs(ControllerInput::One(buttons));
-
-            // Resize the window
-            if let Some(size) = input.window_resized() {
-                if let Err(err) = renderer.pixels().resize_surface(size.width, size.height) {
-                    log_error("pixels.resize_surface", err);
-                    target.exit();
-                }
-            }
-
-            if !paused.load(Ordering::Relaxed) {
-                acc += now.elapsed().as_secs_f64();
-                now = Instant::now();
-                while acc >= FRAME_TIME {
-                    fps_counter.tick();
-                    let should_pause = nes.advance_frame();
-                    if should_pause {
-                        paused.store(true, Ordering::Relaxed);
+        let mut pattern_table_palette = 0;
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. } => break 'running,
+                Event::KeyDown {
+                    keycode: Some(key), ..
+                } => match key {
+                    Keycode::Space => {
+                        if paused.load(Ordering::Relaxed) {
+                            nes.unpause()
+                        }
+                        paused.toggle()
                     }
-                    acc -= FRAME_TIME;
-                }
+                    Keycode::N if paused.load(Ordering::Relaxed) => nes.next_instruction(),
+                    _ => {}
+                },
+                _ => {}
             }
-            window.request_redraw();
         }
-    })?;
+        handle_input(&mut event_pump, &mut nes);
+
+        let paused = paused.load(Ordering::Relaxed);
+
+        // The rest of the game loop goes here...
+        acc += now.elapsed().as_secs_f64();
+        now = Instant::now();
+        let mut frame_ticked = false;
+        while acc >= FRAME_TIME {
+            let before_emu_frame = Instant::now();
+            if !paused {
+                let should_pause = nes.advance_frame();
+                if should_pause {
+                    paused.store(true, Ordering::Relaxed);
+                }
+                log::debug!(
+                    "Frame time: {}ms",
+                    before_emu_frame.elapsed().as_secs_f64() * 1000.0
+                );
+            }
+            acc -= FRAME_TIME;
+            frame_ticked = true;
+        }
+
+        if frame_ticked || paused {
+            // TODO: Implement not drawing overscan
+            // https://www.nesdev.org/wiki/Overscan
+            let before_render = Instant::now();
+            renderer.clear();
+            if args.draw_debug_info {
+                draw_with_debug_info(&mut renderer, &nes, &fps_counter, paused)
+            } else {
+                renderer.draw(nes.screen(), 0, 0);
+            }
+            renderer.render();
+            log::debug!(
+                "Render time: {}ms",
+                before_render.elapsed().as_secs_f64() * 1000.0
+            );
+        }
+
+        let rem = frame_begin.elapsed();
+        if rem < frame_time_duration {
+            thread::sleep(frame_time_duration - rem);
+        }
+    }
 
     Ok(())
 }
 
-fn setup_audio() -> Result<(cpal::Device, cpal::SupportedStreamConfig)> {
-    let host = cpal::default_host();
-
-    let device = host
-        .default_output_device()
-        .expect("Failed to find output device");
-    log::info!("Output device: {}", device.name()?);
-
-    let config = device.default_output_config()?;
-
-    log::info!("Sample format: {}", config.sample_format());
-    log::info!("Sample rate: {}", config.sample_rate().0);
-
-    Ok((device, config))
+fn handle_input(event_pump: &mut sdl2::EventPump, nes: &mut Nes) {
+    let mut buttons = ControllerButtons::empty();
+    let key_state = event_pump.keyboard_state();
+    if key_state.is_scancode_pressed(Scancode::X) {
+        buttons.insert(ControllerButtons::A);
+    }
+    if key_state.is_scancode_pressed(Scancode::Z) {
+        buttons.insert(ControllerButtons::B);
+    }
+    if key_state.is_scancode_pressed(Scancode::A) {
+        buttons.insert(ControllerButtons::Select);
+    }
+    if key_state.is_scancode_pressed(Scancode::S) {
+        buttons.insert(ControllerButtons::Start);
+    }
+    if key_state.is_scancode_pressed(Scancode::Up) {
+        buttons.insert(ControllerButtons::Up);
+    }
+    if key_state.is_scancode_pressed(Scancode::Down) {
+        buttons.insert(ControllerButtons::Down);
+    }
+    if key_state.is_scancode_pressed(Scancode::Left) {
+        buttons.insert(ControllerButtons::Left);
+    }
+    if key_state.is_scancode_pressed(Scancode::Right) {
+        buttons.insert(ControllerButtons::Right);
+    }
+    nes.trigger_inputs(ControllerInput::One(buttons));
 }
 
-fn start_audio<T>(
-    device: &cpal::Device,
-    config: &cpal::StreamConfig,
-    mut consumer: AudioBufferConsumer,
-    paused: Arc<AtomicBool>,
-) -> Result<()>
-where
-    T: SizedSample + FromSample<f32>,
-{
-    let sample_rate = config.sample_rate.0 as f32;
-    let channels = config.channels as usize;
-
-    log::info!(
-        "Starting audio with sample rate {} and {} channels",
-        sample_rate,
-        channels
-    );
-
-    let mut next_sample = move || {
-        if paused.load(Ordering::Relaxed) {
-            return 0.0;
-        }
-        match consumer.try_pop() {
-            Some(sample) => sample,
-            None => {
-                log::warn!("Audio buffer was exhausted, outputting 0");
-                0.0
-            }
-        }
-    };
-
-    let err_fn = |err| log::error!("an error occurred on stream: {}", err);
-
-    let stream = device.build_output_stream(
-        config,
-        move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-            for frame in data.chunks_mut(channels) {
-                let value: T = T::from_sample(next_sample());
-                for sample in frame.iter_mut() {
-                    *sample = value;
-                }
-            }
-        },
-        err_fn,
-        None,
-    )?;
-    stream.play()?;
-
-    std::thread::park();
-
-    Ok(())
-}
-
-fn setup_emulator(args: &Args) -> Result<(Nes, Arc<AtomicBool>)> {
+fn setup_emulator(args: &Args, sdl_context: &sdl2::Sdl) -> Result<(Nes, Arc<AtomicBool>)> {
     // Emulator setup
-    let palette = Palette::load("assets/palettes/2C02G.pal")?;
+    let palette = Palette::default();
     let cartridge = Cartridge::new(args.rom_path.as_path())?;
 
     let paused = Arc::new(AtomicBool::new(true));
 
-    let mut nes = if !args.disable_audio {
-        let (device, config) = setup_audio()?;
-        let stream_config: StreamConfig = config.into();
-
-        let (nes, audio_consumer) =
-            Nes::new(palette.clone()).with_audio(stream_config.sample_rate.0 as usize);
-
-        let p = paused.clone();
-        thread::spawn(move || {
-            start_audio::<f32>(&device, &stream_config, audio_consumer, p)
-                .expect("Could not start audio")
-        });
-
-        nes
-    } else {
-        Nes::new(palette.clone())
-    };
+    let mut nes = Nes::new(palette.clone());
+    if !args.disable_audio {
+        nes.with_audio(AudioOutput::new(sdl_context)?)
+    }
 
     // Start
     nes.load_cartridge(cartridge);
-    nes.reset();
 
     Ok((nes, paused))
 }
 
-fn draw_with_debug_info(renderer: &mut Renderer, nes: &Nes, fps_counter: &FpsCounter, palette: u8) {
+fn draw_with_debug_info(
+    renderer: &mut Renderer,
+    nes: &Nes,
+    fps_counter: &FpsCounter,
+    palette: u8,
+    paused: bool,
+) {
     renderer.draw(&nes.screen().scale(2), 0, 180);
 
     renderer.draw_text(&format!("FPS: {:.1}", fps_counter.get_fps()), 0, 160);
+    if paused {
+        renderer.draw_text("(Paused)", 120, 160);
+    }
 
     draw_ppu_info(renderer, &nes.ppu(), 0, 0);
     draw_palettes(renderer, &nes.ppu(), 240, 0);
     draw_pattern_tables(renderer, &nes.ppu(), palette, 576, 0);
     draw_cpu_info(renderer, nes, 576, 180);
     // draw_oam_sprites(renderer, &nes.ppu(), 600, 320)
-}
-
-fn log_error<E: std::error::Error + 'static>(method_name: &str, err: E) {
-    error!("{method_name}() failed: {err}");
-    for source in err.sources().skip(1) {
-        error!("  Caused by: {source}");
-    }
 }

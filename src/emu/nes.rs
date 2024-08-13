@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    audio_output::{AudioBufferConsumer, AudioOutput},
+    audio_output::AudioOutput,
     renderer::{Color, Sprite},
 };
 
@@ -46,12 +46,8 @@ impl Nes {
         }
     }
 
-    /// Returns the `Nes` struct, as well as the consumer for the audio buffer.
-    pub fn with_audio(mut self, audio_sample_rate: usize) -> (Self, AudioBufferConsumer) {
-        let (audio_output, consumer) = AudioOutput::new(audio_sample_rate);
-        self.audio_output = Some(audio_output);
-
-        (self, consumer)
+    pub fn with_audio(&mut self, output: AudioOutput) {
+        self.audio_output = Some(output);
     }
 
     pub fn cpu(&self) -> Ref<Cpu> {
@@ -79,6 +75,11 @@ impl Nes {
 
     pub fn reset(&mut self) {
         self.cpu.borrow_mut().reset();
+        if let Some(output) = self.audio_output.as_mut() {
+            output.pause();
+            output.clear();
+            output.play();
+        }
     }
 
     pub fn trigger_inputs(&mut self, input: ControllerInput) {
@@ -86,10 +87,7 @@ impl Nes {
     }
 
     pub fn advance_frame(&mut self) -> bool {
-        let mut frame_complete = false;
-        while !frame_complete {
-            frame_complete = self.clock(false);
-        }
+        while !self.clock(false) {}
 
         self.paused
     }
@@ -134,6 +132,7 @@ impl Nes {
         if clock_res.nmi {
             self.cpu.borrow_mut().request_nmi();
         }
+
         if irq {
             log::info!(
                 "Pending IRQ from NES on scanline {}",

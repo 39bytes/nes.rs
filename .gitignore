@@ -16,5 +16,5 @@ assets/test_roms/*
 
 .vscode
 
-*.log
 *.txt
+*.log

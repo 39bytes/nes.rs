@@ -162,12 +162,10 @@ impl Ppu {
         self.data_buffer
     }
 
-    #[allow(dead_code)]
     pub fn scanline(&self) -> i16 {
         self.scanline
     }
 
-    #[allow(dead_code)]
     pub fn cycle(&self) -> u16 {
         self.cycle
     }
@@ -315,7 +313,7 @@ impl Ppu {
 
             if self.scanline > 260 {
                 self.scanline = -1;
-                self.odd_frame = !self.odd_frame
+                self.odd_frame = !self.odd_frame;
             }
         }
 
