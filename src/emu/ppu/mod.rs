@@ -651,7 +651,9 @@ impl Ppu {
     }
 
     fn get_bg_pixel(&self) -> BgPixel {
-        if !self.mask.contains(PpuMask::ShowBackground) {
+        if !self.mask.contains(PpuMask::ShowBackground)
+            || (!self.mask.contains(PpuMask::ShowBackgroundLeft) && self.cycle < 9)
+        {
             return BgPixel::default();
         }
 
@@ -662,7 +664,9 @@ impl Ppu {
     }
 
     fn get_sprite_pixel(&self) -> SpritePixel {
-        if !self.mask.contains(PpuMask::ShowSprites) {
+        if !self.mask.contains(PpuMask::ShowSprites)
+            || (!self.mask.contains(PpuMask::ShowSpritesLeft) && self.cycle < 9)
+        {
             return SpritePixel::default();
         }
 

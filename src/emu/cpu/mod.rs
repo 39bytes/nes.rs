@@ -486,7 +486,7 @@ impl Cpu {
                     };
                 }
             }
-            println!("{}", self.get_log_line());
+            // println!("{}", self.get_log_line());
 
             self.opcode = self.read(self.pc);
 
