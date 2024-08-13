@@ -7,7 +7,7 @@ edition = "2021"
 opt-level = 3
 
 [profile.release]
-lto = true
+lto = "thin"
 panic = "abort"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
