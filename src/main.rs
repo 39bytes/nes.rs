@@ -31,7 +31,6 @@ mod audio_output;
 mod emu;
 mod extension_traits;
 mod renderer;
-#[allow(dead_code)]
 mod ui;
 mod utils;
 

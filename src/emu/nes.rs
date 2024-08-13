@@ -48,12 +48,10 @@ impl Nes {
         self.audio_output = Some(output);
     }
 
-    #[allow(dead_code)]
     pub fn cpu(&self) -> Ref<Cpu> {
         self.cpu.borrow()
     }
 
-    #[allow(dead_code)]
     pub fn ppu(&self) -> Ref<Ppu> {
         self.ppu.borrow()
     }

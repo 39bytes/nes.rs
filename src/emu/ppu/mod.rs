@@ -160,12 +160,10 @@ impl Ppu {
         self.data_buffer
     }
 
-    #[allow(dead_code)]
     pub fn scanline(&self) -> i16 {
         self.scanline
     }
 
-    #[allow(dead_code)]
     pub fn cycle(&self) -> u16 {
         self.cycle
     }
