@@ -31,6 +31,7 @@ mod audio_output;
 mod emu;
 mod extension_traits;
 mod renderer;
+#[allow(dead_code)]
 mod ui;
 mod utils;
 
@@ -166,7 +167,7 @@ fn handle_input(event_pump: &mut sdl2::EventPump, nes: &mut Nes) {
 
 fn setup_emulator(args: &Args, sdl_context: &sdl2::Sdl) -> Result<(Nes, Arc<AtomicBool>)> {
     // Emulator setup
-    let palette = Palette::load("assets/palettes/2C02G.pal")?;
+    let palette = Palette::default();
     let cartridge = Cartridge::new(args.rom_path.as_path())?;
 
     let paused = Arc::new(AtomicBool::new(false));
