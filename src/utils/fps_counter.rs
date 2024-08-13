@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, time::Instant};
 
-const MAX_SAMPLES: usize = 60;
+const MAX_SAMPLES: usize = 120;
 
 pub struct FpsCounter {
     last_frame: Instant,

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::{fs::File, io::prelude::*};
 
 use crate::renderer::{Color, Sprite};
@@ -10,9 +10,8 @@ pub struct Palette {
 
 impl Default for Palette {
     fn default() -> Self {
-        Self {
-            colors: Vec::from([Color::BLACK; 64]),
-        }
+        let pal = include_bytes!("../../assets/palettes/2C02G.pal");
+        Self::from_bytes(pal).unwrap()
     }
 }
 
@@ -24,12 +23,20 @@ impl Palette {
         let mut buf = [0; 192];
         f.read_exact(&mut buf)?;
 
-        let colors = buf
+        Self::from_bytes(&buf)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() != 192 {
+            bail!("Palette length must be exactly 192 bytes");
+        }
+
+        let colors = bytes
             .chunks_exact(3)
             .map(|c| Color(c[0], c[1], c[2]))
             .collect::<Vec<_>>();
 
-        Ok(Palette { colors })
+        Ok(Self { colors })
     }
 
     pub fn colors(&self) -> &Vec<Color> {

@@ -82,7 +82,6 @@ pub struct Cpu {
 
 struct AddressModeResult {
     /// The pointer that was used to get the computed address, used for debugging
-    #[allow(dead_code)]
     ptr: Option<u16>,
     /// The computed address to read from
     addr: u16,

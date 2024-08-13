@@ -39,6 +39,7 @@ struct SpritePixel {
 pub struct PpuClockResult {
     pub pixel: Option<Pixel>,
     pub nmi: bool,
+    pub frame_complete: bool,
 }
 
 const PALETTE_RAM_SIZE: usize = 32;
@@ -159,12 +160,10 @@ impl Ppu {
         self.data_buffer
     }
 
-    #[allow(dead_code)]
     pub fn scanline(&self) -> i16 {
         self.scanline
     }
 
-    #[allow(dead_code)]
     pub fn cycle(&self) -> u16 {
         self.cycle
     }
@@ -289,6 +288,8 @@ impl Ppu {
             None => None,
         };
 
+        let mut frame_complete = false;
+
         self.cycle += 1;
         if self.cycle > 340 {
             self.cycle = 0;
@@ -296,11 +297,16 @@ impl Ppu {
 
             if self.scanline > 260 {
                 self.scanline = -1;
-                self.odd_frame = !self.odd_frame
+                self.odd_frame = !self.odd_frame;
+                frame_complete = true;
             }
         }
 
-        PpuClockResult { pixel, nmi }
+        PpuClockResult {
+            pixel,
+            nmi,
+            frame_complete,
+        }
     }
 
     fn fetch_nametable_tile_id(&self) -> u8 {
