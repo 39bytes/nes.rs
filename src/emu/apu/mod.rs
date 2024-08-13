@@ -38,6 +38,11 @@ enum SequenceMode {
     FiveStep,
 }
 
+pub struct APUClockResult {
+    pub dmc_res: Option<DMCClockResult>,
+    pub frame_interrupt: bool,
+}
+
 pub struct Apu {
     pulse1: PulseChannel,
     pulse2: PulseChannel,
@@ -102,7 +107,7 @@ impl Apu {
         pulse_out + tnd_out
     }
 
-    pub fn clock(&mut self, dma_sample: Option<u8>) -> Option<DMCClockResult> {
+    pub fn clock(&mut self, dma_sample: Option<u8>) -> APUClockResult {
         self.cycle += 1;
 
         if let Some(sample) = dma_sample {
@@ -126,53 +131,55 @@ impl Apu {
                 self.clock_quarter_frame();
                 self.clock_half_frame();
             }
-            return res;
+        } else {
+            // See: https://www.nesdev.org/wiki/APU_Frame_Counter
+            let (quarter, half) = match self.mode {
+                SequenceMode::FourStep => match self.cycle {
+                    7457 => (true, false),
+                    14913 => (true, true),
+                    22371 => (true, false),
+                    29828 => {
+                        self.frame_interrupt = !self.irq_disable;
+
+                        (false, false)
+                    }
+                    29829 => {
+                        self.frame_interrupt = !self.irq_disable;
+                        (true, true)
+                    }
+                    29830 => {
+                        self.frame_interrupt = !self.irq_disable;
+                        self.cycle = 0;
+                        (false, false)
+                    }
+                    _ => (false, false),
+                },
+                SequenceMode::FiveStep => match self.cycle {
+                    7457 => (true, false),
+                    14913 => (true, true),
+                    22371 => (true, false),
+                    37281 => (true, true),
+                    37282 => {
+                        self.cycle = 0;
+                        (false, false)
+                    }
+                    _ => (false, false),
+                },
+            };
+
+            if quarter {
+                self.clock_quarter_frame();
+            }
+
+            if half {
+                self.clock_half_frame();
+            }
         }
 
-        // See: https://www.nesdev.org/wiki/APU_Frame_Counter
-        let (quarter, half) = match self.mode {
-            SequenceMode::FourStep => match self.cycle {
-                7457 => (true, false),
-                14913 => (true, true),
-                22371 => (true, false),
-                29828 => {
-                    self.frame_interrupt = !self.irq_disable;
-
-                    (false, false)
-                }
-                29829 => {
-                    self.frame_interrupt = !self.irq_disable;
-                    (true, true)
-                }
-                29830 => {
-                    self.frame_interrupt = !self.irq_disable;
-                    self.cycle = 0;
-                    (false, false)
-                }
-                _ => (false, false),
-            },
-            SequenceMode::FiveStep => match self.cycle {
-                7457 => (true, false),
-                14913 => (true, true),
-                22371 => (true, false),
-                37281 => (true, true),
-                37282 => {
-                    self.cycle = 0;
-                    (false, false)
-                }
-                _ => (false, false),
-            },
-        };
-
-        if quarter {
-            self.clock_quarter_frame();
+        APUClockResult {
+            dmc_res: res,
+            frame_interrupt: self.frame_interrupt,
         }
-
-        if half {
-            self.clock_half_frame();
-        }
-
-        res
     }
 
     fn clock_quarter_frame(&mut self) {

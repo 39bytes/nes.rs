@@ -4,6 +4,7 @@ use super::{
     bits::IntoBit,
     cartridge::Cartridge,
     input::{ControllerInput, StandardController},
+    mappers::MapWrite,
     ppu::Ppu,
 };
 use bitflags::bitflags;
@@ -49,6 +50,7 @@ pub struct Cpu {
     cycles: u8,
 
     total_cycles: u64,
+    frame_cycle: u64,
 
     // Whether or not we are currently performing OAM DMA
     oam_dma: bool,
@@ -61,6 +63,7 @@ pub struct Cpu {
     oam_dma_page: u8,
     oam_dma_index: u8,
     oam_dma_data: u8,
+    oam_dma_count: u8,
 
     // Whether or not we are currently performing DMC DMA
     dmc_dma: Option<DMCDMARequest>,
@@ -70,6 +73,10 @@ pub struct Cpu {
     // Memory
     ram: [u8; CPU_RAM_SIZE],
 
+    // Interrupts
+    nmi_pending: bool,
+    irq_pending: bool,
+
     // Other components
     apu: Option<Rc<RefCell<Apu>>>,
     ppu: Option<Rc<RefCell<Ppu>>>,
@@ -78,6 +85,9 @@ pub struct Cpu {
     // Input
     controller_strobe: bool,
     controllers: [StandardController; 2],
+
+    // Debugging
+    breakpoint: Option<u16>,
 }
 
 struct AddressModeResult {
@@ -89,7 +99,10 @@ struct AddressModeResult {
     additional_cycles: bool,
 }
 
-pub struct DMCDMAClockResult(pub u8);
+pub struct CpuClockResult {
+    pub dmc_dma_sample: Option<u8>,
+    pub breakpoint_hit: bool,
+}
 
 impl Cpu {
     pub fn new() -> Self {
@@ -103,12 +116,14 @@ impl Cpu {
             opcode: 0x00,
             cycles: 0,
             total_cycles: 0,
+            frame_cycle: 0,
 
             oam_dma: false,
             oam_dma_halting: false,
             oam_dma_page: 0x00,
             oam_dma_index: 0x00,
             oam_dma_data: 0x00,
+            oam_dma_count: 0x00,
 
             dmc_dma: None,
             dmc_dma_stall_cycles: 0,
@@ -116,12 +131,17 @@ impl Cpu {
 
             ram: [0; CPU_RAM_SIZE],
 
+            nmi_pending: false,
+            irq_pending: false,
+
             cartridge: None,
             ppu: None,
             apu: None,
 
             controller_strobe: false,
             controllers: [StandardController::default(); 2],
+
+            breakpoint: None,
         }
     }
 
@@ -141,7 +161,7 @@ impl Cpu {
     fn next_instruction(&mut self) {
         self.total_cycles += self.cycles as u64;
         self.cycles = 0;
-        self.clock();
+        self.clock(true);
     }
 
     pub fn a(&self) -> u8 {
@@ -267,20 +287,37 @@ impl Cpu {
                 let mapped_addr = addr as usize % CPU_RAM_SIZE;
                 self.ram[mapped_addr] = data;
             }
-            0x2000..=0x3FFF => match &self.ppu {
-                Some(ppu) => ppu.borrow_mut().cpu_write(addr, data),
-                None => panic!("PPU not attached"),
-            },
+            0x2000..=0x3FFF => {
+                let irq_request = self
+                    .ppu
+                    .as_mut()
+                    .expect("PPU not attached")
+                    .borrow_mut()
+                    .cpu_write(addr, data);
+                if irq_request {
+                    self.request_irq();
+                }
+            }
             0x4000..=0x4013 | 0x4015 | 0x4017 => {
-                let req = match &self.apu {
-                    Some(apu) => apu.borrow_mut().write(addr, data),
-                    None => panic!("APU not attached"),
-                };
+                let req = self
+                    .apu
+                    .as_mut()
+                    .expect("APU not attached")
+                    .borrow_mut()
+                    .write(addr, data);
                 if let Some(req) = req {
                     self.begin_dmc_dma(req);
                 }
             }
-            0x4014 => self.begin_oam_dma(data),
+            0x4014 => {
+                let oam_addr = self
+                    .ppu
+                    .as_mut()
+                    .expect("PPU not attached")
+                    .borrow()
+                    .oam_addr();
+                self.begin_oam_dma(data, oam_addr);
+            }
             0x4016 => {
                 let data = data & 0x01;
 
@@ -293,7 +330,13 @@ impl Cpu {
                 }
             }
             0x4020..=0xFFFF => match &self.cartridge {
-                Some(cartridge) => cartridge.borrow_mut().cpu_write(addr, data),
+                Some(cartridge) => {
+                    let res = cartridge.borrow_mut().cpu_write(addr, data);
+                    if let Some(MapWrite::AcknowledgeIRQ) = res {
+                        self.irq();
+                        self.irq_pending = false;
+                    }
+                }
                 None => panic!("Cartridge not attached"),
             },
             _ => {}
@@ -362,8 +405,8 @@ impl Cpu {
         self.push_u16(self.pc);
 
         self.set_flag(StatusFlags::B, false);
-        self.set_flag(StatusFlags::I, true);
         self.push(self.status.bits());
+        self.set_flag(StatusFlags::I, true);
 
         // Get the interrupt address to jump to
         self.pc = self.read_u16(interrupt_addr);
@@ -390,24 +433,55 @@ impl Cpu {
     }
 
     /// Run one clock cycle.
-    pub fn clock(&mut self) -> Option<DMCDMAClockResult> {
-        if let Some(req) = self.dmc_dma {
-            if self.dmc_dma_stall_cycles == 0 {
-                let res = self.dmc_dma_clock(req);
-                self.total_cycles += 1;
-                return res;
-            } else {
-                self.dmc_dma_stall_cycles -= 1;
+    pub fn clock(&mut self, paused: bool) -> CpuClockResult {
+        if self.dmc_dma.is_some() || self.oam_dma {
+            let mut dma_sample: Option<u8> = None;
+
+            if let Some(req) = self.dmc_dma {
+                if self.dmc_dma_stall_cycles == 0 {
+                    dma_sample = self.dmc_dma_clock(req);
+                } else {
+                    self.dmc_dma_stall_cycles -= 1;
+                }
+            }
+
+            if self.oam_dma {
+                self.oam_dma_clock();
+            }
+
+            self.total_cycles += 1;
+
+            return CpuClockResult {
+                dmc_dma_sample: dma_sample,
+                breakpoint_hit: false,
+            };
+        }
+
+        // An instruction just ended
+        if self.cycles == 0 {
+            // Check if any interrupts need to be processed
+            if self.nmi_pending {
+                // Handle NMI and "forget" about the pending IRQ
+                self.nmi();
+                self.irq_pending = false;
+            }
+            if self.irq_pending {
+                self.irq();
             }
         }
 
-        if self.oam_dma {
-            self.oam_dma_clock();
-            self.total_cycles += 1;
-            return None;
-        }
-
+        // Interrupts set the cycles to 7,
+        // so this goes on to process the next instruction if no interrupts were fired.
         if self.cycles == 0 {
+            if let Some(bp) = self.breakpoint {
+                if self.pc == bp && !paused {
+                    return CpuClockResult {
+                        dmc_dma_sample: None,
+                        breakpoint_hit: true,
+                    };
+                }
+            }
+
             self.opcode = self.read(self.pc);
 
             let instruction = Instruction::lookup(self.opcode);
@@ -526,15 +600,20 @@ impl Cpu {
         self.cycles -= 1;
 
         self.total_cycles += 1;
+        self.frame_cycle += 1;
 
-        None
+        CpuClockResult {
+            dmc_dma_sample: None,
+            breakpoint_hit: false,
+        }
     }
 
-    fn begin_oam_dma(&mut self, page: u8) {
+    fn begin_oam_dma(&mut self, page: u8, index: u8) {
         self.oam_dma = true;
         self.oam_dma_halting = true;
         self.oam_dma_page = page;
-        self.oam_dma_index = 0x00;
+        self.oam_dma_index = index;
+        self.oam_dma_count = 0;
     }
 
     fn oam_dma_clock(&mut self) {
@@ -550,7 +629,7 @@ impl Cpu {
         // Put cycles: Write to PPU OAM
         if self.total_cycles % 2 == 0 {
             let page_base_addr = (self.oam_dma_page as u16) << 8;
-            let addr = page_base_addr + (self.oam_dma_index as u16);
+            let addr = page_base_addr + (self.oam_dma_count as u16);
             self.oam_dma_data = self.read(addr);
         } else {
             match &self.ppu {
@@ -560,10 +639,11 @@ impl Cpu {
                 None => panic!("Attempted to perform DMA without PPU attached to CPU"),
             }
 
-            if self.oam_dma_index == 0xFF {
+            if self.oam_dma_count == 0xFF {
                 self.oam_dma = false;
             } else {
-                self.oam_dma_index += 1;
+                self.oam_dma_index = self.oam_dma_index.wrapping_add(1);
+                self.oam_dma_count += 1;
             }
         }
     }
@@ -576,7 +656,7 @@ impl Cpu {
         self.dmc_dma_stall_cycles = 2;
     }
 
-    fn dmc_dma_clock(&mut self, req: DMCDMARequest) -> Option<DMCDMAClockResult> {
+    fn dmc_dma_clock(&mut self, req: DMCDMARequest) -> Option<u8> {
         if self.dmc_dma_halt_cycles > 0 {
             self.dmc_dma_halt_cycles -= 1;
             return None;
@@ -594,7 +674,7 @@ impl Cpu {
 
         self.dmc_dma = None;
         let sample = self.read(sample_addr);
-        Some(DMCDMAClockResult(sample))
+        Some(sample)
     }
 
     // Addressing modes
@@ -1232,6 +1312,11 @@ impl Cpu {
     fn rti(&mut self) -> u8 {
         self.status = StatusFlags::from_bits(self.pop())
             .expect("Invalid flags read from memory when returning from interrupt.");
+
+        if !self.status.contains(StatusFlags::I) && self.irq_pending {
+            self.irq();
+        }
+
         self.status.remove(StatusFlags::B);
         self.status.insert(StatusFlags::U);
 
@@ -1511,17 +1596,27 @@ impl Cpu {
     // Interrupts
 
     /// Interrupt request.
-    pub fn irq(&mut self) {
+    fn irq(&mut self) {
         if self.get_flag(StatusFlags::I) {
             return;
         }
 
+        self.irq_pending = false;
         self.interrupt(0xFFFE, 7);
     }
 
     /// Non-maskable interrupt, can't be disabled
-    pub fn nmi(&mut self) {
+    fn nmi(&mut self) {
         self.interrupt(0xFFFA, 7);
+        self.nmi_pending = false;
+    }
+
+    pub fn request_irq(&mut self) {
+        self.irq_pending = true;
+    }
+
+    pub fn request_nmi(&mut self) {
+        self.nmi_pending = true;
     }
 
     // Debug functions
@@ -1641,6 +1736,14 @@ impl Cpu {
             self.stkp(),
             self.total_cycles() + self.cycles() as u64
         )
+    }
+
+    pub fn set_breakpoint(&mut self, addr: u16) {
+        self.breakpoint = Some(addr);
+    }
+
+    pub fn mark_frame_complete(&mut self) {
+        self.frame_cycle = 0;
     }
 }
 

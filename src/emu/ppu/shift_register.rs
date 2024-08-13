@@ -37,7 +37,7 @@ impl ShiftRegister16 {
     }
 
     pub fn get_at(&self, bit_num: u8) -> u8 {
-        assert!(bit_num < 16);
+        debug_assert!(bit_num < 16);
 
         let mask = 0x8000 >> bit_num;
 
@@ -90,7 +90,7 @@ impl ShiftRegister8 {
     }
 
     pub fn get_at(&self, bit_num: u8) -> u8 {
-        assert!(bit_num < 8);
+        debug_assert!(bit_num < 8);
 
         let mask = 0x80 >> bit_num;
 

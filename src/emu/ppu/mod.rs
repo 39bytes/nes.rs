@@ -3,6 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use crate::renderer::{Color, Pixel, Sprite};
 
 pub use self::pattern_table::PatternTable;
+
 use self::{
     flags::*,
     shift_register::{ShiftRegister16, ShiftRegister8},
@@ -19,7 +20,7 @@ use super::{
 mod flags;
 mod pattern_table;
 mod shift_register;
-mod sprite;
+pub mod sprite;
 mod vram_addr;
 
 #[derive(Debug, Default)]
@@ -39,6 +40,7 @@ struct SpritePixel {
 pub struct PpuClockResult {
     pub pixel: Option<Pixel>,
     pub nmi: bool,
+    pub irq: bool,
     pub frame_complete: bool,
 }
 
@@ -185,8 +187,10 @@ impl Ppu {
     /// See: https://www.nesdev.org/wiki/PPU_rendering
     /// for details on how this works.
     pub fn clock(&mut self) -> PpuClockResult {
+        let mut irq = false;
+
         // Rendering during the visible region
-        if self.scanline >= -1 && self.scanline < 240 {
+        if self.scanline < 240 {
             // Rendering a new frame so reset some flags
             if self.scanline == -1 && self.cycle == 1 {
                 self.status.set(PpuStatus::VerticalBlank, false);
@@ -288,9 +292,17 @@ impl Ppu {
             None => None,
         };
 
-        let mut frame_complete = false;
-
         self.cycle += 1;
+
+        // Yes, it should tick on cycle 260 instead but it fires too
+        // early on Kirby causing UI shaking,
+        // so this is just a hack to delay it by a bit, tried fixing it properly
+        // but couldn't figure out how
+        if self.rendering_enabled() && self.cycle == 269 && self.scanline < 240 {
+            // Notify mapper of scanline end (mapper 4 IRQ clock)
+            irq = self.notify_scanline_hblank();
+        }
+
         if self.cycle > 340 {
             self.cycle = 0;
             self.scanline += 1;
@@ -298,14 +310,14 @@ impl Ppu {
             if self.scanline > 260 {
                 self.scanline = -1;
                 self.odd_frame = !self.odd_frame;
-                frame_complete = true;
             }
         }
 
         PpuClockResult {
             pixel,
             nmi,
-            frame_complete,
+            irq,
+            frame_complete: self.cycle == 0 && self.scanline == -1,
         }
     }
 
@@ -410,12 +422,24 @@ impl Ppu {
         let dy = self.scanline - (sprite.y as i16);
 
         let tile_id = sprite.tile_id & 0xFE;
-        // Top half or bottom half
-        let tile_id = if dy < 8 { tile_id } else { tile_id + 1 };
-        let row = if sprite.attribute.contains(SpriteAttribute::FlipVertically) {
-            7 - dy
+
+        // 4 cases:
+        let (tile_id, row) = if !sprite.attribute.contains(SpriteAttribute::FlipVertically) {
+            // Top half - not flipped
+            if dy < 8 {
+                (tile_id, dy)
+            // Bottom half - not flipped
+            } else {
+                (tile_id + 1, dy % 8)
+            }
         } else {
-            dy
+            // Top half - flipped
+            if dy < 8 {
+                (tile_id + 1, 7 - dy)
+            // Bottom half - flipped
+            } else {
+                (tile_id, 7 - (dy % 8))
+            }
         };
 
         let lsb = self.fetch_tile_byte(pattern_table, tile_id, row as u8, false);
@@ -549,14 +573,7 @@ impl Ppu {
                 break;
             }
 
-            let sprite = PpuSprite {
-                y: sprite[0],
-                tile_id: sprite[1],
-                attribute: SpriteAttribute::from_bits_truncate(sprite[2]),
-                x: sprite[3],
-                oam_index: i,
-            };
-
+            let sprite = PpuSprite::from_bytes(sprite, i);
             if in_range(sprite.y) {
                 next_scanline_sprites.push(sprite);
             }
@@ -630,7 +647,9 @@ impl Ppu {
     }
 
     fn get_bg_pixel(&self) -> BgPixel {
-        if !self.mask.contains(PpuMask::ShowBackground) {
+        if !self.mask.contains(PpuMask::ShowBackground)
+            || (!self.mask.contains(PpuMask::ShowBackgroundLeft) && self.cycle < 9)
+        {
             return BgPixel::default();
         }
 
@@ -641,7 +660,9 @@ impl Ppu {
     }
 
     fn get_sprite_pixel(&self) -> SpritePixel {
-        if !self.mask.contains(PpuMask::ShowSprites) {
+        if !self.mask.contains(PpuMask::ShowSprites)
+            || (!self.mask.contains(PpuMask::ShowSpritesLeft) && self.cycle < 9)
+        {
             return SpritePixel::default();
         }
 
@@ -674,10 +695,11 @@ impl Ppu {
         SpritePixel::default()
     }
 
-    pub fn cpu_write(&mut self, addr: u16, data: u8) {
-        assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
+    pub fn cpu_write(&mut self, addr: u16, data: u8) -> bool {
+        debug_assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
 
         let register = addr % 8;
+
         match register {
             0 => {
                 self.ctrl = PpuCtrl::from_bits_truncate(data);
@@ -689,7 +711,10 @@ impl Ppu {
             1 => self.mask = PpuMask::from_bits_truncate(data),
             2 => {}
             3 => self.oam_addr = data,
-            4 => self.oam[self.oam_addr as usize] = data,
+            4 => {
+                self.oam[self.oam_addr as usize] = data;
+                self.oam_addr = self.oam_addr.wrapping_add(1);
+            }
             5 => {
                 if !self.write_latch {
                     self.fine_x = data & 0x07;
@@ -702,10 +727,17 @@ impl Ppu {
             }
             6 => {
                 let data = data as u16;
+                let mut irq = false;
                 // Write latch is false on first write, true on second
                 // We write the high byte first.
                 if !self.write_latch {
-                    let addr = (u16::from(self.temp_vram_addr) & 0x00FF) | ((data & 0x3F) << 8);
+                    let old = u16::from(self.temp_vram_addr);
+                    let addr = (old & 0x00FF) | ((data & 0x3F) << 8);
+
+                    // A12 toggle, should trigger an MMC3 update
+                    if (old & 0x1000) == 0 && (addr & 0x1000) != 0 {
+                        irq = self.notify_scanline_hblank();
+                    }
                     self.temp_vram_addr = VRAMAddr::from(addr);
                 } else {
                     let addr = (u16::from(self.temp_vram_addr) & 0xFF00) | data;
@@ -713,6 +745,8 @@ impl Ppu {
                     self.vram_addr = self.temp_vram_addr;
                 }
                 self.write_latch = !self.write_latch;
+
+                return irq;
             }
             7 => {
                 self.write(self.vram_addr.into(), data);
@@ -724,10 +758,11 @@ impl Ppu {
             }
             _ => unreachable!(),
         }
+        false
     }
 
     pub fn cpu_read(&mut self, addr: u16) -> u8 {
-        assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
+        debug_assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
 
         let register = addr % 8;
         match register {
@@ -771,7 +806,7 @@ impl Ppu {
 
     /// CPU Read but doesn't affect state
     pub fn cpu_read_debug(&self, addr: u16) -> u8 {
-        assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
+        debug_assert!((0x2000..=0x3FFF).contains(&addr), "Invalid PPU address");
 
         let register = addr % 8;
         match register {
@@ -876,7 +911,9 @@ impl Ppu {
         self.palette.get_color(color_index)
     }
 
-    pub fn get_pattern_table(&self, table: PatternTable) -> Sprite {
+    pub fn get_pattern_table(&self, table: PatternTable, palette: u8, mode_8x16: bool) -> Sprite {
+        // NOTE: Does the 8x16 bug only happen when sprites are stored in the right
+        // pattern table ???
         let table_offset = match table {
             PatternTable::Left => 0x0000,
             PatternTable::Right => 0x1000,
@@ -887,6 +924,18 @@ impl Ppu {
         for i in 0..16 {
             for j in 0..16 {
                 let tile_offset = i * 256 + j * 16;
+                let (tile_y, tile_x) = if mode_8x16 {
+                    match (i % 2, j % 2) {
+                        (0, 0) => (i, j / 2),
+                        (0, 1) => (i + 1, j / 2),
+                        (1, 0) => (i - 1, j / 2 + 8),
+                        (1, 1) => (i, j / 2 + 8),
+                        _ => unreachable!(),
+                    }
+                } else {
+                    (i, j)
+                };
+
                 for tile_row in 0..8 {
                     let row_addr = table_offset + tile_offset + tile_row;
                     let tile_lsb = self.read_debug(row_addr);
@@ -897,9 +946,11 @@ impl Ppu {
                         let msb = (tile_msb >> tile_col) & 0x01;
 
                         let pixel = (msb << 1) | lsb;
-                        let pixel_index = (i * 8 + tile_row) * 128 + (j * 8 + 7 - tile_col);
+
+                        let pixel_index =
+                            (tile_y * 8 + tile_row) * 128 + (tile_x * 8 + 7 - tile_col);
                         // TODO: Don't hardcode palette
-                        buf[pixel_index as usize] = self.get_palette_color(0, pixel);
+                        buf[pixel_index as usize] = self.get_palette_color(palette, pixel);
                     }
                 }
             }
@@ -907,12 +958,20 @@ impl Ppu {
 
         Sprite::new(Vec::from(buf), 128, 128).expect("Failed to create sprite from pattern table")
     }
+
+    pub fn notify_scanline_hblank(&self) -> bool {
+        self.cartridge
+            .as_ref()
+            .expect("Cartridge not attached")
+            .borrow_mut()
+            .on_scanline_hblank()
+    }
 }
 
 /// Returns nametable (0 or 1) as well as the index within the nametable
 /// See: https://www.nesdev.org/wiki/Mirroring
 fn map_addr_to_nametable(mirroring: Mirroring, addr: u16) -> (usize, usize) {
-    assert!(
+    debug_assert!(
         (0x2000..=0x3FFF).contains(&addr),
         "Invalid nametable address"
     );

@@ -69,6 +69,7 @@ pub fn main() -> Result<()> {
 
     let mut acc = 0.0;
     let mut now = Instant::now();
+    let mut pattern_table_palette = 0;
 
     nes.reset();
     'running: loop {
@@ -80,8 +81,19 @@ pub fn main() -> Result<()> {
                 Event::KeyDown {
                     keycode: Some(key), ..
                 } => match key {
-                    Keycode::Space => paused.toggle(),
+                    Keycode::Space => {
+                        if paused.load(Ordering::Relaxed) {
+                            nes.unpause()
+                        }
+                        paused.toggle();
+                    }
                     Keycode::N if paused.load(Ordering::Relaxed) => nes.next_instruction(),
+                    Keycode::M if paused.load(Ordering::Relaxed) => {
+                        nes.advance_frame();
+                    }
+                    Keycode::P => {
+                        pattern_table_palette = (pattern_table_palette + 1) % 8;
+                    }
                     _ => {}
                 },
                 _ => {}
@@ -89,7 +101,7 @@ pub fn main() -> Result<()> {
         }
         handle_input(&mut event_pump, &mut nes);
 
-        let paused = paused.load(Ordering::Relaxed);
+        let pause_val = paused.load(Ordering::Relaxed);
 
         // The rest of the game loop goes here...
         acc += now.elapsed().as_secs_f64();
@@ -97,25 +109,34 @@ pub fn main() -> Result<()> {
         let mut frame_ticked = false;
         while acc >= FRAME_TIME {
             let before_emu_frame = Instant::now();
-            if !paused {
-                nes.advance_frame();
+            if !pause_val {
+                let should_pause = nes.advance_frame();
+                if should_pause {
+                    paused.store(true, Ordering::Relaxed);
+                }
+                fps_counter.tick();
                 log::debug!(
                     "Frame time: {}ms",
                     before_emu_frame.elapsed().as_secs_f64() * 1000.0
                 );
             }
-            fps_counter.tick();
             acc -= FRAME_TIME;
             frame_ticked = true;
         }
 
-        if frame_ticked || paused {
+        if frame_ticked || pause_val {
             // TODO: Implement not drawing overscan
             // https://www.nesdev.org/wiki/Overscan
             let before_render = Instant::now();
             renderer.clear();
             if args.draw_debug_info {
-                draw_with_debug_info(&mut renderer, &nes, &fps_counter, paused)
+                draw_with_debug_info(
+                    &mut renderer,
+                    &nes,
+                    &fps_counter,
+                    pattern_table_palette,
+                    pause_val,
+                )
             } else {
                 renderer.draw(nes.screen(), 0, 0);
             }
@@ -187,6 +208,7 @@ fn draw_with_debug_info(
     renderer: &mut Renderer,
     nes: &Nes,
     fps_counter: &FpsCounter,
+    palette: u8,
     paused: bool,
 ) {
     renderer.draw(&nes.screen().scale(2), 0, 180);
@@ -198,6 +220,7 @@ fn draw_with_debug_info(
 
     draw_ppu_info(renderer, &nes.ppu(), 0, 0);
     draw_palettes(renderer, &nes.ppu(), 240, 0);
-    draw_pattern_tables(renderer, &nes.ppu(), 576, 0);
+    draw_pattern_tables(renderer, &nes.ppu(), palette, 576, 0);
     draw_cpu_info(renderer, nes, 576, 180);
+    // draw_oam_sprites(renderer, &nes.ppu(), 600, 320)
 }

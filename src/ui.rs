@@ -5,7 +5,10 @@ use crate::{
             Cpu,
         },
         nes::Nes,
-        ppu::{PatternTable, Ppu},
+        ppu::{
+            sprite::{Sprite as PpuSprite, SpriteAttribute},
+            PatternTable, Ppu,
+        },
     },
     renderer::{Color, Renderer, Sprite},
 };
@@ -74,7 +77,13 @@ pub fn draw_cpu_info(renderer: &mut Renderer, nes: &Nes, x: usize, y: usize) {
             x,
             y + 200 + i * 20,
         );
-        addr += instruction.address_mode.arg_size() + 1;
+
+        let stride = instruction.address_mode.arg_size() + 1;
+        // Prevent overflow when near end of address space
+        if 0xFFFF - addr < stride {
+            break;
+        }
+        addr += stride;
     }
 }
 
@@ -94,9 +103,9 @@ pub fn get_instruction_repr(cpu: &Cpu, addr: u16) -> String {
         AddressMode::Rel => {
             let offset = cpu.read_debug(arg_addr) as i8;
             let computed_addr = if offset < 0 {
-                addr - (offset.unsigned_abs() as u16)
+                addr.wrapping_sub(offset.unsigned_abs() as u16)
             } else {
-                addr + offset as u16
+                addr.wrapping_add(offset as u16)
             };
             format!("{} ${:02X}", name, computed_addr + 2)
         }
@@ -127,9 +136,9 @@ pub fn draw_ppu_info(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
     renderer.draw_text(&format!("C: {}", ppu.cycle()), x + 80, y + 140);
 }
 
-pub fn draw_pattern_tables(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
-    let left_pattern_table = ppu.get_pattern_table(PatternTable::Left);
-    let right_pattern_table = ppu.get_pattern_table(PatternTable::Right);
+pub fn draw_pattern_tables(renderer: &mut Renderer, ppu: &Ppu, palette: u8, x: usize, y: usize) {
+    let left_pattern_table = ppu.get_pattern_table(PatternTable::Left, palette, false);
+    let right_pattern_table = ppu.get_pattern_table(PatternTable::Right, palette, true);
 
     renderer.draw_text("Pattern Tables", x, y);
     renderer.draw(&left_pattern_table, x, y + 24);
@@ -150,18 +159,17 @@ pub fn draw_palettes(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
     for i in 0..4 {
         renderer.draw(
             &palette_sprite(ppu, i).scale(16),
-            x + 72 * (i as usize % 2),
-            y + 24 * (i as usize / 2) + 24,
+            x + 80 * i as usize,
+            y + 24,
         );
     }
 
-    renderer.draw_text("Sprites", x + 160, y);
+    renderer.draw_text("Sprites", x, y + 48);
     for i in 4..8 {
-        let i = i - 4;
         renderer.draw(
             &palette_sprite(ppu, i).scale(16),
-            x + 72 * (i as usize % 2) + 160,
-            y + 24 * (i as usize / 2) + 24,
+            x + 80 * (i - 4) as usize,
+            y + 72,
         );
     }
 }
@@ -187,5 +195,25 @@ pub fn draw_nametable(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
                 (i as usize) * 16 + y,
             );
         }
+    }
+}
+
+pub fn draw_oam_sprites(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
+    let oam = ppu.oam();
+
+    for (i, sprite) in oam.chunks_exact(4).enumerate() {
+        let sprite = PpuSprite::from_bytes(sprite, i);
+
+        let tx = i % 4;
+        let ty = i / 4;
+
+        let palette = (sprite.attribute.contains(SpriteAttribute::PaletteMSB) as u8) << 1
+            | (sprite.attribute.contains(SpriteAttribute::PaletteLSB) as u8);
+
+        renderer.draw_text(
+            &format!("{:02X}-{}", sprite.tile_id, palette),
+            x + tx * 56,
+            y + ty * 20,
+        );
     }
 }
