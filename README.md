@@ -1,6 +1,6 @@
 # nes.rs
 
-(WIP) An emulator for the [Nintendo Entertainment System](https://en.wikipedia.org/wiki/Nintendo_Entertainment_System) written in Rust.
+An emulator for the [Nintendo Entertainment System](https://en.wikipedia.org/wiki/Nintendo_Entertainment_System) written in Rust.
 
 https://github.com/39bytes/nes.rs/assets/47371088/69a3ce36-a5a2-4d11-b13a-cede656cec81
 
@@ -45,13 +45,13 @@ To find out which mapper a game uses, search it on [NesCartDB](https://nescartdb
 
 ## TODO
 ### Emulation
-- [ ] Accurate audio emulation
+- [x] Accurate audio emulation
     - [x] Implement DMC channel for APU
     - [x] Investigate issues with envelope/sweep unit
-    - [ ] Fix issues with buffer underrun/overrun and reduce audio latency
-- [ ] Investigate performance issues
+    - [x] Fix issues with buffer underrun/overrun and reduce audio latency
+- [x] Investigate performance issues
 - [ ] Implement more mappers 
-    - [ ] Mapper 4 (MMC3)
+    - [x] Mapper 4 (MMC3)
     - [ ] Mapper 5 (MMC5)
     - [ ] Mapper 7 (AxROM)
     - [x] Mapper 9 (MMC2)
