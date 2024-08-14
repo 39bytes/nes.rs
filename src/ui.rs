@@ -10,7 +10,7 @@ use crate::{
             PatternTable, Ppu,
         },
     },
-    renderer::{Color, Renderer, Sprite},
+    renderer::{Color, Layer, Renderer, Sprite},
 };
 
 pub fn draw_oam(renderer: &mut Renderer, oam: &[u8], x: usize, y: usize) {
@@ -141,8 +141,8 @@ pub fn draw_pattern_tables(renderer: &mut Renderer, ppu: &Ppu, palette: u8, x: u
     let right_pattern_table = ppu.get_pattern_table(PatternTable::Right, palette, true);
 
     renderer.draw_text("Pattern Tables", x, y);
-    renderer.draw(&left_pattern_table, x, y + 24);
-    renderer.draw(&right_pattern_table, x + 144, y + 24);
+    renderer.draw(Layer::UI, &left_pattern_table, x, y + 24);
+    renderer.draw(Layer::UI, &right_pattern_table, x + 144, y + 24);
 }
 
 fn palette_sprite(ppu: &Ppu, palette_index: u8) -> Sprite {
@@ -158,6 +158,7 @@ pub fn draw_palettes(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
     renderer.draw_text("Background", x, y);
     for i in 0..4 {
         renderer.draw(
+            Layer::UI,
             &palette_sprite(ppu, i).scale(16),
             x + 80 * i as usize,
             y + 24,
@@ -167,6 +168,7 @@ pub fn draw_palettes(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {
     renderer.draw_text("Sprites", x, y + 48);
     for i in 4..8 {
         renderer.draw(
+            Layer::UI,
             &palette_sprite(ppu, i).scale(16),
             x + 80 * (i - 4) as usize,
             y + 72,

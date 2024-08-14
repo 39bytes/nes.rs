@@ -9,7 +9,7 @@ use utils::FpsCounter;
 
 use anyhow::Result;
 use audio_output::AudioOutput;
-use renderer::Renderer;
+use renderer::{Layer, Renderer};
 use sdl2::keyboard::Keycode;
 use sdl2::{event::Event, keyboard::Scancode};
 
@@ -66,6 +66,8 @@ pub fn main() -> Result<()> {
 
     let mut acc = 0.0;
     let mut now = Instant::now();
+    let mut showing_text: Option<String> = None;
+    let mut text_timer = 0;
 
     nes.reset();
     'running: loop {
@@ -74,85 +76,56 @@ pub fn main() -> Result<()> {
         let shift_pressed = key_state.is_scancode_pressed(Scancode::LShift)
             || key_state.is_scancode_pressed(Scancode::RShift);
 
-        for event in event_pump.poll_iter() {
-            match event {
-                Event::Quit { .. } => break 'running,
-                Event::KeyDown {
-                    keycode: Some(key), ..
-                } => match key {
-                    Keycode::Space => {
-                        if emu_state.paused() {
-                            nes.unpause();
-                        }
-                        emu_state.toggle_pause();
-                    }
-                    Keycode::N if emu_state.paused() => {
-                        nes.next_instruction();
-                    }
-                    Keycode::M if emu_state.paused() => {
-                        nes.advance_frame();
-                    }
-                    Keycode::P => {
-                        emu_state.next_palette();
-                    }
-                    Keycode::Num1 => {
-                        if !shift_pressed {
-                            if let Some(state) = emu_state.save_state(1) {
-                                log::info!("Loading state 1");
-                                nes.load_state(state);
+        {
+            for event in event_pump.poll_iter() {
+                match event {
+                    Event::Quit { .. } => break 'running,
+                    Event::KeyDown {
+                        keycode: Some(key), ..
+                    } => match key {
+                        Keycode::Space => {
+                            if emu_state.paused() {
+                                nes.unpause();
                             }
-                        } else {
-                            log::info!("Writing state 1");
-                            emu_state.write_save_state(1, nes.state());
+                            emu_state.toggle_pause();
                         }
-                    }
-                    Keycode::Num2 => {
-                        if !shift_pressed {
-                            if let Some(state) = emu_state.save_state(2) {
-                                log::info!("Loading state 2");
-                                nes.load_state(state);
+                        Keycode::N if emu_state.paused() => {
+                            nes.next_instruction();
+                        }
+                        Keycode::M if emu_state.paused() => {
+                            nes.advance_frame();
+                        }
+                        Keycode::P => {
+                            emu_state.next_palette();
+                        }
+                        Keycode::Num1
+                        | Keycode::Num2
+                        | Keycode::Num3
+                        | Keycode::Num4
+                        | Keycode::Num5 => {
+                            let number = keycode_to_number(key).unwrap();
+                            if !shift_pressed {
+                                if let Some(state) = emu_state.save_state(number) {
+                                    log::info!("Loading state {}", number);
+                                    nes.load_state(state);
+                                    showing_text = Some(format!("Loaded state {}", number));
+                                    text_timer = 60;
+                                }
+                            } else {
+                                log::info!("Writing state {}", number);
+                                match emu_state.write_save_state(number, nes.state()) {
+                                    Ok(()) => {
+                                        showing_text = Some(format!("Wrote state {}", number));
+                                        text_timer = 60;
+                                    }
+                                    Err(e) => log::error!("Error writing state {}: {}", number, e),
+                                };
                             }
-                        } else {
-                            log::info!("Writing state 2");
-                            emu_state.write_save_state(2, nes.state());
                         }
-                    }
-                    Keycode::Num3 => {
-                        if !shift_pressed {
-                            if let Some(state) = emu_state.save_state(3) {
-                                log::info!("Loading state 3");
-                                nes.load_state(state);
-                            }
-                        } else {
-                            log::info!("Writing state 3");
-                            emu_state.write_save_state(3, nes.state());
-                        }
-                    }
-                    Keycode::Num4 => {
-                        if !shift_pressed {
-                            if let Some(state) = emu_state.save_state(4) {
-                                log::info!("Loading state 4");
-                                nes.load_state(state);
-                            }
-                        } else {
-                            log::info!("Writing state 4");
-                            emu_state.write_save_state(4, nes.state());
-                        }
-                    }
-                    Keycode::Num5 => {
-                        if !shift_pressed {
-                            if let Some(state) = emu_state.save_state(5) {
-                                log::info!("Loading state 5");
-                                nes.load_state(state);
-                            }
-                        } else {
-                            log::info!("Writing state 5");
-                            emu_state.write_save_state(5, nes.state());
-                        }
-                    }
+                        _ => {}
+                    },
                     _ => {}
-                },
-                _ => {}
+                }
             }
         }
         handle_input(&mut event_pump, &mut nes);
@@ -186,8 +159,17 @@ pub fn main() -> Result<()> {
             if args.draw_debug_info {
                 draw_with_debug_info(&mut renderer, &nes, &fps_counter, &emu_state)
             } else {
-                renderer.draw(nes.screen(), 0, 0);
+                renderer.draw(Layer::Screen, nes.screen(), 0, 0);
             }
+
+            match showing_text {
+                Some(ref text) if text_timer > 0 => {
+                    renderer.draw_text(text, 16, height as usize - 32);
+                    text_timer -= 1;
+                }
+                _ => {}
+            };
+
             renderer.render();
             log::debug!(
                 "Render time: {}ms",
@@ -256,7 +238,7 @@ fn draw_with_debug_info(
     fps_counter: &FpsCounter,
     emu_state: &EmuState,
 ) {
-    renderer.draw(&nes.screen().scale(2), 0, 180);
+    renderer.draw(Layer::Screen, &nes.screen().scale(2), 0, 180);
 
     renderer.draw_text(&format!("FPS: {:.1}", fps_counter.get_fps()), 0, 160);
     if emu_state.paused() {
@@ -274,4 +256,20 @@ fn draw_with_debug_info(
     );
     draw_cpu_info(renderer, nes, 576, 180);
     // draw_oam_sprites(renderer, &nes.ppu(), 600, 320)
+}
+
+fn keycode_to_number(keycode: Keycode) -> Option<usize> {
+    Some(match keycode {
+        Keycode::Num1 => 0,
+        Keycode::Num2 => 1,
+        Keycode::Num3 => 2,
+        Keycode::Num4 => 3,
+        Keycode::Num5 => 4,
+        Keycode::Num6 => 5,
+        Keycode::Num7 => 6,
+        Keycode::Num8 => 7,
+        Keycode::Num9 => 8,
+        Keycode::Num0 => 9,
+        _ => None?,
+    })
 }
