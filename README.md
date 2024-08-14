@@ -39,7 +39,7 @@ This will run test ROMs for the CPU emulation.
 - [x] `instr_test-v5` (blargg)
 
 ## Compatability
-[iNES Mappers](https://www.nesdev.org/wiki/Mapper#iNES_1.0_mapper_grid) 0, 1, 2, 3, and 9 are supported. 
+[iNES Mappers](https://www.nesdev.org/wiki/Mapper#iNES_1.0_mapper_grid) 0, 1, 2, 3, 4 and 9 are supported. 
 Any game that uses a different mapper will not work for now. 
 To find out which mapper a game uses, search it on [NesCartDB](https://nescartdb.com/).
 
