@@ -24,6 +24,8 @@ Controls are bound to:
 - S: Start
 - Arrow keys: Up/Down/Left/Right
 
+There are 5 save state slots. Save states can be loaded with the number keys 1-5, and written with SHIFT + [number].
+
 The emulator has only been tested on Linux x86_64 (Wayland), but should work on most platforms.
 
 ## Testing
