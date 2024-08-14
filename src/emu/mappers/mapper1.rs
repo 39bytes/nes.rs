@@ -186,4 +186,12 @@ impl Mapper for Mapper1 {
             _ => unreachable!(),
         })
     }
+
+    fn onboard_ram(&self) -> Option<&[u8]> {
+        Some(&self.prg_ram)
+    }
+
+    fn load_onboard_ram(&mut self, ram: &[u8]) {
+        self.prg_ram.copy_from_slice(ram);
+    }
 }

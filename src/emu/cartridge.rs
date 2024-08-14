@@ -7,7 +7,10 @@ use std::{
     path::Path,
 };
 
-use super::mappers::*;
+use super::{
+    mappers::*,
+    save::{load_bin, write_bin},
+};
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -229,6 +232,37 @@ impl Cartridge {
         let mut s = DefaultHasher::new();
         self.hash(&mut s);
         s.finish()
+    }
+
+    pub fn write_save_file(&self) -> Result<()> {
+        if !self.header.flags6.contains(Flags6::BatteryBacked) {
+            log::info!("Cartridge does not have battery backed RAM");
+            return Ok(());
+        }
+
+        if let Some(ram) = self.mapper.onboard_ram() {
+            write_bin(ram, self.compute_hash(), "save.bin")?;
+            log::info!("Wrote save file");
+        }
+
+        Ok(())
+    }
+
+    pub fn load_save_file(&mut self) {
+        if !self.header.flags6.contains(Flags6::BatteryBacked) {
+            log::error!("Cartridge does not have battery backed RAM");
+            return;
+        }
+
+        match load_bin::<Vec<u8>>(self.compute_hash(), "save.bin") {
+            Ok(ram) => self.mapper.load_onboard_ram(ram.as_slice()),
+            Err(e) => {
+                log::error!("Failed to load save data for ROM: {}", e);
+                return;
+            }
+        }
+
+        log::info!("Loading save file");
     }
 }
 

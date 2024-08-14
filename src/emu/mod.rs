@@ -8,4 +8,4 @@ pub mod mappers;
 pub mod nes;
 pub mod palette;
 pub mod ppu;
-pub mod save_state;
+pub mod save;

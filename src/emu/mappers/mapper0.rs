@@ -60,4 +60,12 @@ impl Mapper for Mapper0 {
 
         Some(MapWrite::Address(addr as usize))
     }
+
+    fn onboard_ram(&self) -> Option<&[u8]> {
+        Some(&self.ram)
+    }
+
+    fn load_onboard_ram(&mut self, ram: &[u8]) {
+        self.ram.copy_from_slice(ram);
+    }
 }

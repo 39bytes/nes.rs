@@ -42,4 +42,11 @@ pub trait Mapper {
     fn on_scanline_hblank(&mut self) -> bool {
         false
     }
+
+    // Get the onboard ram if it exists (for storing save files)
+    fn onboard_ram(&self) -> Option<&[u8]> {
+        None
+    }
+
+    fn load_onboard_ram(&mut self, ram: &[u8]) {}
 }

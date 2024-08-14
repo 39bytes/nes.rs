@@ -79,7 +79,14 @@ pub fn main() -> Result<()> {
         {
             for event in event_pump.poll_iter() {
                 match event {
-                    Event::Quit { .. } => break 'running,
+                    Event::Quit { .. } => {
+                        log::info!("Exiting");
+                        log::info!("Writing save data...");
+                        if let Err(e) = nes.write_save_file() {
+                            log::error!("{}", e);
+                        }
+                        break 'running;
+                    }
                     Event::KeyDown {
                         keycode: Some(key), ..
                     } => match key {
@@ -219,7 +226,8 @@ fn handle_input(event_pump: &mut sdl2::EventPump, nes: &mut Nes) {
 fn setup_emulator(args: &Args, sdl_context: &sdl2::Sdl) -> Result<(Nes, EmuState)> {
     // Emulator setup
     let palette = Palette::default();
-    let cartridge = Cartridge::new(args.rom_path.as_path())?;
+    let mut cartridge = Cartridge::new(args.rom_path.as_path())?;
+    cartridge.load_save_file();
 
     let mut nes = Nes::new(palette.clone());
     if !args.disable_audio {

@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::{
     cell::{Ref, RefCell},
     rc::Rc,
@@ -10,7 +11,7 @@ use crate::{
 
 use super::{
     apu::Apu, cartridge::Cartridge, cpu::Cpu, input::ControllerInput, palette::Palette, ppu::Ppu,
-    save_state::SaveState,
+    save::SaveState,
 };
 
 pub struct Nes {
@@ -197,6 +198,19 @@ impl Nes {
         self.apu.borrow_mut().load_state(&state.apu_state);
         self.clock_count = state.clock_count;
         self.paused = state.paused;
+    }
+
+    pub fn write_save_file(&mut self) -> Result<()> {
+        if let Some(cartridge) = &self.cartridge {
+            cartridge.borrow().write_save_file()?;
+        }
+        Ok(())
+    }
+
+    pub fn load_save_file(&mut self) {
+        if let Some(cartridge) = &self.cartridge {
+            cartridge.borrow_mut().load_save_file();
+        }
     }
 }
 

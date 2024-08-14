@@ -4,7 +4,7 @@ use std::sync::{
     Arc,
 };
 
-use crate::emu::{cartridge::Cartridge, save_state::SaveState};
+use crate::emu::{cartridge::Cartridge, save::SaveState};
 
 pub struct EmuState {
     paused: Arc<AtomicBool>,
