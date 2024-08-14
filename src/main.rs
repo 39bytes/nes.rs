@@ -1,9 +1,6 @@
+use emu_state::EmuState;
 use std::{
     path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
     thread,
     time::{Duration, Instant},
 };
@@ -23,12 +20,12 @@ use emu::{
     nes::Nes,
     palette::Palette,
 };
-use extension_traits::*;
 
 use clap::{arg, Parser};
 
 mod audio_output;
 mod emu;
+mod emu_state;
 mod extension_traits;
 mod renderer;
 #[allow(dead_code)]
@@ -61,7 +58,7 @@ pub fn main() -> Result<()> {
     };
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let (mut nes, paused) = setup_emulator(&args, &sdl_context)?;
+    let (mut nes, mut emu_state) = setup_emulator(&args, &sdl_context)?;
     let mut renderer = Renderer::new(&sdl_context, width, height, scale)?;
     let mut fps_counter = FpsCounter::new();
 
@@ -69,11 +66,13 @@ pub fn main() -> Result<()> {
 
     let mut acc = 0.0;
     let mut now = Instant::now();
-    let mut pattern_table_palette = 0;
 
     nes.reset();
     'running: loop {
         let frame_begin = Instant::now();
+        let key_state = event_pump.keyboard_state();
+        let shift_pressed = key_state.is_scancode_pressed(Scancode::LShift)
+            || key_state.is_scancode_pressed(Scancode::RShift);
 
         for event in event_pump.poll_iter() {
             match event {
@@ -82,17 +81,74 @@ pub fn main() -> Result<()> {
                     keycode: Some(key), ..
                 } => match key {
                     Keycode::Space => {
-                        if paused.load(Ordering::Relaxed) {
-                            nes.unpause()
+                        if emu_state.paused() {
+                            nes.unpause();
                         }
-                        paused.toggle();
+                        emu_state.toggle_pause();
                     }
-                    Keycode::N if paused.load(Ordering::Relaxed) => nes.next_instruction(),
-                    Keycode::M if paused.load(Ordering::Relaxed) => {
+                    Keycode::N if emu_state.paused() => {
+                        nes.next_instruction();
+                    }
+                    Keycode::M if emu_state.paused() => {
                         nes.advance_frame();
                     }
                     Keycode::P => {
-                        pattern_table_palette = (pattern_table_palette + 1) % 8;
+                        emu_state.next_palette();
+                    }
+                    Keycode::Num1 => {
+                        if !shift_pressed {
+                            if let Some(state) = emu_state.save_state(1) {
+                                log::info!("Loading state 1");
+                                nes.load_state(state);
+                            }
+                        } else {
+                            log::info!("Writing state 1");
+                            emu_state.write_save_state(1, nes.state());
+                        }
+                    }
+                    Keycode::Num2 => {
+                        if !shift_pressed {
+                            if let Some(state) = emu_state.save_state(2) {
+                                log::info!("Loading state 2");
+                                nes.load_state(state);
+                            }
+                        } else {
+                            log::info!("Writing state 2");
+                            emu_state.write_save_state(2, nes.state());
+                        }
+                    }
+                    Keycode::Num3 => {
+                        if !shift_pressed {
+                            if let Some(state) = emu_state.save_state(3) {
+                                log::info!("Loading state 3");
+                                nes.load_state(state);
+                            }
+                        } else {
+                            log::info!("Writing state 3");
+                            emu_state.write_save_state(3, nes.state());
+                        }
+                    }
+                    Keycode::Num4 => {
+                        if !shift_pressed {
+                            if let Some(state) = emu_state.save_state(4) {
+                                log::info!("Loading state 4");
+                                nes.load_state(state);
+                            }
+                        } else {
+                            log::info!("Writing state 4");
+                            emu_state.write_save_state(4, nes.state());
+                        }
+                    }
+                    Keycode::Num5 => {
+                        if !shift_pressed {
+                            if let Some(state) = emu_state.save_state(5) {
+                                log::info!("Loading state 5");
+                                nes.load_state(state);
+                            }
+                        } else {
+                            log::info!("Writing state 5");
+                            emu_state.write_save_state(5, nes.state());
+                        }
                     }
                     _ => {}
                 },
@@ -101,18 +157,16 @@ pub fn main() -> Result<()> {
         }
         handle_input(&mut event_pump, &mut nes);
 
-        let pause_val = paused.load(Ordering::Relaxed);
-
         // The rest of the game loop goes here...
         acc += now.elapsed().as_secs_f64();
         now = Instant::now();
         let mut frame_ticked = false;
         while acc >= FRAME_TIME {
             let before_emu_frame = Instant::now();
-            if !pause_val {
+            if !emu_state.paused() {
                 let should_pause = nes.advance_frame();
                 if should_pause {
-                    paused.store(true, Ordering::Relaxed);
+                    emu_state.set_paused(true);
                 }
                 fps_counter.tick();
                 log::debug!(
@@ -124,19 +178,13 @@ pub fn main() -> Result<()> {
             frame_ticked = true;
         }
 
-        if frame_ticked || pause_val {
+        if frame_ticked || emu_state.paused() {
             // TODO: Implement not drawing overscan
             // https://www.nesdev.org/wiki/Overscan
             let before_render = Instant::now();
             renderer.clear();
             if args.draw_debug_info {
-                draw_with_debug_info(
-                    &mut renderer,
-                    &nes,
-                    &fps_counter,
-                    pattern_table_palette,
-                    pause_val,
-                )
+                draw_with_debug_info(&mut renderer, &nes, &fps_counter, &emu_state)
             } else {
                 renderer.draw(nes.screen(), 0, 0);
             }
@@ -186,41 +234,44 @@ fn handle_input(event_pump: &mut sdl2::EventPump, nes: &mut Nes) {
     nes.trigger_inputs(ControllerInput::One(buttons));
 }
 
-fn setup_emulator(args: &Args, sdl_context: &sdl2::Sdl) -> Result<(Nes, Arc<AtomicBool>)> {
+fn setup_emulator(args: &Args, sdl_context: &sdl2::Sdl) -> Result<(Nes, EmuState)> {
     // Emulator setup
     let palette = Palette::default();
     let cartridge = Cartridge::new(args.rom_path.as_path())?;
-
-    let paused = Arc::new(AtomicBool::new(false));
 
     let mut nes = Nes::new(palette.clone());
     if !args.disable_audio {
         nes.with_audio(AudioOutput::new(sdl_context)?)
     }
+    let emu_state = EmuState::new(&cartridge);
 
-    // Start
     nes.load_cartridge(cartridge);
 
-    Ok((nes, paused))
+    Ok((nes, emu_state))
 }
 
 fn draw_with_debug_info(
     renderer: &mut Renderer,
     nes: &Nes,
     fps_counter: &FpsCounter,
-    palette: u8,
-    paused: bool,
+    emu_state: &EmuState,
 ) {
     renderer.draw(&nes.screen().scale(2), 0, 180);
 
     renderer.draw_text(&format!("FPS: {:.1}", fps_counter.get_fps()), 0, 160);
-    if paused {
+    if emu_state.paused() {
         renderer.draw_text("(Paused)", 120, 160);
     }
 
     draw_ppu_info(renderer, &nes.ppu(), 0, 0);
     draw_palettes(renderer, &nes.ppu(), 240, 0);
-    draw_pattern_tables(renderer, &nes.ppu(), palette, 576, 0);
+    draw_pattern_tables(
+        renderer,
+        &nes.ppu(),
+        emu_state.pattern_table_palette(),
+        576,
+        0,
+    );
     draw_cpu_info(renderer, nes, 576, 180);
     // draw_oam_sprites(renderer, &nes.ppu(), 600, 320)
 }

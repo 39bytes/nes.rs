@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use bitflags::bitflags;
 use std::{
     fs::File,
+    hash::{DefaultHasher, Hash, Hasher},
     io::{prelude::*, SeekFrom},
     path::Path,
 };
@@ -38,7 +39,7 @@ const PRG_ROM_CHUNK_SIZE: usize = 16 * 1024;
 const CHR_ROM_CHUNK_SIZE: usize = 8 * 1024;
 
 /// The iNES format file header
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 #[allow(dead_code)]
 struct Header {
     name: [u8; 4],
@@ -88,6 +89,8 @@ pub struct Cartridge {
 
     mapper: Box<dyn Mapper>,
     mirroring: Mirroring,
+
+    header: Header,
 }
 
 impl Cartridge {
@@ -144,6 +147,7 @@ impl Cartridge {
             chr_memory,
             mapper,
             mirroring,
+            header,
         })
     }
 
@@ -219,5 +223,19 @@ impl Cartridge {
 
     pub fn on_scanline_hblank(&mut self) -> bool {
         self.mapper.on_scanline_hblank()
+    }
+
+    pub fn compute_hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.hash(&mut s);
+        s.finish()
+    }
+}
+
+impl Hash for Cartridge {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.prg_memory.hash(state);
+        self.chr_memory.hash(state);
+        self.header.hash(state);
     }
 }

@@ -1,7 +1,9 @@
 use bitflags::bitflags;
+use serde::{Deserialize, Serialize};
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(transparent)]
     pub struct PpuCtrl: u8 {
         /// Base nametable address
         /// 0: $2000; 1: $2400; 2: $2800; 3: $2C00
@@ -24,7 +26,8 @@ bitflags! {
         const GenerateNMI = 1 << 7;
     }
 
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(transparent)]
     pub struct PpuMask: u8 {
         const Greyscale = 1 << 0;
         const ShowBackgroundLeft = 1 << 1;
@@ -36,7 +39,8 @@ bitflags! {
         const EmphasizeBlue = 1 << 7;
     }
 
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(transparent)]
     pub struct PpuStatus: u8 {
         const SpriteOverflow = 1 << 5;
         const Sprite0Hit = 1 << 6;

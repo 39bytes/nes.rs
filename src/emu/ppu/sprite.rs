@@ -1,7 +1,9 @@
 use bitflags::bitflags;
+use serde::{Deserialize, Serialize};
 
 bitflags! {
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(transparent)]
     pub struct SpriteAttribute: u8 {
         const PaletteLSB = 1 << 0;
         const PaletteMSB = 1 << 1;
@@ -12,7 +14,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Sprite {
     pub x: u8,
     pub y: u8,

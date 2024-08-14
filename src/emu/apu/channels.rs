@@ -1,15 +1,17 @@
+use serde::{Deserialize, Serialize};
+
 use crate::emu::bits::IntoBit;
 
 use super::components::{Divider, Envelope, LengthCounter, LinearCounter, Sweep};
 
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum PulseChannelNumber {
     #[default]
     One,
     Two,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct PulseChannel {
     sequence: u8,
     sequence_position: u8,
@@ -91,7 +93,7 @@ const TRIANGLE_SEQUENCE: [u8; 32] = [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 ];
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct TriangleChannel {
     pub length_counter: LengthCounter,
     pub linear_counter: LinearCounter,
@@ -147,6 +149,7 @@ const NOISE_PERIOD_LOOKUP: [u16; 16] = [
     4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
 ];
 
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct NoiseChannel {
     pub length_counter: LengthCounter,
     pub envelope: Envelope,
@@ -219,7 +222,7 @@ const DMC_RATE_LOOKUP: [u16; 16] = [
     214, 190, 170, 160, 143, 127, 113, 107, 95, 80, 71, 64, 53, 42, 36, 27,
 ];
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Deserialize, Serialize)]
 pub enum DMCDMARequest {
     Load(u16),
     Reload(u16),
@@ -231,7 +234,7 @@ pub struct DMCClockResult {
     pub interrupt: bool,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct DMCChannel {
     enabled: bool,
     pub irq_enabled: bool,

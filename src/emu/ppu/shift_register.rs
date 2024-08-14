@@ -1,7 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use super::IntoBit;
 
 /// A shift register with 16 slots that outputs 2 bits at a time.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ShiftRegister16 {
     low: u16,
     high: u16,
@@ -55,7 +57,7 @@ impl ShiftRegister16 {
 }
 
 /// A shift register with 8 slots that outputs 2 bits at a time.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ShiftRegister8 {
     low: u8,
     high: u8,

@@ -9,14 +9,15 @@ use crate::{
 };
 
 use super::{
-    apu::Apu, cartridge::Cartridge, consts::FRAME_CLOCKS, cpu::Cpu, input::ControllerInput,
-    palette::Palette, ppu::Ppu,
+    apu::Apu, cartridge::Cartridge, cpu::Cpu, input::ControllerInput, palette::Palette, ppu::Ppu,
+    save_state::SaveState,
 };
 
 pub struct Nes {
     apu: Rc<RefCell<Apu>>,
     cpu: Rc<RefCell<Cpu>>,
     ppu: Rc<RefCell<Ppu>>,
+    cartridge: Option<Rc<RefCell<Cartridge>>>,
 
     screen: Sprite,
     audio_output: Option<AudioOutput>,
@@ -37,6 +38,7 @@ impl Nes {
             cpu,
             ppu,
             apu,
+            cartridge: None,
 
             screen: Sprite::monocolor(Color::BLACK, 256, 240),
             audio_output: None,
@@ -69,8 +71,9 @@ impl Nes {
 
     pub fn load_cartridge(&mut self, cartridge: Cartridge) {
         let cartridge = Rc::new(RefCell::new(cartridge));
+        self.cartridge = Some(cartridge.clone());
         self.cpu.borrow_mut().load_cartridge(cartridge.clone());
-        self.ppu.borrow_mut().load_cartridge(cartridge.clone());
+        self.ppu.borrow_mut().load_cartridge(cartridge);
     }
 
     pub fn reset(&mut self) {
@@ -176,6 +179,24 @@ impl Nes {
         }
 
         s
+    }
+
+    pub fn state(&self) -> SaveState {
+        SaveState {
+            cpu_state: self.cpu.borrow().state(),
+            ppu_state: self.ppu.borrow().state(),
+            apu_state: self.apu.borrow().state(),
+            clock_count: self.clock_count,
+            paused: self.paused,
+        }
+    }
+
+    pub fn load_state(&mut self, state: &SaveState) {
+        self.cpu.borrow_mut().load_state(&state.cpu_state);
+        self.ppu.borrow_mut().load_state(&state.ppu_state);
+        self.apu.borrow_mut().load_state(&state.apu_state);
+        self.clock_count = state.clock_count;
+        self.paused = state.paused;
     }
 }
 

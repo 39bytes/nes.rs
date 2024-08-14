@@ -1,7 +1,9 @@
 use bitflags::bitflags;
+use serde::{Deserialize, Serialize};
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, Default)]
+    #[derive(Default, Clone, Copy, Debug, Serialize, Deserialize)]
+    #[serde(transparent)]
     pub struct ControllerButtons: u8 {
         const A = 1 << 0;
         const B = 1 << 1;
@@ -21,7 +23,7 @@ pub enum ControllerInput {
     Two(ControllerButtons),
 }
 
-#[derive(Default, Copy, Clone, Debug)]
+#[derive(Default, Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct StandardController {
     buttons: ControllerButtons,
     shift_reg: u8,
