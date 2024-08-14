@@ -1,5 +1,6 @@
 use num_integer::Integer;
 use num_traits::Unsigned;
+use serde::{Deserialize, Serialize};
 
 use super::channels::PulseChannelNumber;
 
@@ -10,7 +11,7 @@ const LENGTHS: [u8; 32] = [
     12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30
 ];
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct LengthCounter {
     counter: u8,
     halted: bool,
@@ -51,7 +52,7 @@ impl LengthCounter {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct LinearCounter {
     reload: u8,
     pub control: bool,
@@ -89,7 +90,7 @@ impl LinearCounter {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Divider<U: Unsigned + Integer + Default + Copy> {
     pub reload: U,
     counter: U,
@@ -112,7 +113,7 @@ impl<U: Unsigned + Integer + Default + Copy> Divider<U> {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Envelope {
     start: bool,
     divider: Divider<u8>,
@@ -167,7 +168,7 @@ impl Envelope {
 }
 
 // Clocked on half frames
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct Sweep {
     enabled: bool,
     shift_count: u8,

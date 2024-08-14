@@ -1,5 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
+
 use crate::renderer::{Color, Pixel, Sprite};
 
 pub use self::pattern_table::PatternTable;
@@ -966,6 +969,120 @@ impl Ppu {
             .borrow_mut()
             .on_scanline_hblank()
     }
+
+    pub fn state(&self) -> PpuState {
+        PpuState {
+            cycle: self.cycle,
+            scanline: self.scanline,
+
+            ctrl: self.ctrl,
+            mask: self.mask,
+            status: self.status,
+            oam_addr: self.oam_addr,
+
+            vram_addr: self.vram_addr,
+            temp_vram_addr: self.temp_vram_addr,
+            fine_x: self.fine_x,
+
+            write_latch: self.write_latch,
+            data_buffer: self.data_buffer,
+
+            next_bg_tile_id: self.next_bg_tile_id,
+            next_bg_tile_palette_id: self.next_bg_tile_palette_id,
+            next_bg_tile_lsb: self.next_bg_tile_lsb,
+            next_bg_tile_msb: self.next_bg_tile_msb,
+
+            bg_tile_id_shifter: self.bg_tile_id_shifter,
+            bg_tile_palette_shifter: self.bg_tile_palette_shifter,
+
+            scanline_sprites: self.scanline_sprites.clone(),
+            sprite_tile_shifters: self.sprite_tile_shifters,
+
+            left_nametable: self.nametables[0],
+            right_nametable: self.nametables[1],
+            palette_ram: self.palette_ram,
+
+            oam: self.oam,
+
+            odd_frame: self.odd_frame,
+        }
+    }
+
+    pub fn load_state(&mut self, state: &PpuState) {
+        self.cycle = state.cycle;
+        self.scanline = state.scanline;
+
+        self.ctrl = state.ctrl;
+        self.mask = state.mask;
+        self.status = state.status;
+        self.oam_addr = state.oam_addr;
+
+        self.vram_addr = state.vram_addr;
+        self.temp_vram_addr = state.temp_vram_addr;
+        self.fine_x = state.fine_x;
+
+        self.write_latch = state.write_latch;
+        self.data_buffer = state.data_buffer;
+
+        self.next_bg_tile_id = state.next_bg_tile_id;
+        self.next_bg_tile_palette_id = state.next_bg_tile_palette_id;
+        self.next_bg_tile_lsb = state.next_bg_tile_lsb;
+        self.next_bg_tile_msb = state.next_bg_tile_msb;
+
+        self.bg_tile_id_shifter = state.bg_tile_id_shifter;
+        self.bg_tile_palette_shifter = state.bg_tile_palette_shifter;
+
+        self.scanline_sprites.clone_from(&state.scanline_sprites);
+        self.sprite_tile_shifters = state.sprite_tile_shifters;
+
+        self.nametables = [state.left_nametable, state.right_nametable];
+        self.palette_ram = state.palette_ram;
+
+        self.oam = state.oam;
+
+        self.odd_frame = state.odd_frame;
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PpuState {
+    cycle: u16,
+    scanline: i16,
+
+    ctrl: PpuCtrl,
+    mask: PpuMask,
+    status: PpuStatus,
+    oam_addr: u8,
+
+    vram_addr: VRAMAddr,
+    temp_vram_addr: VRAMAddr,
+    fine_x: u8,
+
+    write_latch: bool,
+    data_buffer: u8,
+
+    next_bg_tile_id: u8,
+    next_bg_tile_palette_id: u8,
+    next_bg_tile_lsb: u8,
+    next_bg_tile_msb: u8,
+
+    bg_tile_id_shifter: ShiftRegister16,
+    bg_tile_palette_shifter: ShiftRegister16,
+
+    scanline_sprites: Vec<PpuSprite>,
+    sprite_tile_shifters: [ShiftRegister8; 8],
+
+    #[serde(with = "BigArray")]
+    left_nametable: [u8; NAMETABLE_SIZE],
+    #[serde(with = "BigArray")]
+    right_nametable: [u8; NAMETABLE_SIZE],
+
+    palette_ram: [u8; PALETTE_RAM_SIZE],
+
+    #[serde(with = "BigArray")]
+    oam: [u8; OAM_SIZE],
+
+    odd_frame: bool,
 }
 
 /// Returns nametable (0 or 1) as well as the index within the nametable

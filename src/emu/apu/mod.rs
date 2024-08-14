@@ -6,6 +6,7 @@ mod channels;
 mod components;
 
 pub use channels::DMCDMARequest;
+use serde::{Deserialize, Serialize};
 
 // Precompute lookup tables for sampling
 // See https://www.nesdev.org/wiki/APU_Mixer#Lookup_Table
@@ -33,6 +34,7 @@ const TND_TABLE: [f32; 203] = const {
     tnd_table
 };
 
+#[derive(Clone, Serialize, Deserialize)]
 enum SequenceMode {
     FourStep,
     FiveStep,
@@ -43,6 +45,7 @@ pub struct APUClockResult {
     pub frame_interrupt: bool,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Apu {
     pulse1: PulseChannel,
     pulse2: PulseChannel,
@@ -59,6 +62,8 @@ pub struct Apu {
     // are executed after a write to 0x4017
     status_write_effect_timer: u8,
 }
+
+pub type ApuState = Apu;
 
 impl Apu {
     pub fn new() -> Apu {
@@ -288,5 +293,23 @@ impl Apu {
             }
             _ => todo!(),
         }
+    }
+
+    pub fn state(&self) -> ApuState {
+        self.clone()
+    }
+
+    pub fn load_state(&mut self, state: &ApuState) {
+        self.pulse1 = state.pulse1.clone();
+        self.pulse2 = state.pulse2.clone();
+        self.triangle = state.triangle.clone();
+        self.noise = state.noise.clone();
+        self.dmc = state.dmc.clone();
+
+        self.cycle = state.cycle;
+        self.mode = state.mode.clone();
+        self.frame_interrupt = state.frame_interrupt;
+        self.irq_disable = state.irq_disable;
+        self.status_write_effect_timer = state.status_write_effect_timer;
     }
 }

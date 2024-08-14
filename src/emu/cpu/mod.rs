@@ -8,12 +8,15 @@ use super::{
     ppu::Ppu,
 };
 use bitflags::bitflags;
+use serde::{Deserialize, Serialize};
+use serde_big_array::BigArray;
 use std::{cell::RefCell, rc::Rc};
 
 pub mod instructions;
 
 bitflags! {
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+    #[serde(transparent)]
     pub struct StatusFlags: u8 {
         /// Carry Bit
         const C = 1 << 0;
@@ -50,7 +53,6 @@ pub struct Cpu {
     cycles: u8,
 
     total_cycles: u64,
-    frame_cycle: u64,
 
     // Whether or not we are currently performing OAM DMA
     oam_dma: bool,
@@ -116,7 +118,6 @@ impl Cpu {
             opcode: 0x00,
             cycles: 0,
             total_cycles: 0,
-            frame_cycle: 0,
 
             oam_dma: false,
             oam_dma_halting: false,
@@ -600,7 +601,6 @@ impl Cpu {
         self.cycles -= 1;
 
         self.total_cycles += 1;
-        self.frame_cycle += 1;
 
         CpuClockResult {
             dmc_dma_sample: None,
@@ -1742,13 +1742,122 @@ impl Cpu {
         self.breakpoint = Some(addr);
     }
 
-    pub fn mark_frame_complete(&mut self) {
-        self.frame_cycle = 0;
+    pub fn state(&self) -> CpuState {
+        CpuState {
+            a: self.a,
+            x: self.x,
+            y: self.y,
+            sp: self.sp,
+            pc: self.pc,
+            status: self.status,
+
+            opcode: self.opcode,
+            cycles: self.cycles,
+
+            total_cycles: self.total_cycles,
+
+            oam_dma: self.oam_dma,
+            oam_dma_halting: self.oam_dma_halting,
+            oam_dma_page: self.oam_dma_page,
+            oam_dma_index: self.oam_dma_index,
+            oam_dma_data: self.oam_dma_data,
+            oam_dma_count: self.oam_dma_count,
+
+            dmc_dma: self.dmc_dma,
+            dmc_dma_stall_cycles: self.dmc_dma_stall_cycles,
+            dmc_dma_halt_cycles: self.dmc_dma_halt_cycles,
+
+            ram: self.ram,
+
+            nmi_pending: self.nmi_pending,
+            irq_pending: self.irq_pending,
+
+            controller_strobe: self.controller_strobe,
+            controllers: self.controllers,
+        }
+    }
+
+    pub fn load_state(&mut self, state: &CpuState) {
+        self.a = state.a;
+        self.x = state.x;
+        self.y = state.y;
+        self.sp = state.sp;
+        self.pc = state.pc;
+        self.status = state.status;
+
+        self.opcode = state.opcode;
+        self.cycles = state.cycles;
+
+        self.total_cycles = state.total_cycles;
+
+        self.oam_dma = state.oam_dma;
+        self.oam_dma_halting = state.oam_dma_halting;
+        self.oam_dma_page = state.oam_dma_page;
+        self.oam_dma_index = state.oam_dma_index;
+        self.oam_dma_data = state.oam_dma_data;
+        self.oam_dma_count = state.oam_dma_count;
+
+        self.dmc_dma = state.dmc_dma;
+        self.dmc_dma_stall_cycles = state.dmc_dma_stall_cycles;
+        self.dmc_dma_halt_cycles = state.dmc_dma_halt_cycles;
+
+        self.ram = state.ram;
+
+        self.nmi_pending = state.nmi_pending;
+        self.irq_pending = state.irq_pending;
+
+        self.controller_strobe = state.controller_strobe;
+        self.controllers = state.controllers;
     }
 }
 
 fn is_negative(byte: u8) -> bool {
     (byte & 0x80) != 0
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CpuState {
+    /* Registers */
+    a: u8,               // Accumulator
+    x: u8,               // X register
+    y: u8,               // Y register
+    sp: u8,              // Stack Pointer
+    pc: u16,             // Program Counter
+    status: StatusFlags, // Status register
+
+    opcode: u8,
+    cycles: u8,
+
+    total_cycles: u64,
+
+    // Whether or not we are currently performing OAM DMA
+    oam_dma: bool,
+    // Whether or not we are waiting to start the DMA
+    // Always waits on the first cycle that DMA is triggered,
+    // then optionally for another alignment cycle
+    // See: https://www.nesdev.org/wiki/DMA
+    oam_dma_halting: bool,
+    // For reading/writing during DMA
+    oam_dma_page: u8,
+    oam_dma_index: u8,
+    oam_dma_data: u8,
+    oam_dma_count: u8,
+
+    // Whether or not we are currently performing DMC DMA
+    dmc_dma: Option<DMCDMARequest>,
+    dmc_dma_stall_cycles: u8,
+    dmc_dma_halt_cycles: u8,
+
+    // Memory
+    #[serde(with = "BigArray")]
+    ram: [u8; CPU_RAM_SIZE],
+
+    // Interrupts
+    nmi_pending: bool,
+    irq_pending: bool,
+
+    controller_strobe: bool,
+    controllers: [StandardController; 2],
 }
 
 #[cfg(test)]

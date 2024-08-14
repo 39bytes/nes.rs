@@ -1,7 +1,9 @@
 use modular_bitfield::prelude::*;
+use serde::{Deserialize, Serialize};
 
 #[bitfield]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(transparent)]
 pub(crate) struct VRAMAddr {
     pub coarse_x: B5,
     pub coarse_y: B5,
