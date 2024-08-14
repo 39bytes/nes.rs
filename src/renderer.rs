@@ -3,7 +3,7 @@ use rusttype::{point, Font, Scale};
 use sdl2::{
     pixels::PixelFormatEnum,
     rect::Rect,
-    render::{Canvas, Texture},
+    render::{BlendMode, Canvas, Texture},
     video::Window,
 };
 
@@ -126,12 +126,18 @@ impl<'a> Draw for Scaled<'a> {
     }
 }
 
+pub enum Layer {
+    Screen,
+    UI,
+}
+
 pub struct Renderer {
     width: u32,
     height: u32,
 
     canvas: Canvas<Window>,
     screen_texture: Texture,
+    ui_texture: Texture,
 
     font: Font<'static>,
 }
@@ -150,17 +156,23 @@ impl Renderer {
             .resizable()
             .build()?;
         let mut canvas = window.into_canvas().build()?;
+        canvas.set_blend_mode(BlendMode::Blend);
         canvas.clear();
         canvas.present();
 
-        let screen_texture =
-            canvas.create_texture_streaming(PixelFormatEnum::RGB24, width, height)?;
+        let mut screen_texture =
+            canvas.create_texture_streaming(PixelFormatEnum::RGBA32, width, height)?;
+        screen_texture.set_blend_mode(BlendMode::Blend);
+        let mut ui_texture =
+            canvas.create_texture_streaming(PixelFormatEnum::RGBA32, width, height)?;
+        ui_texture.set_blend_mode(BlendMode::Blend);
 
         Ok(Renderer {
             width,
             height,
             canvas,
             screen_texture,
+            ui_texture,
             font,
         })
     }
@@ -169,8 +181,15 @@ impl Renderer {
         self.screen_texture
             .update(
                 None,
-                &vec![0; (self.width * self.height * 3) as usize],
-                (self.width as usize) * 3,
+                &vec![0; (self.width * self.height * 4) as usize],
+                (self.width as usize) * 4,
+            )
+            .unwrap();
+        self.ui_texture
+            .update(
+                None,
+                &vec![0; (self.width * self.height * 4) as usize],
+                (self.width as usize) * 4,
             )
             .unwrap();
         self.canvas.clear();
@@ -209,20 +228,27 @@ impl Renderer {
         {
             log::warn!("Rendering error: {}", e);
         }
+        if let Err(e) = self
+            .canvas
+            .copy(&self.ui_texture, None, rect!(x, y, width, height))
+        {
+            log::warn!("Rendering error: {}", e);
+        }
         self.canvas.present();
     }
 
-    pub fn draw<D: Draw>(&mut self, obj: &D, x: usize, y: usize) {
-        let res = self.screen_texture.with_lock(
+    pub fn draw<D: Draw>(&mut self, layer: Layer, obj: &D, x: usize, y: usize) {
+        let res = self.select_texture(layer).with_lock(
             rect!(x, y, obj.width(), obj.height()),
             |buf: &mut [u8], pitch: usize| {
                 for px_y in 0..obj.height() {
                     for px_x in 0..obj.width() {
                         let pixel = obj.get_pixel(px_x, px_y);
-                        let index = px_y * pitch + px_x * 3;
+                        let index = px_y * pitch + px_x * 4;
                         buf[index] = pixel.0;
                         buf[index + 1] = pixel.1;
                         buf[index + 2] = pixel.2;
+                        buf[index + 3] = 255;
                     }
                 }
             },
@@ -247,12 +273,12 @@ impl Renderer {
                 let w = bb.width();
                 let h = bb.height();
 
-                self.screen_texture
+                self.ui_texture
                     .with_lock(
                         rect!(bb.min.x, bb.min.y, w, h),
                         |buf: &mut [u8], pitch: usize| {
                             glyph.draw(|x, y, v| {
-                                let index = y as usize * pitch + x as usize * 3;
+                                let index = y as usize * pitch + x as usize * 4;
                                 if index + 2 >= buf.len() {
                                     return;
                                 }
@@ -261,6 +287,7 @@ impl Renderer {
                                 buf[index] = b;
                                 buf[index + 1] = b;
                                 buf[index + 2] = b;
+                                buf[index + 3] = b;
                             });
                         },
                     )
@@ -292,12 +319,12 @@ impl Renderer {
                 let w = bb.width();
                 let h = bb.height();
 
-                self.screen_texture
+                self.ui_texture
                     .with_lock(
                         rect!(bb.min.x, bb.min.y, w, h),
                         |buf: &mut [u8], pitch: usize| {
                             glyph.draw(|x, y, v| {
-                                let index = y as usize * pitch + x as usize * 3;
+                                let index = y as usize * pitch + x as usize * 4;
                                 if index + 2 >= buf.len() {
                                     return;
                                 }
@@ -306,11 +333,19 @@ impl Renderer {
                                 buf[index] = (v * color.0 as f32) as u8;
                                 buf[index + 1] = (v * color.1 as f32) as u8;
                                 buf[index + 2] = (v * color.2 as f32) as u8;
+                                buf[index + 3] = (v * 255.0) as u8;
                             });
                         },
                     )
                     .unwrap();
             }
+        }
+    }
+
+    pub fn select_texture(&mut self, layer: Layer) -> &mut Texture {
+        match layer {
+            Layer::UI => &mut self.ui_texture,
+            Layer::Screen => &mut self.screen_texture,
         }
     }
 }

@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -48,11 +49,10 @@ impl EmuState {
         self.save_states.get(number).and_then(|o| o.as_ref())
     }
 
-    pub fn write_save_state(&mut self, number: usize, save_state: SaveState) {
-        if let Err(e) = save_state.write(number, self.cart_hash) {
-            log::error!("Failed to write save state {}: {}", number, e);
-        };
+    pub fn write_save_state(&mut self, number: usize, save_state: SaveState) -> Result<()> {
+        save_state.write(number, self.cart_hash)?;
         self.save_states[number] = Some(save_state);
+        Ok(())
     }
 
     pub fn pattern_table_palette(&self) -> u8 {
