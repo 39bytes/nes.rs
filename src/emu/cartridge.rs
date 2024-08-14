@@ -269,7 +269,6 @@ impl Cartridge {
 impl Hash for Cartridge {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.prg_memory.hash(state);
-        self.chr_memory.hash(state);
         self.header.hash(state);
     }
 }
