@@ -58,10 +58,9 @@ To find out which mapper a game uses, search it on [NesCartDB](https://nescartdb
     - [ ] Mapper 10 (MMC4)
     - [ ] Mapper 66 (GxROM)
 - [ ] Run test ROMs for PPU emulation
-- [ ] Open bus behavior emulation
 
 ### QOL
-- [ ] Select ROM from emulator instead of passing as a command line argument
+- [x] Save states
 - [ ] Remappable controls
 
 ## Resources
