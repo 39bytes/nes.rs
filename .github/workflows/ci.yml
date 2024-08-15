@@ -1,26 +1,12 @@
+name: CI
+
 on:
   pull_request:
   push:
     branches:
       - main
 
-name: CI
-
 jobs:
-
-  check:
-    name: Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download actionlint
-        id: actionlint
-        run:
-          bash <(curl
-          https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
-      - name: Check workflow
-        run: ${{ steps.actionlint.outputs.executable }} -color
-
   check:
     name: Check
     runs-on: ubuntu-latest
