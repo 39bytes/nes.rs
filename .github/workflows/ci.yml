@@ -1,0 +1,62 @@
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+name: CI
+
+jobs:
+
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download actionlint
+        id: actionlint
+        run:
+          bash <(curl
+          https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+      - name: Check workflow
+        run: ${{ steps.actionlint.outputs.executable }} -color
+
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rust toolchain components
+        uses: dtolnay/rust-toolchain@stable
+        run: cargo check
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rust toolchain components
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+        run: cargo +nightly fmt --check
+
+  clippy:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rust toolchain components
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+        run: cargo clippy
+  
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rust toolchain components
+        uses: dtolnay/rust-toolchain@stable
+        run: cargo test
