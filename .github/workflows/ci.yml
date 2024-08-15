@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install rust toolchain components
         uses: dtolnay/rust-toolchain@stable
-        run: cargo check
+      - run: cargo check
 
   format:
     name: Format
@@ -25,7 +25,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-        run: cargo +nightly fmt --check
+      - run: cargo +nightly fmt --check
 
   clippy:
     name: Lint
@@ -36,7 +36,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-        run: cargo clippy
+      - run: cargo clippy
   
   test:
     name: Tests
@@ -45,4 +45,4 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install rust toolchain components
         uses: dtolnay/rust-toolchain@stable
-        run: cargo test
+      - run: cargo test
