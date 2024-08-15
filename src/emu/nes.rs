@@ -153,6 +153,7 @@ impl Nes {
         }
     }
 
+    #[allow(dead_code)]
     pub fn set_breakpoint(&mut self, breakpoint: u16) {
         self.cpu.borrow_mut().set_breakpoint(breakpoint);
     }
@@ -205,12 +206,6 @@ impl Nes {
             cartridge.borrow().write_save_file()?;
         }
         Ok(())
-    }
-
-    pub fn load_save_file(&mut self) {
-        if let Some(cartridge) = &self.cartridge {
-            cartridge.borrow_mut().load_save_file();
-        }
     }
 }
 
