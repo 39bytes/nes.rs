@@ -1,3 +1,6 @@
+fmt:
+    cargo +nightly fmt
+
 dk:
     RUST_LOG=info cargo run assets/test_roms/donkeykong.nes
 

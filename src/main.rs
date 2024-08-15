@@ -10,8 +10,10 @@ use utils::FpsCounter;
 use anyhow::Result;
 use audio_output::AudioOutput;
 use renderer::{Layer, Renderer};
-use sdl2::keyboard::Keycode;
-use sdl2::{event::Event, keyboard::Scancode};
+use sdl2::{
+    event::Event,
+    keyboard::{Keycode, Scancode},
+};
 
 use emu::{
     cartridge::Cartridge,
