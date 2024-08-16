@@ -23,8 +23,8 @@ jobs:
         run: cargo build
 
 
-  format:
-    name: Format and Lint
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +32,7 @@ jobs:
       - name: Install rust toolchain components
         uses: dtolnay/rust-toolchain@nightly
         with:
-          components: rustfmt
+          components: rustfmt, clippy
 
       - name: Format check
         run: cargo +nightly fmt --check
