@@ -8,7 +8,7 @@ on:
 
 jobs:
   check:
-    name: Check
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,10 +17,12 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Install mold
         uses: rui314/setup-mold@v1
-      - run: cargo check
+      - name: Check
+      - run: cargo build
+
 
   format:
-    name: Format
+    name: Format and Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,23 +30,13 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
+      - name: Format check
       - run: cargo +nightly fmt --check
-
-  clippy:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install rust toolchain components
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - name: Install mold
-        uses: rui314/setup-mold@v1
+      - name: Clippy
       - run: cargo clippy
   
   test:
-    name: Tests
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
