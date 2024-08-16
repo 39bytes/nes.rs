@@ -126,7 +126,6 @@ impl Nes {
 
                 irq = irq || res.interrupt;
             }
-            irq = irq || apu_res.frame_interrupt;
         }
 
         if let Some(audio_output) = &mut self.audio_output {

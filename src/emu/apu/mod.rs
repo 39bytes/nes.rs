@@ -42,7 +42,6 @@ enum SequenceMode {
 
 pub struct APUClockResult {
     pub dmc_res: Option<DMCClockResult>,
-    pub frame_interrupt: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -181,10 +180,7 @@ impl Apu {
             }
         }
 
-        APUClockResult {
-            dmc_res: res,
-            frame_interrupt: self.frame_interrupt,
-        }
+        APUClockResult { dmc_res: res }
     }
 
     fn clock_quarter_frame(&mut self) {
