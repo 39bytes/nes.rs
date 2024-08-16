@@ -1,11 +1,24 @@
 use anyhow::{bail, Result};
 use std::{fs::File, io::prelude::*};
 
-use crate::renderer::{Color, Sprite};
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Color(pub u8, pub u8, pub u8);
+
+impl Color {
+    pub const WHITE: Self = Color(255, 255, 255);
+    pub const GRAY: Self = Color(128, 128, 128);
+    pub const BLACK: Self = Color(0, 0, 0);
+}
 
 #[derive(Debug, Clone)]
 pub struct Palette {
     colors: Vec<Color>,
+}
+
+pub struct Pixel {
+    pub x: usize,
+    pub y: usize,
+    pub color: Color,
 }
 
 impl Default for Palette {
@@ -46,11 +59,5 @@ impl Palette {
 
     pub fn get_color(&self, color: u8) -> Color {
         self.colors[(color % 64) as usize]
-    }
-}
-
-impl From<Palette> for Sprite {
-    fn from(value: Palette) -> Self {
-        Sprite::new(value.colors().clone(), 16, 4).unwrap()
     }
 }

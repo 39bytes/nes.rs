@@ -1862,7 +1862,7 @@ pub struct CpuState {
 
 #[cfg(test)]
 mod test {
-    use crate::emu::cartridge::Cartridge;
+    use crate::cartridge::Cartridge;
 
     use super::*;
     use std::{

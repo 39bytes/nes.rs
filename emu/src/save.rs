@@ -7,7 +7,7 @@ use std::{
     path::PathBuf,
 };
 
-use super::{apu::ApuState, cpu::CpuState, ppu::PpuState};
+use crate::{apu::ApuState, cpu::CpuState, ppu::PpuState};
 
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {

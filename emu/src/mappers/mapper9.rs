@@ -1,4 +1,4 @@
-use crate::emu::cartridge::Mirroring;
+use crate::cartridge::Mirroring;
 
 use super::{MapRead, MapWrite, Mapper};
 

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::emu::cartridge::Mirroring;
+use crate::cartridge::Mirroring;
 
 use super::{MapRead, MapWrite, Mapper};
 use modular_bitfield::prelude::*;

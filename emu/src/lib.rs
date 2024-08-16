@@ -1,4 +1,5 @@
 pub mod apu;
+mod audio_sample_buffer;
 mod bits;
 pub mod cartridge;
 pub mod consts;

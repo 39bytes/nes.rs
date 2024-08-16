@@ -4,15 +4,20 @@ use std::{
     rc::Rc,
 };
 
-use crate::{
-    audio_output::AudioOutput,
-    renderer::{Color, Sprite},
-};
+use crate::{audio_sample_buffer::AudioSampleBuffer, palette::Color};
 
 use super::{
     apu::Apu, cartridge::Cartridge, cpu::Cpu, input::ControllerInput, palette::Palette, ppu::Ppu,
     save::SaveState,
 };
+
+const SCREEN_WIDTH: usize = 256;
+const SCREEN_HEIGHT: usize = 240;
+const BUFFER_SIZE: usize = 1024;
+
+pub struct AudioInfo {
+    pub sample_rate: u32,
+}
 
 pub struct Nes {
     apu: Rc<RefCell<Apu>>,
@@ -20,15 +25,14 @@ pub struct Nes {
     ppu: Rc<RefCell<Ppu>>,
     cartridge: Option<Rc<RefCell<Cartridge>>>,
 
-    screen: Sprite,
-    audio_output: Option<AudioOutput>,
-
+    screen: [Color; 256 * 240],
+    audio_buffer: AudioSampleBuffer,
     clock_count: u64,
     paused: bool,
 }
 
 impl Nes {
-    pub fn new(palette: Palette) -> Self {
+    pub fn new(palette: Palette, sample_rate: Option<u32>) -> Self {
         let cpu = Rc::new(RefCell::new(Cpu::new()));
         let ppu = Rc::new(RefCell::new(Ppu::new(palette)));
         let apu = Rc::new(RefCell::new(Apu::new()));
@@ -41,16 +45,12 @@ impl Nes {
             apu,
             cartridge: None,
 
-            screen: Sprite::monocolor(Color::BLACK, 256, 240),
-            audio_output: None,
+            screen: [Color::BLACK; SCREEN_WIDTH * SCREEN_HEIGHT],
+            audio_buffer: AudioSampleBuffer::new(sample_rate.unwrap_or(44100)),
 
             clock_count: 0,
             paused: false,
         }
-    }
-
-    pub fn with_audio(&mut self, output: AudioOutput) {
-        self.audio_output = Some(output);
     }
 
     pub fn cpu(&self) -> Ref<Cpu> {
@@ -61,8 +61,12 @@ impl Nes {
         self.ppu.borrow()
     }
 
-    pub fn screen(&self) -> &Sprite {
+    pub fn screen(&self) -> &[Color] {
         &self.screen
+    }
+
+    pub fn audio_buffer(&mut self) -> &mut AudioSampleBuffer {
+        &mut self.audio_buffer
     }
 
     #[allow(dead_code)]
@@ -79,11 +83,6 @@ impl Nes {
 
     pub fn reset(&mut self) {
         self.cpu.borrow_mut().reset();
-        if let Some(output) = self.audio_output.as_mut() {
-            output.pause();
-            output.clear();
-            output.play();
-        }
     }
 
     pub fn trigger_inputs(&mut self, input: ControllerInput) {
@@ -105,9 +104,7 @@ impl Nes {
         let clock_res = self.ppu.borrow_mut().clock();
 
         if let Some(pixel) = clock_res.pixel {
-            if let Err(e) = self.screen.set_pixel(pixel.x, pixel.y, pixel.color) {
-                panic!("{}", e);
-            }
+            self.screen[pixel.y * SCREEN_WIDTH + pixel.x] = pixel.color;
         }
 
         let mut irq = clock_res.irq;
@@ -128,9 +125,8 @@ impl Nes {
             }
         }
 
-        if let Some(audio_output) = &mut self.audio_output {
-            audio_output.try_push_sample(self.apu.borrow().sample());
-        }
+        self.audio_buffer
+            .try_push_sample(self.apu.borrow().sample());
 
         if clock_res.nmi {
             self.cpu.borrow_mut().request_nmi();
@@ -213,7 +209,7 @@ mod test {
     use super::*;
 
     fn rom_test(path: &str) {
-        let mut nes = Nes::new(Palette::default());
+        let mut nes = Nes::new(Palette::default(), None);
         let cartridge = Cartridge::new(path).unwrap();
         nes.load_cartridge(cartridge);
         nes.reset();

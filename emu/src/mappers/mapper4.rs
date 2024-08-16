@@ -1,5 +1,5 @@
 use super::{MapRead, MapWrite, Mapper};
-use crate::emu::cartridge::Mirroring;
+use crate::cartridge::Mirroring;
 
 const PRG_BANK_SIZE: usize = 8 * 1024;
 const CHR_BANK_SIZE: usize = 1024;

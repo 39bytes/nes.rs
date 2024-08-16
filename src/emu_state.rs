@@ -1,12 +1,15 @@
 use anyhow::Result;
+use emu::{cartridge::Cartridge, save::SaveState};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
 
-use crate::emu::{cartridge::Cartridge, save::SaveState};
+use crate::audio_output::AudioOutput;
 
 pub struct EmuState {
+    audio_output: Option<AudioOutput>,
+
     paused: Arc<AtomicBool>,
     save_states: [Option<SaveState>; 10],
     pattern_table_palette: u8,
@@ -14,9 +17,11 @@ pub struct EmuState {
 }
 
 impl EmuState {
-    pub fn new(cartridge: &Cartridge) -> Self {
+    pub fn new(cartridge: &Cartridge, audio_output: Option<AudioOutput>) -> Self {
         const EMPTY: Option<SaveState> = None;
         let mut emu_state = Self {
+            audio_output,
+
             paused: Arc::new(AtomicBool::new(false)),
             save_states: [EMPTY; 10],
             pattern_table_palette: 0,
@@ -30,6 +35,10 @@ impl EmuState {
             }
         }
         emu_state
+    }
+
+    pub fn audio_output(&mut self) -> Option<&mut AudioOutput> {
+        self.audio_output.as_mut()
     }
 
     pub fn toggle_pause(&mut self) {

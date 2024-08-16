@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
-use crate::renderer::{Color, Pixel, Sprite};
+use crate::palette::{Color, Pixel};
 
 pub use self::pattern_table::PatternTable;
 
@@ -914,7 +914,12 @@ impl Ppu {
         self.palette.get_color(color_index)
     }
 
-    pub fn get_pattern_table(&self, table: PatternTable, palette: u8, mode_8x16: bool) -> Sprite {
+    pub fn get_pattern_table(
+        &self,
+        table: PatternTable,
+        palette: u8,
+        mode_8x16: bool,
+    ) -> [Color; 128 * 128] {
         // NOTE: Does the 8x16 bug only happen when sprites are stored in the right
         // pattern table ???
         let table_offset = match table {
@@ -959,7 +964,7 @@ impl Ppu {
             }
         }
 
-        Sprite::new(Vec::from(buf), 128, 128).expect("Failed to create sprite from pattern table")
+        buf
     }
 
     pub fn notify_scanline_hblank(&self) -> bool {

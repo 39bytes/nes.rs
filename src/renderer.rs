@@ -1,4 +1,7 @@
+use std::borrow::Cow;
+
 use anyhow::{anyhow, Result};
+use emu::palette::{Color, Palette};
 use rusttype::{point, Font, Scale};
 use sdl2::{
     pixels::PixelFormatEnum,
@@ -15,21 +18,6 @@ macro_rules! rect(
     )
 );
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Color(pub u8, pub u8, pub u8);
-
-impl Color {
-    pub const WHITE: Self = Color(255, 255, 255);
-    pub const GRAY: Self = Color(128, 128, 128);
-    pub const BLACK: Self = Color(0, 0, 0);
-}
-
-pub struct Pixel {
-    pub x: usize,
-    pub y: usize,
-    pub color: Color,
-}
-
 pub trait Draw {
     fn width(&self) -> usize;
     fn height(&self) -> usize;
@@ -37,13 +25,13 @@ pub trait Draw {
 }
 
 #[derive(Clone)]
-pub struct Sprite {
-    pixels: Vec<Color>,
+pub struct Sprite<'a> {
+    pixels: Cow<'a, [Color]>,
     width: usize,
     height: usize,
 }
 
-impl Sprite {
+impl<'a> Sprite<'a> {
     pub fn new(pixels: Vec<Color>, width: usize, height: usize) -> Result<Self> {
         if pixels.len() != width * height {
             return Err(anyhow!(
@@ -55,26 +43,30 @@ impl Sprite {
         }
 
         Ok(Sprite {
-            pixels,
+            pixels: pixels.into(),
             width,
             height,
         })
     }
 
-    pub fn monocolor(color: Color, width: usize, height: usize) -> Self {
-        let mut pixels = Vec::with_capacity(width * height);
-
-        for _ in 0..(width * height) {
-            pixels.push(color);
+    pub fn from_slice(pixels: &'a [Color], width: usize, height: usize) -> Result<Self> {
+        if pixels.len() != width * height {
+            return Err(anyhow!(
+                "Width {} and height {} not assignable to pixel buffer of length {}",
+                width,
+                height,
+                pixels.len()
+            ));
         }
 
-        Sprite {
-            pixels,
+        Ok(Sprite {
+            pixels: pixels.into(),
             width,
             height,
-        }
+        })
     }
 
+    #[allow(dead_code)]
     pub fn set_pixel(&mut self, x: usize, y: usize, color: Color) -> Result<()> {
         if !(0..self.width).contains(&x) || !(0..self.height).contains(&y) {
             return Err(anyhow!(
@@ -84,7 +76,7 @@ impl Sprite {
             ));
         }
 
-        self.pixels[y * self.width + x] = color;
+        self.pixels.to_mut()[y * self.width + x] = color;
         Ok(())
     }
 
@@ -93,7 +85,7 @@ impl Sprite {
     }
 }
 
-impl Draw for Sprite {
+impl Draw for Sprite<'_> {
     fn width(&self) -> usize {
         self.width
     }
@@ -107,12 +99,18 @@ impl Draw for Sprite {
     }
 }
 
-pub struct Scaled<'a> {
-    orig: &'a Sprite,
+impl From<Palette> for Sprite<'_> {
+    fn from(value: Palette) -> Self {
+        Sprite::new(value.colors().clone(), 16, 4).unwrap()
+    }
+}
+
+pub struct Scaled<'orig, 'a> {
+    orig: &'orig Sprite<'a>,
     scale: usize,
 }
 
-impl<'a> Draw for Scaled<'a> {
+impl<'orig, 'a> Draw for Scaled<'orig, 'a> {
     fn width(&self) -> usize {
         self.orig.width() * self.scale
     }
