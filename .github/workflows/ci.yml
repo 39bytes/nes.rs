@@ -15,10 +15,12 @@ jobs:
 
       - name: Install rust toolchain components
         uses: dtolnay/rust-toolchain@stable
+
       - name: Install mold
         uses: rui314/setup-mold@v1
+
       - name: Check
-      - run: cargo build
+        run: cargo build
 
 
   format:
@@ -26,12 +28,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Install rust toolchain components
         uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
+
       - name: Format check
         run: cargo +nightly fmt --check
+
       - name: Clippy
         run: cargo clippy
   
@@ -40,9 +45,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Install rust toolchain components
         uses: dtolnay/rust-toolchain@stable
+
       - name: Install mold
         uses: rui314/setup-mold@v1
+
       - name: Run tests
         run: cargo test
