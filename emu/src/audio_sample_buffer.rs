@@ -26,6 +26,7 @@ impl AudioSampleBuffer {
         }
     }
 
+    #[inline]
     pub fn flush(&mut self, mut callback: impl FnMut(&[f32])) {
         callback(self.buffer.as_slice());
         self.buffer.clear();

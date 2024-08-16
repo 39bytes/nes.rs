@@ -158,12 +158,12 @@ pub fn main() -> Result<()> {
                 if let Some(output) = emu_state.audio_output() {
                     nes.audio_buffer().flush(|samples| output.queue(samples));
                 }
-
-                fps_counter.tick();
                 log::debug!(
                     "Frame time: {}ms",
                     before_emu_frame.elapsed().as_secs_f64() * 1000.0
                 );
+
+                fps_counter.tick();
             }
             acc -= FRAME_TIME;
             frame_ticked = true;
