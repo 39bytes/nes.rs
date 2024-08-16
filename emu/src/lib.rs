@@ -1,11 +1,11 @@
-pub mod apu;
+mod apu;
 mod audio_sample_buffer;
 mod bits;
 pub mod cartridge;
 pub mod consts;
 pub mod cpu;
 pub mod input;
-pub mod mappers;
+mod mappers;
 pub mod nes;
 pub mod palette;
 pub mod ppu;

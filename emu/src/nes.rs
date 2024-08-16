@@ -53,23 +53,28 @@ impl Nes {
         }
     }
 
+    #[inline]
     pub fn cpu(&self) -> Ref<Cpu> {
         self.cpu.borrow()
     }
 
+    #[inline]
     pub fn ppu(&self) -> Ref<Ppu> {
         self.ppu.borrow()
     }
 
+    #[inline]
     pub fn screen(&self) -> &[Color] {
         &self.screen
     }
 
+    #[inline]
     pub fn audio_buffer(&mut self) -> &mut AudioSampleBuffer {
         &mut self.audio_buffer
     }
 
     #[allow(dead_code)]
+    #[inline]
     pub fn clock_count(&self) -> u64 {
         self.clock_count
     }
@@ -85,10 +90,12 @@ impl Nes {
         self.cpu.borrow_mut().reset();
     }
 
+    #[inline]
     pub fn trigger_inputs(&mut self, input: ControllerInput) {
         self.cpu.borrow_mut().trigger_inputs(input);
     }
 
+    #[inline]
     pub fn advance_frame(&mut self) -> bool {
         while !self.clock(false) {}
 
@@ -153,6 +160,7 @@ impl Nes {
         self.cpu.borrow_mut().set_breakpoint(breakpoint);
     }
 
+    #[inline]
     pub fn unpause(&mut self) {
         self.paused = false;
     }
