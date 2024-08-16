@@ -31,9 +31,9 @@ jobs:
         with:
           components: rustfmt
       - name: Format check
-      - run: cargo +nightly fmt --check
+        run: cargo +nightly fmt --check
       - name: Clippy
-      - run: cargo clippy
+        run: cargo clippy
   
   test:
     name: Test
@@ -44,4 +44,5 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Install mold
         uses: rui314/setup-mold@v1
-      - run: cargo test
+      - name: Run tests
+        run: cargo test
