@@ -12,8 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Install rust toolchain components
         uses: dtolnay/rust-toolchain@stable
+      - name: Install mold
+        uses: rui314/setup-mold@v1
       - run: cargo check
 
   format:
