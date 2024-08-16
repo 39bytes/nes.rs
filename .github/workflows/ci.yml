@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  check:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install rust toolchain components
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install mold
+        uses: rui314/setup-mold@v1
+
+      - name: Check
+        run: cargo build
+
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install rust toolchain components
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt, clippy
+
+      - name: Install mold
+        uses: rui314/setup-mold@v1
+
+      - name: Format check
+        run: cargo +nightly fmt --check
+
+      - name: Clippy
+        run: cargo clippy
+  
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install rust toolchain components
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install mold
+        uses: rui314/setup-mold@v1
+
+      - name: Run tests
+        run: cargo test

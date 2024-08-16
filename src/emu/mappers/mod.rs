@@ -48,5 +48,5 @@ pub trait Mapper {
         None
     }
 
-    fn load_onboard_ram(&mut self, ram: &[u8]) {}
+    fn load_onboard_ram(&mut self, _ram: &[u8]) {}
 }

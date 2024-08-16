@@ -16,6 +16,7 @@ impl Default for Palette {
 }
 
 impl Palette {
+    #[allow(dead_code)]
     pub fn load(path: &str) -> Result<Self> {
         let mut f = File::open(path)?;
 

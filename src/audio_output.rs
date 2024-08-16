@@ -82,6 +82,7 @@ impl AudioOutput {
         }
     }
 
+    #[allow(dead_code)]
     pub fn set_volume(&mut self, volume: f32) {
         self.volume = volume;
     }

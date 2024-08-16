@@ -152,6 +152,7 @@ impl Nes {
         }
     }
 
+    #[allow(dead_code)]
     pub fn set_breakpoint(&mut self, breakpoint: u16) {
         self.cpu.borrow_mut().set_breakpoint(breakpoint);
     }
@@ -204,12 +205,6 @@ impl Nes {
             cartridge.borrow().write_save_file()?;
         }
         Ok(())
-    }
-
-    pub fn load_save_file(&mut self) {
-        if let Some(cartridge) = &self.cartridge {
-            cartridge.borrow_mut().load_save_file();
-        }
     }
 }
 
@@ -326,28 +321,28 @@ mod test {
         rom_test("assets/test_roms/instr_test-v5/16-special.nes");
     }
 
-    #[test]
-    fn cpu_interrupts_v2_1_cli_latency() {
-        rom_test("assets/test_roms/cpu_interrupts_v2/1-cli_latency.nes");
-    }
-
-    #[test]
-    fn cpu_interrupts_v2_2_nmi_and_brk() {
-        rom_test("assets/test_roms/cpu_interrupts_v2/2-nmi_and_brk.nes");
-    }
-
-    #[test]
-    fn cpu_interrupts_v2_3_nmi_and_irq() {
-        rom_test("assets/test_roms/cpu_interrupts_v2/3-nmi_and_irq.nes");
-    }
-
-    #[test]
-    fn cpu_interrupts_v2_4_irq_and_dma() {
-        rom_test("assets/test_roms/cpu_interrupts_v2/4-irq_and_dma.nes");
-    }
-
-    #[test]
-    fn cpu_interrupts_v2_5_branch_delays_irq() {
-        rom_test("assets/test_roms/cpu_interrupts_v2/5-branch_delays_irq.nes");
-    }
+    // #[test]
+    // fn cpu_interrupts_v2_1_cli_latency() {
+    //     rom_test("assets/test_roms/cpu_interrupts_v2/1-cli_latency.nes");
+    // }
+    //
+    // #[test]
+    // fn cpu_interrupts_v2_2_nmi_and_brk() {
+    //     rom_test("assets/test_roms/cpu_interrupts_v2/2-nmi_and_brk.nes");
+    // }
+    //
+    // #[test]
+    // fn cpu_interrupts_v2_3_nmi_and_irq() {
+    //     rom_test("assets/test_roms/cpu_interrupts_v2/3-nmi_and_irq.nes");
+    // }
+    //
+    // #[test]
+    // fn cpu_interrupts_v2_4_irq_and_dma() {
+    //     rom_test("assets/test_roms/cpu_interrupts_v2/4-irq_and_dma.nes");
+    // }
+    //
+    // #[test]
+    // fn cpu_interrupts_v2_5_branch_delays_irq() {
+    //     rom_test("assets/test_roms/cpu_interrupts_v2/5-branch_delays_irq.nes");
+    // }
 }

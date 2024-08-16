@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::emu::cartridge::Mirroring;
 
 use super::{MapRead, MapWrite, Mapper};
@@ -5,7 +7,6 @@ use modular_bitfield::prelude::*;
 
 const PRG_RAM_SIZE: usize = 32 * 1024;
 // TODO: Emulate PRG RAM bank switching
-#[allow(dead_code)]
 const PRG_RAM_BANK_SIZE: usize = 8 * 1024;
 const PRG_ROM_BANK_SIZE: usize = 16 * 1024;
 const CHR_BANK_SIZE: usize = 4 * 1024;
