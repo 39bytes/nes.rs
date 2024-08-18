@@ -160,7 +160,18 @@ fn palette_sprite(ppu: &Ppu, palette_index: u8) -> Sprite {
     let color2 = ppu.get_palette_color(palette_index, 2);
     let color3 = ppu.get_palette_color(palette_index, 3);
 
-    Sprite::new(vec![bg_color, color1, color2, color3], 4, 1).unwrap()
+    Sprite::new(
+        [
+            bg_color.as_slice(),
+            color1.as_slice(),
+            color2.as_slice(),
+            color3.as_slice(),
+        ]
+        .concat(),
+        4,
+        1,
+    )
+    .unwrap()
 }
 
 pub fn draw_palettes(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {

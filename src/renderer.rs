@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use anyhow::{anyhow, Result};
-use emu::palette::{Color, Palette};
+use emu::palette::Color;
 use rusttype::{point, Font, Scale};
 use sdl2::{
     pixels::PixelFormatEnum,
@@ -21,19 +21,19 @@ macro_rules! rect(
 pub trait Draw {
     fn width(&self) -> usize;
     fn height(&self) -> usize;
-    fn get_pixel(&self, x: usize, y: usize) -> &Color;
+    fn get_pixel(&self, x: usize, y: usize) -> Color;
 }
 
 #[derive(Clone)]
 pub struct Sprite<'a> {
-    pixels: Cow<'a, [Color]>,
+    pixels: Cow<'a, [u8]>,
     width: usize,
     height: usize,
 }
 
 impl<'a> Sprite<'a> {
-    pub fn new(pixels: Vec<Color>, width: usize, height: usize) -> Result<Self> {
-        if pixels.len() != width * height {
+    pub fn new(pixels: Vec<u8>, width: usize, height: usize) -> Result<Self> {
+        if pixels.len() != width * height * 3 {
             return Err(anyhow!(
                 "Width {} and height {} not assignable to pixel buffer of length {}",
                 width,
@@ -49,8 +49,8 @@ impl<'a> Sprite<'a> {
         })
     }
 
-    pub fn from_slice(pixels: &'a [Color], width: usize, height: usize) -> Result<Self> {
-        if pixels.len() != width * height {
+    pub fn from_slice(pixels: &'a [u8], width: usize, height: usize) -> Result<Self> {
+        if pixels.len() != width * height * 3 {
             return Err(anyhow!(
                 "Width {} and height {} not assignable to pixel buffer of length {}",
                 width,
@@ -76,12 +76,20 @@ impl<'a> Sprite<'a> {
             ));
         }
 
-        self.pixels.to_mut()[y * self.width + x] = color;
+        let i = self.pixel_index(x, y);
+        let buf = self.pixels.to_mut();
+        buf[i] = color.0;
+        buf[i + 1] = color.1;
+        buf[i + 2] = color.2;
         Ok(())
     }
 
     pub fn scale(&self, scale: usize) -> Scaled {
         Scaled { orig: self, scale }
+    }
+
+    fn pixel_index(&self, x: usize, y: usize) -> usize {
+        (y * self.width() + x) * 3
     }
 }
 
@@ -94,14 +102,9 @@ impl Draw for Sprite<'_> {
         self.height
     }
 
-    fn get_pixel(&self, x: usize, y: usize) -> &Color {
-        &self.pixels[self.width * y + x]
-    }
-}
-
-impl From<Palette> for Sprite<'_> {
-    fn from(value: Palette) -> Self {
-        Sprite::new(value.colors().clone(), 16, 4).unwrap()
+    fn get_pixel(&self, x: usize, y: usize) -> Color {
+        let i = self.pixel_index(x, y);
+        Color(self.pixels[i], self.pixels[i + 1], self.pixels[i + 2])
     }
 }
 
@@ -119,7 +122,7 @@ impl<'orig, 'a> Draw for Scaled<'orig, 'a> {
         self.orig.height() * self.scale
     }
 
-    fn get_pixel(&self, x: usize, y: usize) -> &Color {
+    fn get_pixel(&self, x: usize, y: usize) -> Color {
         self.orig.get_pixel(x / self.scale, y / self.scale)
     }
 }

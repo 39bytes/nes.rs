@@ -76,6 +76,9 @@ pub fn main() -> Result<()> {
         output.clear();
         output.play();
     }
+    // Render 2 frames in advance just to fill the sound buffer to prevent popping
+    nes.advance_frame();
+    nes.advance_frame();
 
     'running: loop {
         let frame_begin = Instant::now();
@@ -156,7 +159,10 @@ pub fn main() -> Result<()> {
                     emu_state.set_paused(true);
                 }
                 if let Some(output) = emu_state.audio_output() {
-                    nes.audio_buffer().flush(|samples| output.queue(samples));
+                    nes.audio_buffer().flush(|samples| {
+                        log::info!("Samples this frame: {}", samples.len());
+                        output.queue(samples);
+                    });
                 }
                 log::debug!(
                     "Frame time: {}ms",

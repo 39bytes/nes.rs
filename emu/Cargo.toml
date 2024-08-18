@@ -24,5 +24,3 @@ num-traits = "0.2.19"
 serde = { version = "1.0.207", features = ["derive"] }
 serde-big-array = "0.5.1"
 strum_macros = "0.26.1"
-
-

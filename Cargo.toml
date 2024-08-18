@@ -17,6 +17,7 @@ anyhow = "1.0.80"
 clap = { version = "4.5.10", features = ["derive"] }
 emu = { path = "emu" }
 env_logger = "0.11.3"
+js-sys = "0.3.70"
 log = "0.4.21"
 rusttype = "0.9.3"
 sdl2 = { version = "0.37.0", features = ["static-link", "bundled", "unsafe_textures"] }

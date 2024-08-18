@@ -1,9 +1,7 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use bitflags::bitflags;
 use std::{
-    fs::File,
     hash::{DefaultHasher, Hash, Hasher},
-    io::{prelude::*, SeekFrom},
     path::Path,
 };
 
@@ -57,8 +55,12 @@ struct Header {
 }
 
 impl Header {
-    pub fn from_bytes(bytes: [u8; 16]) -> Self {
-        Header {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() != 16 {
+            bail!("Header must be exactly 16 bytes long");
+        }
+
+        Ok(Header {
             name: [bytes[0], bytes[1], bytes[2], bytes[3]],
             prg_rom_chunks: bytes[4],
             chr_rom_chunks: bytes[5],
@@ -68,7 +70,7 @@ impl Header {
             prg_ram_size: bytes[8],
             tv_system1: bytes[9],
             tv_system2: bytes[10],
-        }
+        })
     }
 }
 
@@ -101,17 +103,20 @@ impl Cartridge {
         let path = rom_path.as_ref();
 
         log::info!("Loading ROM: {}", path.display());
-        let mut f = File::open(rom_path)?;
+        let bytes = std::fs::read(path)?;
 
-        let mut header_buf = [0; 16];
-        f.read_exact(&mut header_buf)?;
+        Self::from_bytes(&bytes)
+    }
 
-        let header = Header::from_bytes(header_buf);
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        let header = Header::from_bytes(&bytes[0..16])?;
         log::info!("Header: {:?}", header);
+
+        let mut i = 16;
 
         if header.flags6.contains(Flags6::HasTrainer) {
             log::info!("Rom has trainer info, skipping 512 bytes");
-            f.seek(SeekFrom::Current(512))?;
+            i += 512;
         }
 
         let mirroring = if header.flags6.contains(Flags6::Mirroring) {
@@ -124,7 +129,7 @@ impl Cartridge {
             prg_memory,
             chr_memory,
             allow_chr_ram,
-        } = Cartridge::from_ines1(f, &header)?;
+        } = Cartridge::from_ines1(&bytes[i..], &header)?;
 
         let mapper: Box<dyn Mapper> = match header.mapper_num {
             0 => Box::new(Mapper0::new(header.prg_rom_chunks, allow_chr_ram)),
@@ -158,26 +163,20 @@ impl Cartridge {
         self.mapper.mirroring().unwrap_or(self.mirroring)
     }
 
-    fn from_ines1(mut f: File, header: &Header) -> Result<CartridgeData> {
+    fn from_ines1(bytes: &[u8], header: &Header) -> Result<CartridgeData> {
         let prg_rom_size = (header.prg_rom_chunks as usize) * PRG_ROM_CHUNK_SIZE;
         log::info!("Reading {} bytes of program ROM", prg_rom_size);
 
-        let mut prg_memory = vec![0u8; prg_rom_size];
-        f.read_exact(prg_memory.as_mut_slice())?;
+        let prg_memory = bytes[..prg_rom_size].to_vec();
 
-        let mut chr_memory;
-
-        if header.chr_rom_chunks == 0 {
+        let chr_memory = if header.chr_rom_chunks == 0 {
             log::info!("No character ROM, allocating 8 KB of character RAM");
-
-            chr_memory = vec![0u8; CHR_ROM_CHUNK_SIZE];
+            vec![0u8; CHR_ROM_CHUNK_SIZE]
         } else {
             let chr_rom_size = (header.chr_rom_chunks as usize) * CHR_ROM_CHUNK_SIZE;
             log::info!("Reading {} bytes of character ROM", chr_rom_size);
-
-            chr_memory = vec![0u8; chr_rom_size];
-            f.read_exact(chr_memory.as_mut_slice())?;
-        }
+            bytes[prg_rom_size..prg_rom_size + chr_rom_size].to_vec()
+        };
 
         Ok(CartridgeData {
             prg_memory,

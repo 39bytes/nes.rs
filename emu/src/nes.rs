@@ -4,7 +4,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{audio_sample_buffer::AudioSampleBuffer, palette::Color};
+use crate::audio_sample_buffer::AudioSampleBuffer;
 
 use super::{
     apu::Apu, cartridge::Cartridge, cpu::Cpu, input::ControllerInput, palette::Palette, ppu::Ppu,
@@ -13,7 +13,6 @@ use super::{
 
 const SCREEN_WIDTH: usize = 256;
 const SCREEN_HEIGHT: usize = 240;
-const BUFFER_SIZE: usize = 1024;
 
 pub struct AudioInfo {
     pub sample_rate: u32,
@@ -25,7 +24,7 @@ pub struct Nes {
     ppu: Rc<RefCell<Ppu>>,
     cartridge: Option<Rc<RefCell<Cartridge>>>,
 
-    screen: [Color; 256 * 240],
+    screen: [u8; 256 * 240 * 3],
     audio_buffer: AudioSampleBuffer,
     clock_count: u64,
     paused: bool,
@@ -45,7 +44,7 @@ impl Nes {
             apu,
             cartridge: None,
 
-            screen: [Color::BLACK; SCREEN_WIDTH * SCREEN_HEIGHT],
+            screen: [0; SCREEN_WIDTH * SCREEN_HEIGHT * 3],
             audio_buffer: AudioSampleBuffer::new(sample_rate.unwrap_or(44100)),
 
             clock_count: 0,
@@ -64,7 +63,7 @@ impl Nes {
     }
 
     #[inline]
-    pub fn screen(&self) -> &[Color] {
+    pub fn screen(&self) -> &[u8] {
         &self.screen
     }
 
@@ -111,7 +110,10 @@ impl Nes {
         let clock_res = self.ppu.borrow_mut().clock();
 
         if let Some(pixel) = clock_res.pixel {
-            self.screen[pixel.y * SCREEN_WIDTH + pixel.x] = pixel.color;
+            let i = (pixel.y * SCREEN_WIDTH + pixel.x) * 3;
+            self.screen[i] = pixel.color.0;
+            self.screen[i + 1] = pixel.color.1;
+            self.screen[i + 2] = pixel.color.2;
         }
 
         let mut irq = clock_res.irq;
