@@ -1,17 +1,15 @@
 import { Nes } from "emu-wasm";
 import { getControllerInput } from "./input";
 import NesAudioWorkletUrl from "./audio?worker&url";
+import { drawScreen } from "./renderer";
+import { AudioWriter, RingBuffer } from "ringbuf.js";
 
-const SCREEN_WIDTH = 256;
-const SCREEN_HEIGHT = 240;
-const FPS = 60;
+const FPS = 60.0988;
+const TIME_PER_FRAME = 1000 / FPS;
 
 const canvas = document.getElementById(
   "nes-screen-canvas",
 ) as HTMLCanvasElement;
-canvas.width = SCREEN_WIDTH;
-canvas.height = SCREEN_HEIGHT;
-
 const romSelect = document.getElementById(
   "rom-select-input",
 ) as HTMLInputElement;
@@ -33,55 +31,68 @@ const handleRomSelect = async (e: Event) => {
 };
 romSelect.onchange = handleRomSelect;
 
-const drawScreen = (nes: Nes) => {
-  let buf = nes.screen();
-  const imageData = ctx.getImageData(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-  const pixels = imageData.data;
-  for (let i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i += 1) {
-    const bufIdx = i * 3;
-    const pxIdx = i * 4;
+const initAudio = async () => {
+  const context = new AudioContext();
+  context.suspend();
 
-    pixels[pxIdx] = buf[bufIdx];
-    pixels[pxIdx + 1] = buf[bufIdx + 1];
-    pixels[pxIdx + 2] = buf[bufIdx + 2];
-    pixels[pxIdx + 3] = 255;
-  }
+  await context.audioWorklet.addModule(NesAudioWorkletUrl);
+  const sab = RingBuffer.getStorageForCapacity(4096, Float32Array);
+  const rb = new RingBuffer(sab, Float32Array);
+  const audioWriter = new AudioWriter(rb);
 
-  ctx.putImageData(imageData, 0, 0);
+  const node = new AudioWorkletNode(context, "nes-audio", {
+    processorOptions: {
+      audioQueue: sab,
+    },
+  });
+  node.connect(context.destination);
+
+  return { audioContext: context, audioWriter };
 };
 
-class NesWorkletNode extends AudioWorkletNode {
-  constructor(context: BaseAudioContext, options?: AudioWorkletNodeOptions) {
-    super(context, "nes-audio", options);
-  }
-  queue(samples: Float32Array) {
-    this.port.postMessage(samples);
-  }
-}
+let acc = 0;
+let prev = 0;
 
-const initialize = async (rom: Uint8Array) => {
-  const audioContext = new AudioContext();
-  const nes = Nes.new(audioContext.sampleRate);
-  console.log("Initializing");
-  console.log(audioContext.sampleRate);
-  await audioContext.audioWorklet.addModule(NesAudioWorkletUrl);
-  const nesWorkletNode = new NesWorkletNode(audioContext);
-  nesWorkletNode.connect(audioContext.destination);
+const renderLoop = (timestamp: number, nes: Nes, audioWriter: AudioWriter) => {
+  requestAnimationFrame((t) => renderLoop(t, nes, audioWriter));
 
-  console.log(`Loaded rom (size: ${rom.length})`);
-  nes.load_rom(rom);
-
-  const renderLoop = () => {
+  acc += timestamp - prev;
+  let frameTicked = false;
+  while (acc >= TIME_PER_FRAME) {
     const input = getControllerInput();
     nes.trigger_inputs(input);
 
     nes.advance_frame();
     const samples = nes.audio_samples();
-    nesWorkletNode.queue(samples);
+    audioWriter.enqueue(samples);
     nes.clear_audio_samples();
-    drawScreen(nes);
-  };
 
+    frameTicked = true;
+    acc -= TIME_PER_FRAME;
+  }
+
+  if (frameTicked) {
+    drawScreen(ctx, nes);
+  }
+
+  prev = timestamp;
+};
+
+const initialize = async (rom: Uint8Array) => {
+  const { audioContext, audioWriter } = await initAudio();
+  const nes = Nes.new(audioContext.sampleRate);
+
+  console.log(`Loaded rom (size: ${rom.length})`);
+  nes.load_rom(rom);
   nes.reset();
-  setInterval(renderLoop, (1 / FPS) * 1000);
+
+  nes.advance_frame();
+  nes.advance_frame();
+  nes.advance_frame();
+  audioContext.resume();
+
+  requestAnimationFrame((timestamp) => {
+    prev = timestamp;
+    renderLoop(timestamp, nes, audioWriter);
+  });
 };

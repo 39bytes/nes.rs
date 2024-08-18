@@ -9,7 +9,11 @@ export class RingBuffer {
     this.writeIndex = 0;
   }
 
-  pop() {
+  dequeue(buf: Float32Array) {
+    if (this.length() < buf.length) {
+      return;
+    }
+
     if (this.length() == 0) {
       console.log("Buffer underrun");
       return 0;
