@@ -88,7 +88,6 @@ const initialize = async (rom: Uint8Array) => {
 
   nes.advance_frame();
   nes.advance_frame();
-  nes.advance_frame();
   audioContext.resume();
 
   requestAnimationFrame((timestamp) => {
