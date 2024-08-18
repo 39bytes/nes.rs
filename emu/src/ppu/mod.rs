@@ -956,7 +956,7 @@ impl Ppu {
                         let pixel = (msb << 1) | lsb;
 
                         let pixel_index =
-                            (tile_y * 8 + tile_row) * 128 + (tile_x * 8 + 7 - tile_col);
+                            ((tile_y * 8 + tile_row) * 128 + (tile_x * 8 + 7 - tile_col)) * 3;
                         let pixel_index = pixel_index as usize;
                         let color = self.get_palette_color(palette, pixel);
                         buf[pixel_index] = color.0;
