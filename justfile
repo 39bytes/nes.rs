@@ -1,8 +1,8 @@
 fmt:
-    cargo +nightly fmt
+    cargo +nightly fmt --all --check
 
 lint:
-    cargo clippy
+    cargo clippy --all
 
 debug ROM_PATH:
     RUST_LOG=info cargo run {{ROM_PATH}}
