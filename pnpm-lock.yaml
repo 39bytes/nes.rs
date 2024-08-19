@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       emu-wasm:
-        specifier: file:../emu-wasm/pkg
-        version: file:../emu-wasm/pkg
+        specifier: file:emu-wasm/pkg
+        version: file:emu-wasm/pkg
       ringbuf.js:
         specifier: ^0.3.6
         version: 0.3.6
@@ -254,8 +254,8 @@ packages:
   '@types/estree@1.0.5':
     resolution: {integrity: sha512-/kYRxGDLWzHOB7q+wtSUQlFrtcdUccpfy+X+9iMBpHK8QLLhx2wIPYuS5DYtR9Wa/YlZAbIovy7qVdB1Aq6Lyw==}
 
-  emu-wasm@file:../emu-wasm/pkg:
-    resolution: {directory: ../emu-wasm/pkg, type: directory}
+  emu-wasm@file:emu-wasm/pkg:
+    resolution: {directory: emu-wasm/pkg, type: directory}
 
   esbuild@0.21.5:
     resolution: {integrity: sha512-mg3OPMV4hXywwpoDxu3Qda5xCKQi+vCTZq8S9J/EpkhB2HzKXq4SNFZE3+NK93JYxc8VMSep+lOUSC/RVKaBqw==}
@@ -456,7 +456,7 @@ snapshots:
 
   '@types/estree@1.0.5': {}
 
-  emu-wasm@file:../emu-wasm/pkg: {}
+  emu-wasm@file:emu-wasm/pkg: {}
 
   esbuild@0.21.5:
     optionalDependencies:

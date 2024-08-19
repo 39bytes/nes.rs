@@ -39,33 +39,34 @@ jobs:
       - name: Build WASM target
         working-directory: ./emu-wasm
         run: wasm-pack build
+
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.7.1
         
       - name: Set up Node
         uses: actions/setup-node@v4
-        working-directory: ./web
         with:
           node-version: 20
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        working-directory: ./web
-        run: npm ci
+        run: pnpm install
 
       - name: Build
-        working-directory: ./web
-        run: npm run build
+        run: pnpm build
 
       - name: Setup Pages
-        working-directory: ./web
         uses: actions/configure-pages@v4
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           # Upload dist folder
-          path: 'web/dist'
+          path: './web/dist'
 
       - name: Deploy to GitHub Pages
-        working-directory: ./web
         id: deployment
         uses: actions/deploy-pages@v4
