@@ -11,7 +11,7 @@ profile:
     CARGO_PROFILE_RELEASE_DEBUG=true cargo flamegraph -- assets/test_roms/mario.nes
 
 build-wasm:
-    ./build-wasm.sh
+    cd emu-wasm && wasm-pack build
 
 dev-wasm:
     cd web && pnpm dev
