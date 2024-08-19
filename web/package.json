@@ -10,12 +10,12 @@
   },
   "dependencies": {
     "emu-wasm": "file:../emu-wasm/pkg",
-    "ringbuf.js": "^0.3.6",
-    "vite-plugin-wasm": "^3.3.0"
+    "ringbuf.js": "^0.3.6"
   },
   "devDependencies": {
     "@types/audioworklet": "^0.0.59",
     "typescript": "^5.5.3",
-    "vite": "^5.4.1"
+    "vite": "^5.4.1",
+    "vite-plugin-wasm": "^3.3.0"
   }
 }
