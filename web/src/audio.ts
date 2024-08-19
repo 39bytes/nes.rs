@@ -1,4 +1,3 @@
-// import { RingBuffer } from "./ring-buffer";
 import { AudioReader, RingBuffer } from "ringbuf.js";
 
 class NesAudio extends AudioWorkletProcessor {
@@ -18,13 +17,6 @@ class NesAudio extends AudioWorkletProcessor {
     _parameters: Record<string, Float32Array>,
   ) {
     this.audioReader.dequeue(outputs[0][0]);
-    // const output = outputs[0];
-    // output.forEach((channel) => {
-    //   for (let i = 0; i < channel.length; i++) {
-    //     channel[i] = this.buffer.pop();
-    //   }
-    //   // console.log(channel);
-    // });
     return true;
   }
 }
