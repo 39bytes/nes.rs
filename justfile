@@ -14,7 +14,7 @@ build-wasm:
     cd emu-wasm && wasm-pack build
 
 dev-wasm:
-    pnpm dev
+    cd web && pnpm dev
 
 
 # Rom tests

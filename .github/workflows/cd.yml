@@ -37,8 +37,7 @@ jobs:
         uses: jetli/wasm-pack-action@v0.4.0
 
       - name: Build WASM target
-        working-directory: ./emu-wasm
-        run: wasm-pack build
+        run: cd emu-wasm && wasm-pack build
 
 
       - name: Install pnpm
@@ -53,10 +52,10 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: pnpm install
+        run: cd web && pnpm install
 
       - name: Build
-        run: pnpm build
+        run: cd web && pnpm build
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
@@ -65,7 +64,8 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           # Upload dist folder
-          path: './web/dist'
+          path: 'web/dist'
+          if-no-files-found: error
 
       - name: Deploy to GitHub Pages
         id: deployment
