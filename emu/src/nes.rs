@@ -72,6 +72,10 @@ impl Nes {
         &mut self.audio_buffer
     }
 
+    pub fn set_volume(&mut self, volume: f32) {
+        self.audio_buffer.set_volume(volume);
+    }
+
     #[allow(dead_code)]
     #[inline]
     pub fn clock_count(&self) -> u64 {

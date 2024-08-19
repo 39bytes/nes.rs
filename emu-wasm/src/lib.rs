@@ -1,6 +1,9 @@
+#![allow(dead_code)]
+
 use emu::cartridge::Cartridge;
 use emu::input::{ControllerButtons, ControllerInput};
-use emu::palette::{Color, Palette};
+use emu::palette::Palette;
+use emu::save::SaveState;
 use wasm_bindgen::prelude::*;
 use web_sys::js_sys::{Float32Array, Uint8Array};
 
@@ -14,6 +17,7 @@ extern "C" {
 #[wasm_bindgen]
 struct Nes {
     nes: emu::nes::Nes,
+    save_states: [Option<SaveState>; 5],
 }
 
 #[wasm_bindgen]
@@ -21,8 +25,11 @@ impl Nes {
     pub fn new(sample_rate: u32) -> Self {
         #[cfg(feature = "console_error_panic_hook")]
         console_error_panic_hook::set_once();
+        const NONE: Option<SaveState> = None;
+
         Self {
             nes: emu::nes::Nes::new(Palette::default(), Some(sample_rate)),
+            save_states: [NONE; 5],
         }
     }
 
@@ -59,5 +66,24 @@ impl Nes {
         self.nes.trigger_inputs(ControllerInput::One(
             ControllerButtons::from_bits(input_byte).unwrap(),
         ));
+    }
+
+    pub fn clear_save_states(&mut self) {
+        const NONE: Option<SaveState> = None;
+        self.save_states = [NONE; 5];
+    }
+
+    pub fn write_state(&mut self, slot: usize) {
+        self.save_states[slot] = Some(self.nes.state());
+    }
+
+    pub fn load_state(&mut self, slot: usize) {
+        if let Some(ref state) = self.save_states[slot] {
+            self.nes.load_state(state);
+        }
+    }
+
+    pub fn set_volume(&mut self, volume: f32) {
+        self.nes.set_volume(volume);
     }
 }

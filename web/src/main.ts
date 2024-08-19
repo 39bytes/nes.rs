@@ -13,11 +13,20 @@ const canvas = document.getElementById(
 const romSelect = document.getElementById(
   "rom-select-input",
 ) as HTMLInputElement;
+const resetButton = document.getElementById(
+  "nes-reset-button",
+) as HTMLInputElement;
+const volumeSlider = document.getElementById(
+  "volume-slider",
+) as HTMLInputElement;
+const volumeLabel = document.getElementById("volume-label") as HTMLLabelElement;
+const errorMessage = document.getElementById("error-message") as HTMLDivElement;
 
 const ctx = canvas?.getContext("2d");
 if (!ctx) {
   throw new Error("Couldn't get 2D canvas context");
 }
+ctx.imageSmoothingEnabled = false;
 
 const handleRomSelect = async (e: Event) => {
   const target = e.target as HTMLInputElement;
@@ -30,6 +39,49 @@ const handleRomSelect = async (e: Event) => {
   await initialize(bytes);
 };
 romSelect.onchange = handleRomSelect;
+
+volumeSlider.onchange = (e) => {
+  const val = parseFloat((e.target as HTMLInputElement).value);
+  volumeLabel.innerText = Math.floor(val * 100).toString();
+};
+
+const withErrorReport = (f: () => void) => {
+  try {
+    f();
+  } catch (e) {
+    errorMessage.innerText = String(e);
+  }
+};
+
+const resetSaveStateButtons = (nes: Nes) => {
+  nes.clear_save_states();
+  for (let slot = 1; slot <= 5; slot++) {
+    const loadButton = document.getElementById(`slot-${slot}-load`)!;
+    loadButton.style.display = "none";
+  }
+};
+
+const setupSaveStateButtons = (nes: Nes) => {
+  for (let slot = 1; slot <= 5; slot++) {
+    const saveButton = document.getElementById(`slot-${slot}-save`)!;
+    const loadButton = document.getElementById(`slot-${slot}-load`)!;
+    saveButton.onclick = () => {
+      withErrorReport(() => {
+        nes.write_state(slot);
+        loadButton.style.display = "block";
+      });
+    };
+    loadButton.onclick = () => {
+      withErrorReport(() => {
+        nes.load_state(slot);
+      });
+    };
+  }
+};
+
+let acc = 0;
+let prev = 0;
+let animId = 0;
 
 const initAudio = async () => {
   const context = new AudioContext();
@@ -47,19 +99,25 @@ const initAudio = async () => {
   });
   node.connect(context.destination);
 
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      context.suspend();
+    } else {
+      context.resume();
+      prev = performance.now();
+    }
+  });
+
   return { audioContext: context, audioWriter };
 };
 
-let acc = 0;
-let prev = 0;
-
 const renderLoop = (timestamp: number, nes: Nes, audioWriter: AudioWriter) => {
-  requestAnimationFrame((t) => renderLoop(t, nes, audioWriter));
+  animId = requestAnimationFrame((t) => renderLoop(t, nes, audioWriter));
 
   acc += timestamp - prev;
   let frameTicked = false;
+  const input = getControllerInput();
   while (acc >= TIME_PER_FRAME) {
-    const input = getControllerInput();
     nes.trigger_inputs(input);
 
     nes.advance_frame();
@@ -79,18 +137,32 @@ const renderLoop = (timestamp: number, nes: Nes, audioWriter: AudioWriter) => {
 };
 
 const initialize = async (rom: Uint8Array) => {
+  cancelAnimationFrame(animId);
   const { audioContext, audioWriter } = await initAudio();
   const nes = Nes.new(audioContext.sampleRate);
+  resetSaveStateButtons(nes);
+  setupSaveStateButtons(nes);
+
+  nes.set_volume(parseFloat(volumeSlider.value));
+
+  resetButton.onclick = () => nes.reset();
+  volumeSlider.onchange = (e) => {
+    const val = parseFloat((e.target as HTMLInputElement).value);
+    volumeLabel.innerText = Math.floor(val * 100).toString();
+    nes.set_volume(val);
+  };
+
+  errorMessage.innerText = "";
+  withErrorReport(() => nes.load_rom(rom));
 
   console.log(`Loaded rom (size: ${rom.length})`);
-  nes.load_rom(rom);
   nes.reset();
 
   nes.advance_frame();
   nes.advance_frame();
   audioContext.resume();
 
-  requestAnimationFrame((timestamp) => {
+  animId = requestAnimationFrame((timestamp) => {
     prev = timestamp;
     renderLoop(timestamp, nes, audioWriter);
   });
