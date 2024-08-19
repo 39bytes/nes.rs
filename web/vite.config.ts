@@ -3,7 +3,6 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   base: "/nes.rs/",
-  root: "./web",
   build: {
     target: "esnext",
   },
