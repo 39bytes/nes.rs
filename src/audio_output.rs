@@ -1,21 +1,14 @@
 use crate::extension_traits::*;
 use anyhow::{bail, Result};
-use sdl2::audio::{AudioQueue, AudioSpecDesired};
+use sdl2::audio::{AudioQueue, AudioSpec, AudioSpecDesired};
 
-use super::emu::consts::CLOCK_SPEED;
-
-const TIME_PER_CLOCK: f64 = 1.0 / CLOCK_SPEED as f64;
-const SAMPLE_RATE: i32 = 44100;
+const SAMPLE_RATE: u32 = 44100;
 const DEFAULT_VOLUME: f32 = 0.5;
 const BUFFER_SIZE: usize = 1024;
 
 pub struct AudioOutput {
     volume: f32,
-
-    acc: f64,
-    time_between_samples: f64,
-    buffer: [f32; BUFFER_SIZE],
-    buffer_sample_index: usize,
+    spec: AudioSpec,
     queue: AudioQueue<f32>,
 }
 
@@ -31,7 +24,7 @@ impl AudioOutput {
             .open_queue(
                 Some(default_device).as_deref(),
                 &AudioSpecDesired {
-                    freq: Some(SAMPLE_RATE),
+                    freq: Some(SAMPLE_RATE as i32),
                     samples: Some(BUFFER_SIZE as u16),
                     channels: Some(1),
                 },
@@ -43,13 +36,13 @@ impl AudioOutput {
 
         Ok(AudioOutput {
             volume: DEFAULT_VOLUME,
-
-            acc: 0.0,
-            time_between_samples: 1.0 / (SAMPLE_RATE as f64),
+            spec: *spec,
             queue,
-            buffer: [0.0; BUFFER_SIZE],
-            buffer_sample_index: BUFFER_SIZE / 2,
         })
+    }
+
+    pub fn sample_rate(&self) -> u32 {
+        self.spec.freq as u32
     }
 
     pub fn play(&mut self) {
@@ -64,21 +57,9 @@ impl AudioOutput {
         self.queue.clear();
     }
 
-    pub fn try_push_sample(&mut self, sample: f32) {
-        self.acc += TIME_PER_CLOCK;
-        while self.acc >= self.time_between_samples {
-            let adjusted = sample * self.volume;
-            self.buffer[self.buffer_sample_index] = adjusted;
-            self.buffer_sample_index += 1;
-
-            if self.buffer_sample_index == self.buffer.len() {
-                if let Err(e) = self.queue.queue_audio(&self.buffer) {
-                    log::warn!("Audio Queue: {}", e);
-                };
-                self.buffer_sample_index = 0;
-            }
-
-            self.acc -= self.time_between_samples;
+    pub fn queue(&mut self, samples: &[f32]) {
+        if let Err(e) = self.queue.queue_audio(samples) {
+            log::error!("SDL Audio Output: {}", e);
         }
     }
 

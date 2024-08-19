@@ -1,11 +1,28 @@
 use anyhow::{bail, Result};
 use std::{fs::File, io::prelude::*};
 
-use crate::renderer::{Color, Sprite};
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Color(pub u8, pub u8, pub u8);
+
+impl Color {
+    pub const WHITE: Self = Color(255, 255, 255);
+    pub const GRAY: Self = Color(128, 128, 128);
+    pub const BLACK: Self = Color(0, 0, 0);
+
+    pub fn as_slice(&self) -> [u8; 3] {
+        [self.0, self.1, self.2]
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Palette {
-    colors: Vec<Color>,
+    bytes: Vec<u8>,
+}
+
+pub struct Pixel {
+    pub x: usize,
+    pub y: usize,
+    pub color: Color,
 }
 
 impl Default for Palette {
@@ -24,7 +41,9 @@ impl Palette {
         let mut buf = [0; 192];
         f.read_exact(&mut buf)?;
 
-        Self::from_bytes(&buf)
+        Ok(Self {
+            bytes: buf.to_vec(),
+        })
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
@@ -32,25 +51,17 @@ impl Palette {
             bail!("Palette length must be exactly 192 bytes");
         }
 
-        let colors = bytes
-            .chunks_exact(3)
-            .map(|c| Color(c[0], c[1], c[2]))
-            .collect::<Vec<_>>();
-
-        Ok(Self { colors })
+        Ok(Self {
+            bytes: bytes.to_vec(),
+        })
     }
 
-    pub fn colors(&self) -> &Vec<Color> {
-        &self.colors
+    pub fn bytes(&self) -> &[u8] {
+        self.bytes.as_slice()
     }
 
     pub fn get_color(&self, color: u8) -> Color {
-        self.colors[(color % 64) as usize]
-    }
-}
-
-impl From<Palette> for Sprite {
-    fn from(value: Palette) -> Self {
-        Sprite::new(value.colors().clone(), 16, 4).unwrap()
+        let i = ((color % 64) * 3) as usize;
+        Color(self.bytes[i], self.bytes[i + 1], self.bytes[i + 2])
     }
 }

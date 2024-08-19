@@ -18,3 +18,6 @@ assets/test_roms/*
 
 *.txt
 *.log
+
+# WASM generated code
+pkg/

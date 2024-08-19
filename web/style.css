@@ -1,0 +1,156 @@
+* {
+    font-family: "Silkscreen", sans-serif;
+    color: rgb(var(--color-text));
+
+    --color-text: 205, 214, 244;
+    --color-surface0: 49, 50, 68;
+    --color-subtext0: 166, 173, 200;
+    --color-overlay0: 108, 112, 134;
+    --color-red: 243, 139, 168;
+    --color-green: 166, 227, 161;
+    --color-sky: 137, 220, 235;
+}
+
+body {
+    width: 1024px;
+    height: 100vh;
+    margin: 0 auto;
+    background-color: #1e1e2e;
+    overflow-x: hidden;
+}
+
+ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0 2px;
+}
+
+#nes-screen-canvas {
+    border: 1px solid rgb(var(--color-overlay0));
+}
+
+#controls {
+    list-style-type: none;
+}
+
+#save-states ul {
+    font-size: 18px;
+}
+
+#save-states li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px;
+}
+
+.save-state-button-container {
+    display: flex;
+    gap: 8px;
+    min-width: 120px;
+}
+
+#save-states button {
+    font-family: "Silkscreen", sans-serif;
+    font-size: 14px;
+    border: 1px solid rgb(var(--color-text));
+    padding: 2px 6px;
+    cursor: pointer;
+    background-color: transparent;
+}
+
+#save-states button:hover {
+    background-color: rgb(var(--color-overlay0));
+}
+
+#nes-reset-button {
+    color: rgb(var(--color-red));
+    border: 1px solid rgb(var(--color-red));
+}
+
+#nes-reset-button:hover {
+    background-color: rgba(var(--color-red), 0.2);
+}
+
+#rom-select-label {
+    color: rgb(var(--color-green));
+    border: 1px solid rgb(var(--color-green));
+}
+
+#rom-select-label:hover {
+    background-color: rgba(var(--color-green), 0.2);
+}
+
+#canvas-container {
+    max-width: 512px;
+}
+
+#error-message {
+    color: rgb(var(--color-red));
+    max-width: 100%;
+}
+
+#volume {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#volume label {
+    width: 24px;
+    margin-bottom: 1px;
+}
+
+#volume input {
+    width: 180px;
+}
+
+.nes-button {
+    font-family: "Silkscreen", sans-serif;
+    font-size: 16px;
+    border: 1px solid rgb(var(--color-text));
+    padding: 6px 12px;
+    cursor: pointer;
+    background-color: transparent;
+}
+
+.nes-button:hover {
+    background-color: rgb(var(--color-overlay0));
+}
+
+input[type="file"] {
+    display: none;
+}
+
+
+.layout {
+    display: flex;
+    align-items: center;
+    height: calc(100vh - 42px);
+}
+
+.container {
+    width: 100%;
+    display: flex;
+    justify-content: space-around;
+}
+
+.button-group {
+    display: flex;
+    justify-content: space-between;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px;
+}
+
+.header a:hover {
+    color: rgb(var(--color-subtext0));
+}
+
+input[type=range] {
+    accent-color: rgb(var(--color-sky));
+}

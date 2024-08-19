@@ -9,7 +9,7 @@ use utils::FpsCounter;
 
 use anyhow::Result;
 use audio_output::AudioOutput;
-use renderer::{Layer, Renderer};
+use renderer::{Layer, Renderer, Sprite};
 use sdl2::{
     event::Event,
     keyboard::{Keycode, Scancode},
@@ -26,7 +26,6 @@ use emu::{
 use clap::{arg, Parser};
 
 mod audio_output;
-mod emu;
 mod emu_state;
 mod extension_traits;
 mod renderer;
@@ -72,6 +71,15 @@ pub fn main() -> Result<()> {
     let mut text_timer = 0;
 
     nes.reset();
+    if let Some(output) = emu_state.audio_output() {
+        output.pause();
+        output.clear();
+        output.play();
+    }
+    // Render 2 frames in advance just to fill the sound buffer to prevent popping
+    nes.advance_frame();
+    nes.advance_frame();
+
     'running: loop {
         let frame_begin = Instant::now();
         let key_state = event_pump.keyboard_state();
@@ -150,11 +158,18 @@ pub fn main() -> Result<()> {
                 if should_pause {
                     emu_state.set_paused(true);
                 }
-                fps_counter.tick();
+                if let Some(output) = emu_state.audio_output() {
+                    nes.audio_buffer().flush(|samples| {
+                        log::info!("Samples this frame: {}", samples.len());
+                        output.queue(samples);
+                    });
+                }
                 log::debug!(
                     "Frame time: {}ms",
                     before_emu_frame.elapsed().as_secs_f64() * 1000.0
                 );
+
+                fps_counter.tick();
             }
             acc -= FRAME_TIME;
             frame_ticked = true;
@@ -168,7 +183,12 @@ pub fn main() -> Result<()> {
             if args.draw_debug_info {
                 draw_with_debug_info(&mut renderer, &nes, &fps_counter, &emu_state)
             } else {
-                renderer.draw(Layer::Screen, nes.screen(), 0, 0);
+                renderer.draw(
+                    Layer::Screen,
+                    &Sprite::from_slice(nes.screen(), 256, 240).unwrap(),
+                    0,
+                    0,
+                );
             }
 
             match showing_text {
@@ -231,11 +251,15 @@ fn setup_emulator(args: &Args, sdl_context: &sdl2::Sdl) -> Result<(Nes, EmuState
     let mut cartridge = Cartridge::new(args.rom_path.as_path())?;
     cartridge.load_save_file();
 
-    let mut nes = Nes::new(palette.clone());
-    if !args.disable_audio {
-        nes.with_audio(AudioOutput::new(sdl_context)?)
-    }
-    let emu_state = EmuState::new(&cartridge);
+    let audio_output = (!args.disable_audio)
+        .then(|| AudioOutput::new(sdl_context))
+        .transpose()?;
+
+    let mut nes = Nes::new(
+        palette.clone(),
+        audio_output.as_ref().map(|o| o.sample_rate()),
+    );
+    let emu_state = EmuState::new(&cartridge, audio_output);
 
     nes.load_cartridge(cartridge);
 
@@ -248,7 +272,12 @@ fn draw_with_debug_info(
     fps_counter: &FpsCounter,
     emu_state: &EmuState,
 ) {
-    renderer.draw(Layer::Screen, &nes.screen().scale(2), 0, 180);
+    renderer.draw(
+        Layer::Screen,
+        &Sprite::from_slice(nes.screen(), 256, 240).unwrap().scale(2),
+        0,
+        180,
+    );
 
     renderer.draw_text(&format!("FPS: {:.1}", fps_counter.get_fps()), 0, 160);
     if emu_state.paused() {

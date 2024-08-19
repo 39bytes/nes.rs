@@ -1,16 +1,15 @@
-use crate::{
-    emu::{
-        cpu::{
-            instructions::{AddressMode, Instruction},
-            Cpu,
-        },
-        nes::Nes,
-        ppu::{
-            sprite::{Sprite as PpuSprite, SpriteAttribute},
-            PatternTable, Ppu,
-        },
+use crate::renderer::{Layer, Renderer, Sprite};
+use emu::{
+    cpu::{
+        instructions::{AddressMode, Instruction},
+        Cpu,
     },
-    renderer::{Color, Layer, Renderer, Sprite},
+    nes::Nes,
+    palette::Color,
+    ppu::{
+        sprite::{Sprite as PpuSprite, SpriteAttribute},
+        PatternTable, Ppu,
+    },
 };
 
 pub fn draw_oam(renderer: &mut Renderer, oam: &[u8], x: usize, y: usize) {
@@ -141,8 +140,18 @@ pub fn draw_pattern_tables(renderer: &mut Renderer, ppu: &Ppu, palette: u8, x: u
     let right_pattern_table = ppu.get_pattern_table(PatternTable::Right, palette, true);
 
     renderer.draw_text("Pattern Tables", x, y);
-    renderer.draw(Layer::UI, &left_pattern_table, x, y + 24);
-    renderer.draw(Layer::UI, &right_pattern_table, x + 144, y + 24);
+    renderer.draw(
+        Layer::UI,
+        &Sprite::from_slice(&left_pattern_table, 128, 128).unwrap(),
+        x,
+        y + 24,
+    );
+    renderer.draw(
+        Layer::UI,
+        &Sprite::from_slice(&right_pattern_table, 128, 128).unwrap(),
+        x + 144,
+        y + 24,
+    );
 }
 
 fn palette_sprite(ppu: &Ppu, palette_index: u8) -> Sprite {
@@ -151,7 +160,18 @@ fn palette_sprite(ppu: &Ppu, palette_index: u8) -> Sprite {
     let color2 = ppu.get_palette_color(palette_index, 2);
     let color3 = ppu.get_palette_color(palette_index, 3);
 
-    Sprite::new(vec![bg_color, color1, color2, color3], 4, 1).unwrap()
+    Sprite::new(
+        [
+            bg_color.as_slice(),
+            color1.as_slice(),
+            color2.as_slice(),
+            color3.as_slice(),
+        ]
+        .concat(),
+        4,
+        1,
+    )
+    .unwrap()
 }
 
 pub fn draw_palettes(renderer: &mut Renderer, ppu: &Ppu, x: usize, y: usize) {

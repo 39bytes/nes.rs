@@ -4,15 +4,19 @@ use std::{
     rc::Rc,
 };
 
-use crate::{
-    audio_output::AudioOutput,
-    renderer::{Color, Sprite},
-};
+use crate::audio_sample_buffer::AudioSampleBuffer;
 
 use super::{
     apu::Apu, cartridge::Cartridge, cpu::Cpu, input::ControllerInput, palette::Palette, ppu::Ppu,
     save::SaveState,
 };
+
+const SCREEN_WIDTH: usize = 256;
+const SCREEN_HEIGHT: usize = 240;
+
+pub struct AudioInfo {
+    pub sample_rate: u32,
+}
 
 pub struct Nes {
     apu: Rc<RefCell<Apu>>,
@@ -20,15 +24,14 @@ pub struct Nes {
     ppu: Rc<RefCell<Ppu>>,
     cartridge: Option<Rc<RefCell<Cartridge>>>,
 
-    screen: Sprite,
-    audio_output: Option<AudioOutput>,
-
+    screen: [u8; 256 * 240 * 3],
+    audio_buffer: AudioSampleBuffer,
     clock_count: u64,
     paused: bool,
 }
 
 impl Nes {
-    pub fn new(palette: Palette) -> Self {
+    pub fn new(palette: Palette, sample_rate: Option<u32>) -> Self {
         let cpu = Rc::new(RefCell::new(Cpu::new()));
         let ppu = Rc::new(RefCell::new(Ppu::new(palette)));
         let apu = Rc::new(RefCell::new(Apu::new()));
@@ -41,31 +44,40 @@ impl Nes {
             apu,
             cartridge: None,
 
-            screen: Sprite::monocolor(Color::BLACK, 256, 240),
-            audio_output: None,
+            screen: [0; SCREEN_WIDTH * SCREEN_HEIGHT * 3],
+            audio_buffer: AudioSampleBuffer::new(sample_rate.unwrap_or(44100)),
 
             clock_count: 0,
             paused: false,
         }
     }
 
-    pub fn with_audio(&mut self, output: AudioOutput) {
-        self.audio_output = Some(output);
-    }
-
+    #[inline]
     pub fn cpu(&self) -> Ref<Cpu> {
         self.cpu.borrow()
     }
 
+    #[inline]
     pub fn ppu(&self) -> Ref<Ppu> {
         self.ppu.borrow()
     }
 
-    pub fn screen(&self) -> &Sprite {
+    #[inline]
+    pub fn screen(&self) -> &[u8] {
         &self.screen
     }
 
+    #[inline]
+    pub fn audio_buffer(&mut self) -> &mut AudioSampleBuffer {
+        &mut self.audio_buffer
+    }
+
+    pub fn set_volume(&mut self, volume: f32) {
+        self.audio_buffer.set_volume(volume);
+    }
+
     #[allow(dead_code)]
+    #[inline]
     pub fn clock_count(&self) -> u64 {
         self.clock_count
     }
@@ -79,17 +91,14 @@ impl Nes {
 
     pub fn reset(&mut self) {
         self.cpu.borrow_mut().reset();
-        if let Some(output) = self.audio_output.as_mut() {
-            output.pause();
-            output.clear();
-            output.play();
-        }
     }
 
+    #[inline]
     pub fn trigger_inputs(&mut self, input: ControllerInput) {
         self.cpu.borrow_mut().trigger_inputs(input);
     }
 
+    #[inline]
     pub fn advance_frame(&mut self) -> bool {
         while !self.clock(false) {}
 
@@ -105,9 +114,10 @@ impl Nes {
         let clock_res = self.ppu.borrow_mut().clock();
 
         if let Some(pixel) = clock_res.pixel {
-            if let Err(e) = self.screen.set_pixel(pixel.x, pixel.y, pixel.color) {
-                panic!("{}", e);
-            }
+            let i = (pixel.y * SCREEN_WIDTH + pixel.x) * 3;
+            self.screen[i] = pixel.color.0;
+            self.screen[i + 1] = pixel.color.1;
+            self.screen[i + 2] = pixel.color.2;
         }
 
         let mut irq = clock_res.irq;
@@ -128,9 +138,8 @@ impl Nes {
             }
         }
 
-        if let Some(audio_output) = &mut self.audio_output {
-            audio_output.try_push_sample(self.apu.borrow().sample());
-        }
+        self.audio_buffer
+            .try_push_sample(self.apu.borrow().sample());
 
         if clock_res.nmi {
             self.cpu.borrow_mut().request_nmi();
@@ -157,6 +166,7 @@ impl Nes {
         self.cpu.borrow_mut().set_breakpoint(breakpoint);
     }
 
+    #[inline]
     pub fn unpause(&mut self) {
         self.paused = false;
     }
@@ -213,7 +223,7 @@ mod test {
     use super::*;
 
     fn rom_test(path: &str) {
-        let mut nes = Nes::new(Palette::default());
+        let mut nes = Nes::new(Palette::default(), None);
         let cartridge = Cartridge::new(path).unwrap();
         nes.load_cartridge(cartridge);
         nes.reset();

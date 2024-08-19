@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
-use crate::renderer::{Color, Pixel, Sprite};
+use crate::palette::{Color, Pixel};
 
 pub use self::pattern_table::PatternTable;
 
@@ -914,7 +914,12 @@ impl Ppu {
         self.palette.get_color(color_index)
     }
 
-    pub fn get_pattern_table(&self, table: PatternTable, palette: u8, mode_8x16: bool) -> Sprite {
+    pub fn get_pattern_table(
+        &self,
+        table: PatternTable,
+        palette: u8,
+        mode_8x16: bool,
+    ) -> [u8; 128 * 128 * 3] {
         // NOTE: Does the 8x16 bug only happen when sprites are stored in the right
         // pattern table ???
         let table_offset = match table {
@@ -922,7 +927,7 @@ impl Ppu {
             PatternTable::Right => 0x1000,
         };
 
-        let mut buf = [Color::default(); 128 * 128];
+        let mut buf = [0; 128 * 128 * 3];
 
         for i in 0..16 {
             for j in 0..16 {
@@ -951,15 +956,18 @@ impl Ppu {
                         let pixel = (msb << 1) | lsb;
 
                         let pixel_index =
-                            (tile_y * 8 + tile_row) * 128 + (tile_x * 8 + 7 - tile_col);
-                        // TODO: Don't hardcode palette
-                        buf[pixel_index as usize] = self.get_palette_color(palette, pixel);
+                            ((tile_y * 8 + tile_row) * 128 + (tile_x * 8 + 7 - tile_col)) * 3;
+                        let pixel_index = pixel_index as usize;
+                        let color = self.get_palette_color(palette, pixel);
+                        buf[pixel_index] = color.0;
+                        buf[pixel_index + 1] = color.1;
+                        buf[pixel_index + 2] = color.2;
                     }
                 }
             }
         }
 
-        Sprite::new(Vec::from(buf), 128, 128).expect("Failed to create sprite from pattern table")
+        buf
     }
 
     pub fn notify_scanline_hblank(&self) -> bool {

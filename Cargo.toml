@@ -14,17 +14,9 @@ panic = "abort"
 
 [dependencies]
 anyhow = "1.0.80"
-bincode = {version = "2.0.0-rc.3", features = ["serde"] }
-bitflags = { version = "2.4.2", features = ["serde"] }
 clap = { version = "4.5.10", features = ["derive"] }
-dirs = "5.0.1"
+emu = { path = "emu" }
 env_logger = "0.11.3"
 log = "0.4.21"
-modular-bitfield = "0.11.2"
-num-integer = "0.1.46"
-num-traits = "0.2.19"
 rusttype = "0.9.3"
 sdl2 = { version = "0.37.0", features = ["static-link", "bundled", "unsafe_textures"] }
-serde = { version = "1.0.207", features = ["derive"] }
-serde-big-array = "0.5.1"
-strum_macros = "0.26.1"

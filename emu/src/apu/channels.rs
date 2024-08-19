@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::emu::bits::IntoBit;
+use crate::bits::IntoBit;
 
 use super::components::{Divider, Envelope, LengthCounter, LinearCounter, Sweep};
 
