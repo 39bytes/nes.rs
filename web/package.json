@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "emu-wasm": "file:emu-wasm/pkg",
+    "emu-wasm": "file:../emu-wasm/pkg",
     "ringbuf.js": "^0.3.6"
   },
   "devDependencies": {
