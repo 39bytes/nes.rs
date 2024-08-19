@@ -30,7 +30,7 @@ There are 5 save state slots. Save states can be loaded with the number keys 1-5
 
 ## Running the WASM frontend locally
 Ensure that you have [wasm-pack](https://rustwasm.github.io/wasm-pack/), [Node](https://nodejs.org/en) and [pnpm](https://pnpm.io/) installed.
-First, build the wasm-package:
+First, build the wasm crate:
 ```
 cd emu-wasm
 wasm-pack build
