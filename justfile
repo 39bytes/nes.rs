@@ -1,5 +1,5 @@
 fmt:
-    cargo +nightly fmt --all --check
+    cargo +nightly fmt --all
 
 lint:
     cargo clippy --all
