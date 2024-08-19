@@ -3,7 +3,7 @@
 An emulator for the [Nintendo Entertainment System](https://en.wikipedia.org/wiki/Nintendo_Entertainment_System) written in Rust, with SDL2 and web frontends.
 
 <div align="center">
-    <a href="https://39bytes.github.io/nes.rs/"><b>Try it out in your browser!</b></a>
+    <a href="https://39bytes.github.io/nes.rs/"><b>🎮 Try it out in your browser!</b></a>
 </div>
 <br></br>
 
