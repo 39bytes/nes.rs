@@ -27,7 +27,7 @@ export default defineConfig({
             {
               tag: "script",
               attrs: {
-                src: "/coi-serviceworker.min.js",
+                src: "/nes.rs/coi-serviceworker.min.js",
               },
               injectTo: "head",
             },
