@@ -1,16 +1,15 @@
 # nes.rs
 
-An emulator for the [Nintendo Entertainment System](https://en.wikipedia.org/wiki/Nintendo_Entertainment_System) written in Rust.
+An emulator for the [Nintendo Entertainment System](https://en.wikipedia.org/wiki/Nintendo_Entertainment_System) written in Rust, with SDL2 and web frontends.
+
+[Try it out in your browser!](https://39bytes.github.io/nes.rs/)
 
 https://github.com/39bytes/nes.rs/assets/47371088/69a3ce36-a5a2-4d11-b13a-cede656cec81
 
 This isn't meant to be a full-featured or 100% accurate emulator, but rather a fun educational project.
-It still aims to be fairly accurate, emulating some hardware quirks such as:
-- Unofficial CPU opcodes
-- Sprite evaluation bug
-- CPU page boundary bug
+It still aims to be fairly accurate, emulating some hardware quirks such as unofficial CPU opcodes.
 
-## Running
+## Running (SDL2)
 Ensure that you have [cargo](https://doc.rust-lang.org/cargo/) installed.
 ```
 cargo build --release
@@ -26,7 +25,19 @@ Controls are bound to:
 
 There are 5 save state slots. Save states can be loaded with the number keys 1-5, and written with SHIFT + [number].
 
-The emulator has only been tested on Linux x86_64 (Wayland), but should work on most platforms.
+## Running the WASM frontend locally
+Ensure that you have [wasm-pack](https://rustwasm.github.io/wasm-pack/), [Node](https://nodejs.org/en) and [pnpm](https://pnpm.io/) installed.
+First, build the wasm-package:
+```
+cd emu-wasm
+wasm-pack build
+```
+Then just spin up the frontend:
+```
+cd web
+pnpm i
+pnpm dev
+```
 
 ## Testing
 ```
