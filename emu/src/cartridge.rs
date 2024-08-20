@@ -1,5 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use bitflags::bitflags;
+use serde::{Deserialize, Serialize};
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
     path::Path,
@@ -74,6 +75,12 @@ impl Header {
     }
 }
 
+impl Header {
+    fn has_chr_ram(&self) -> bool {
+        self.chr_rom_chunks == 0
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum Mirroring {
     Horizontal,
@@ -85,7 +92,6 @@ pub enum Mirroring {
 struct CartridgeData {
     pub prg_memory: Vec<u8>,
     pub chr_memory: Vec<u8>,
-    pub allow_chr_ram: bool,
 }
 
 pub struct Cartridge {
@@ -128,11 +134,10 @@ impl Cartridge {
         let CartridgeData {
             prg_memory,
             chr_memory,
-            allow_chr_ram,
         } = Cartridge::from_ines1(&bytes[i..], &header)?;
 
         let mapper: Box<dyn Mapper> = match header.mapper_num {
-            0 => Box::new(Mapper0::new(header.prg_rom_chunks, allow_chr_ram)),
+            0 => Box::new(Mapper0::new(header.prg_rom_chunks, header.has_chr_ram())),
             1 => Box::new(Mapper1::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             2 => Box::new(Mapper2::new(header.prg_rom_chunks, header.chr_rom_chunks)),
             3 => Box::new(Mapper3::new(header.prg_rom_chunks, header.chr_rom_chunks)),
@@ -169,7 +174,7 @@ impl Cartridge {
 
         let prg_memory = bytes[..prg_rom_size].to_vec();
 
-        let chr_memory = if header.chr_rom_chunks == 0 {
+        let chr_memory = if header.has_chr_ram() {
             log::info!("No character ROM, allocating 8 KB of character RAM");
             vec![0u8; CHR_ROM_CHUNK_SIZE]
         } else {
@@ -181,7 +186,6 @@ impl Cartridge {
         Ok(CartridgeData {
             prg_memory,
             chr_memory,
-            allow_chr_ram: header.chr_rom_chunks == 0,
         })
     }
 
@@ -263,6 +267,35 @@ impl Cartridge {
 
         log::info!("Loading save file");
     }
+
+    pub fn state(&self) -> CartridgeState {
+        CartridgeState {
+            mapper_onboard_ram: self.mapper.onboard_ram().map(|ram| ram.to_vec()),
+            chr_ram: (self.header.chr_rom_chunks == 0).then(|| self.chr_memory.clone()),
+        }
+    }
+
+    pub fn load_state(&mut self, state: &CartridgeState) {
+        let CartridgeState {
+            chr_ram,
+            mapper_onboard_ram,
+        } = state;
+
+        if let Some(ram) = chr_ram {
+            if self.header.has_chr_ram() {
+                self.chr_memory.clone_from(ram);
+            }
+        }
+        if let Some(ram) = mapper_onboard_ram {
+            self.mapper.load_onboard_ram(ram.as_slice());
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CartridgeState {
+    pub mapper_onboard_ram: Option<Vec<u8>>,
+    pub chr_ram: Option<Vec<u8>>,
 }
 
 impl Hash for Cartridge {

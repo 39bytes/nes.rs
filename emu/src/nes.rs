@@ -197,6 +197,7 @@ impl Nes {
             cpu_state: self.cpu.borrow().state(),
             ppu_state: self.ppu.borrow().state(),
             apu_state: self.apu.borrow().state(),
+            cartridge_state: self.cartridge.as_ref().unwrap().borrow().state(),
             clock_count: self.clock_count,
             paused: self.paused,
         }
@@ -206,6 +207,11 @@ impl Nes {
         self.cpu.borrow_mut().load_state(&state.cpu_state);
         self.ppu.borrow_mut().load_state(&state.ppu_state);
         self.apu.borrow_mut().load_state(&state.apu_state);
+        self.cartridge
+            .as_ref()
+            .unwrap()
+            .borrow_mut()
+            .load_state(&state.cartridge_state);
         self.clock_count = state.clock_count;
         self.paused = state.paused;
     }

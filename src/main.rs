@@ -160,7 +160,6 @@ pub fn main() -> Result<()> {
                 }
                 if let Some(output) = emu_state.audio_output() {
                     nes.audio_buffer().flush(|samples| {
-                        log::info!("Samples this frame: {}", samples.len());
                         output.queue(samples);
                     });
                 }

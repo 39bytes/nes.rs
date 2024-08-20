@@ -7,13 +7,15 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{apu::ApuState, cpu::CpuState, ppu::PpuState};
+use crate::{apu::ApuState, cartridge::CartridgeState, cpu::CpuState, ppu::PpuState};
 
 #[derive(Serialize, Deserialize)]
 pub struct SaveState {
     pub cpu_state: CpuState,
     pub ppu_state: PpuState,
     pub apu_state: ApuState,
+
+    pub cartridge_state: CartridgeState,
 
     pub clock_count: u64,
     pub paused: bool,
