@@ -45,6 +45,10 @@ impl AudioSampleBuffer {
         self.clear();
     }
 
+    pub fn volume(&self) -> f32 {
+        self.volume
+    }
+
     pub fn set_volume(&mut self, volume: f32) {
         self.volume = clamp(volume, 0.0, 1.0);
     }

@@ -20,13 +20,18 @@ cd target/release
 ./nesrs <path-to-rom>
 ```
 Controls are bound to:
-- Z: B
-- X: A
-- A: Select
-- S: Start
-- Arrow keys: Up/Down/Left/Right
+- `Z`: B
+- `X`: A
+- `A`: Select
+- `S`: Start
+- `Arrow keys`: Up/Down/Left/Right
 
-There are 5 save state slots. Save states can be loaded with the number keys 1-5, and written with SHIFT + [number].
+Meta controls (Not controller inputs):
+- `Space`: Pause/unpause emulation
+- `[`: Decrease volume
+- `]`: Increase volume
+- `1-5`: Load save state [1-5]
+- `Shift+[1-5]`: Write save state to slot [1-5]
 
 ## Running the WASM frontend locally
 Ensure that you have [wasm-pack](https://rustwasm.github.io/wasm-pack/), [Node](https://nodejs.org/en) and [pnpm](https://pnpm.io/) installed.

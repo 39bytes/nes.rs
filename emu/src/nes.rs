@@ -72,6 +72,10 @@ impl Nes {
         &mut self.audio_buffer
     }
 
+    pub fn volume(&self) -> f32 {
+        self.audio_buffer.volume()
+    }
+
     pub fn set_volume(&mut self, volume: f32) {
         self.audio_buffer.set_volume(volume);
     }

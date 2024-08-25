@@ -139,6 +139,12 @@ pub fn main() -> Result<()> {
                                 };
                             }
                         }
+                        Keycode::LeftBracket => {
+                            nes.set_volume(nes.volume() - 0.05);
+                        }
+                        Keycode::RightBracket => {
+                            nes.set_volume(nes.volume() + 0.05);
+                        }
                         _ => {}
                     },
                     _ => {}
