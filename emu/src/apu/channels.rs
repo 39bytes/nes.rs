@@ -191,7 +191,8 @@ impl NoiseChannel {
 
     pub fn write_reg2(&mut self, data: u8) {
         self.mode = data & 0b1000_0000 != 0;
-        self.timer.reload = NOISE_PERIOD_LOOKUP[(data & 0x0F) as usize];
+        self.timer.reload = NOISE_PERIOD_LOOKUP[(data & 0b0000_1111) as usize];
+        self.timer.force_reload();
     }
 
     pub fn write_reg3(&mut self, data: u8) {
@@ -204,17 +205,19 @@ impl NoiseChannel {
     }
 
     pub fn clock(&mut self) {
-        let bit0 = (self.shift_register & 0x01).into_bit();
-        let other_bit = if self.mode {
-            self.shift_register & 0x0040
-        } else {
-            self.shift_register & 0x0002
-        }
-        .into_bit();
+        if self.timer.clock() {
+            let bit0 = (self.shift_register & 0x01).into_bit();
+            let other_bit = if self.mode {
+                self.shift_register & 0x0040
+            } else {
+                self.shift_register & 0x0002
+            }
+            .into_bit();
 
-        let feedback = (bit0 ^ other_bit) as u16;
-        self.shift_register >>= 1;
-        self.shift_register |= feedback << 14;
+            let feedback = (bit0 ^ other_bit) as u16;
+            self.shift_register >>= 1;
+            self.shift_register |= feedback << 14;
+        }
     }
 }
 
